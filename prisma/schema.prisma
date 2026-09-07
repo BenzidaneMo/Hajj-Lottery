@@ -1,7 +1,7 @@
 // Prisma schema.
-// Lottery, annual application, and admin/auth models are intentionally
-// deferred to later steps. So far this covers the geographic hierarchy
-// (wilaya/commune) and the participant identity registry.
+// Lottery and annual application models are intentionally deferred to later
+// steps. So far this covers the geographic hierarchy (wilaya/commune), the
+// participant identity registry, and administrator authentication.
 
 generator client {
   provider = "prisma-client-js"
@@ -79,4 +79,64 @@ model Participant {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("participants")
+}
+
+/// Administrative hierarchy. Kept as a database enum so a role can only ever
+/// be one of these values — never arbitrary user input. Mirrors ADMIN_ROLES
+/// in shared/src/roles.ts; the server asserts the two agree at compile time.
+enum AdminRole {
+  SUPER_ADMIN
+  WILAYA_ADMIN
+  COMMUNE_ADMIN
+
+  @@map("admin_role")
+}
+
+/// An administrator who can sign in to the admin portal.
+///
+/// Scoping fields (which wilaya or commune an admin governs) belong to the
+/// authorization step and are deliberately absent: this step establishes
+/// identity only, not permission boundaries.
+model User {
+  id String @id @default(cuid())
+
+  /// Login identifier. Stored lowercase so it is effectively case-insensitive.
+  username String @unique
+
+  /// argon2id digest — never a plaintext or reversible value.
+  passwordHash String @map("password_hash")
+
+  role AdminRole
+
+  /// Deactivated administrators keep their record but cannot authenticate.
+  isActive Boolean @default(true) @map("is_active")
+
+  lastLoginAt DateTime? @map("last_login_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  sessions Session[]
+
+  @@map("users")
+}
+
+/// A server-side administrator session.
+///
+/// The cookie carries an opaque 256-bit token; only its SHA-256 digest is
+/// stored here, so a leaked database dump cannot be replayed as a live
+/// session. Deleting the row revokes the session immediately.
+model Session {
+  id        String @id @default(cuid())
+  tokenHash String @unique @map("token_hash")
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  expiresAt  DateTime @map("expires_at")
+  lastSeenAt DateTime @default(now()) @map("last_seen_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
 }

@@ -2,16 +2,13 @@ import request from 'supertest'
 import { describe, expect, it, vi } from 'vitest'
 
 // The gate reads a module-level env singleton, so an unset key is exercised
-// by mocking that module for this file only.
-vi.mock('../src/config/env.js', () => ({
-  env: {
-    NODE_ENV: 'test',
-    PORT: 4000,
-    DATABASE_URL: process.env.DATABASE_URL ?? '',
-    CLIENT_ORIGIN: 'http://localhost:5173',
-    INTERNAL_API_KEY: undefined,
-  },
-}))
+// by mocking that module for this file only. Everything but INTERNAL_API_KEY
+// comes from the real module, so adding a config value cannot break this
+// mock the way a hand-written stub would.
+vi.mock('../src/config/env.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/config/env.js')>()
+  return { ...actual, env: { ...actual.env, INTERNAL_API_KEY: undefined } }
+})
 
 const { createApp } = await import('../src/app.js')
 

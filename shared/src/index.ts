@@ -1,3 +1,4 @@
+export * from './auth.js'
 export * from './geo.js'
 export * from './locale.js'
 export * from './participant.js'

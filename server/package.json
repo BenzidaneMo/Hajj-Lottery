@@ -14,13 +14,17 @@
   },
   "dependencies": {
     "@hajj-lottery/shared": "*",
+    "@node-rs/argon2": "^2.2.0",
     "@prisma/client": "^5.20.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
+    "express-rate-limit": "^8.7.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/node": "^24.13.3",
