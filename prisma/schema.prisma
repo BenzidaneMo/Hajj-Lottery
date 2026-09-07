@@ -1,7 +1,7 @@
-// Prisma schema — foundation only.
-// Lottery, participant, and admin/auth models are intentionally deferred to
-// later steps. This step establishes the PostgreSQL connection and the
-// geographic hierarchy (wilaya/commune) that all future models will reference.
+// Prisma schema.
+// Lottery, annual application, and admin/auth models are intentionally
+// deferred to later steps. So far this covers the geographic hierarchy
+// (wilaya/commune) and the participant identity registry.
 
 generator client {
   provider = "prisma-client-js"
@@ -50,4 +50,33 @@ model Commune {
   @@unique([wilayaId, code])
   @@index([wilayaId])
   @@map("communes")
+}
+
+/// One real individual — the single identity record for one national ID.
+///
+/// A participant answers "who is this person?", never "how are they taking
+/// part this year?". Draw year, commune, application status, computed weight
+/// and entry type belong to the future annual-application models, which
+/// reference this record instead of duplicating the person.
+model Participant {
+  id String @id @default(cuid())
+
+  /// Algeria's Numéro d'Identification National, stored as the canonical
+  /// 18-digit string produced by normalizeNationalId() — never a numeric
+  /// type, so leading zeros survive. Uniqueness is enforced by PostgreSQL,
+  /// not only by application code.
+  nationalId String @unique @map("national_id")
+
+  fullName String   @map("full_name")
+  /// Date only; no time component, no timezone shifting.
+  dob      DateTime @db.Date
+
+  /// Permanent state: a past Hajj winner is excluded from future draws.
+  /// Set transactionally by the later winner-processing step, never here.
+  hasWonHajj Boolean @default(false) @map("has_won_hajj")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("participants")
 }

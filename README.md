@@ -19,6 +19,12 @@ transparent results, across Arabic (RTL), French, and English.
 > Registration, the lottery engine, authentication, and historical
 > participation are still not implemented.
 
+> **Status:** Step 04 — participant identity registry. One `Participant`
+> record per national ID, with PostgreSQL-enforced uniqueness, a centralized
+> national-ID normalizer, a `ParticipantService`, and a minimal access-gated
+> participant API. The lottery engine, weighting, annual applications and
+> winner processing are still not implemented.
+
 ## Architecture
 
 ```
@@ -133,3 +139,28 @@ the wilaya resets the commune selection.
 
 See [docs/geographic-data.md](docs/geographic-data.md) for the source dataset,
 normalization, and seeding process.
+
+## Participants
+
+A `Participant` is one real person — exactly one record per national ID —
+and answers only "who is this person?". Draw year, commune, status, weight
+and entry type belong to the future annual-application models, which will
+reference a participant by `id` rather than duplicating the person.
+
+| Endpoint                                           | Description                     |
+| -------------------------------------------------- | ------------------------------- |
+| `POST /api/participants`                           | Register a new identity record  |
+| `GET /api/participants/:id`                        | Fetch by internal id            |
+| `GET /api/participants/by-national-id/:nationalId` | Fetch by national ID (any form) |
+
+These endpoints expose personal data, so they are **not public**: every
+request must carry the `x-internal-api-key` header matching `INTERNAL_API_KEY`.
+That gate is a placeholder — it fails closed when the variable is unset, and
+is replaced by real admin authentication in a later step.
+
+National IDs are normalized in exactly one place
+([server/src/lib/national-id.ts](server/src/lib/national-id.ts)): Arabic-Indic
+and Persian digits fold to ASCII, separators and invisible bidi marks are
+stripped, leading zeros are preserved, and the canonical result must be 18
+digits (Algeria's NIN). Uniqueness is enforced by a PostgreSQL unique index,
+not only by application code.

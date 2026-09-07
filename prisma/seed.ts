@@ -1,5 +1,6 @@
 /**
- * Deterministic seed for the geographic foundation (wilayas + communes).
+ * Deterministic seed for the geographic foundation (wilayas + communes),
+ * plus a handful of obviously-fake development participants.
  * Source of truth: prisma/seed-data/{wilayas,communes}.json, produced from
  * algeria_cities.sql by prisma/seed-data/build.mjs (see that file for
  * provenance and the corrections applied to the upstream dump).
@@ -55,6 +56,39 @@ function validate(): void {
   }
 }
 
+/**
+ * Development-only participants. These are NOT real people: the national IDs
+ * are sequential placeholders that no citizen could hold, and the names say
+ * so out loud. They exist purely so the participant API can be exercised
+ * locally, and are skipped entirely in production.
+ */
+const DEV_PARTICIPANTS = [
+  { nationalId: '000000000000000001', fullName: 'DEV TEST — Participant One', dob: '1980-01-01' },
+  { nationalId: '000000000000000002', fullName: 'DEV TEST — Participant Two', dob: '1975-06-15' },
+  { nationalId: '000000000000000003', fullName: 'DEV TEST — Participant Three', dob: '1990-11-30' },
+]
+
+async function seedDevParticipants(): Promise<void> {
+  if (process.env.NODE_ENV === 'production') {
+    console.log('Skipping development participants (NODE_ENV=production).')
+    return
+  }
+
+  console.log(`Seeding ${DEV_PARTICIPANTS.length} development participants...`)
+  for (const p of DEV_PARTICIPANTS) {
+    await prisma.participant.upsert({
+      where: { nationalId: p.nationalId },
+      update: { fullName: p.fullName },
+      // hasWonHajj is left at its default; only winner processing may set it.
+      create: {
+        nationalId: p.nationalId,
+        fullName: p.fullName,
+        dob: new Date(`${p.dob}T00:00:00.000Z`),
+      },
+    })
+  }
+}
+
 async function main(): Promise<void> {
   validate()
 
@@ -85,6 +119,8 @@ async function main(): Promise<void> {
     })
     seeded++
   }
+
+  await seedDevParticipants()
 
   console.log(`Done: ${wilayaIdByCode.size} wilayas, ${seeded} communes.`)
 }
