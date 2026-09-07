@@ -151,5 +151,63 @@
     "retry": "Réessayer",
     "close": "Fermer",
     "loading": "Chargement…"
+  },
+  "register": {
+    "subtitle": "Inscriptions pour le tirage {{year}}.",
+    "submit": "Envoyer la demande",
+    "submitting": "Envoi…",
+    "sections": {
+      "entryType": "Comment souhaitez-vous participer ?",
+      "place": "Où déposez-vous votre demande ?",
+      "placeHint": "Votre demande appartient à cette commune pour toute l'année du tirage.",
+      "primary": "Vos informations",
+      "secondary": "Deuxième demandeur",
+      "secondaryHint": "La personne qui voyagera avec vous (conjoint ou mahram)."
+    },
+    "entryType": {
+      "SINGLE": "Seul(e)",
+      "PAIRED": "En binôme",
+      "hint": "Un binôme participe ensemble et partage un même résultat."
+    },
+    "fields": {
+      "nationalId": "Numéro d'identification national",
+      "fullName": "Nom complet",
+      "dob": "Date de naissance",
+      "phoneNumber": "Numéro de mobile (facultatif)"
+    },
+    "closed": {
+      "title": "Les inscriptions sont fermées",
+      "body": "Les demandes ne sont pas acceptées pour le moment. Merci de revenir plus tard."
+    },
+    "errors": {
+      "nationalId": "Saisissez le numéro d'identification national à 18 chiffres.",
+      "fullName": "Saisissez le nom complet.",
+      "dob": "Saisissez la date de naissance.",
+      "samePerson": "Les deux demandeurs doivent être des personnes différentes.",
+      "wilaya": "Sélectionnez une wilaya.",
+      "commune": "Sélectionnez une commune.",
+      "alreadyApplied": "Une demande existe déjà pour cette année pour l'un des demandeurs.",
+      "notEligible": "Cette demande ne peut pas être acceptée car un demandeur n'est pas éligible.",
+      "invalidCommune": "Sélectionnez une commune de la wilaya choisie.",
+      "closed": "Les inscriptions ne sont pas ouvertes actuellement.",
+      "tooMany": "Trop de tentatives depuis cette connexion. Réessayez plus tard.",
+      "validation": "Veuillez vérifier les informations saisies.",
+      "unknown": "Une erreur est survenue. Veuillez réessayer."
+    },
+    "receipt": {
+      "pageTitle": "Demande reçue",
+      "title": "Inscription réussie",
+      "subtitle": "Votre demande a bien été reçue.",
+      "reference": "Référence de la demande",
+      "drawYear": "Année du tirage",
+      "status": "Statut",
+      "statusPending": "Demande reçue",
+      "entryType": "Type de demande",
+      "submittedAt": "Envoyée le",
+      "keepReference": "Conservez cette référence. Elle vous sera demandée pour suivre votre demande.",
+      "copy": "Copier la référence",
+      "copied": "Copié",
+      "print": "Imprimer"
+    }
   }
 }

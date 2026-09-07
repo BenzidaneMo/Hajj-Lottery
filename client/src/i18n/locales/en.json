@@ -151,5 +151,63 @@
     "retry": "Retry",
     "close": "Close",
     "loading": "Loading…"
+  },
+  "register": {
+    "subtitle": "Applications for the {{year}} draw.",
+    "submit": "Submit application",
+    "submitting": "Submitting…",
+    "sections": {
+      "entryType": "How are you applying?",
+      "place": "Where are you applying?",
+      "placeHint": "Your application belongs to this commune for the whole draw year.",
+      "primary": "Your details",
+      "secondary": "Second applicant",
+      "secondaryHint": "The person who will travel with you (spouse or mahram)."
+    },
+    "entryType": {
+      "SINGLE": "On my own",
+      "PAIRED": "As a pair",
+      "hint": "A pair applies together and shares one result."
+    },
+    "fields": {
+      "nationalId": "National ID number",
+      "fullName": "Full name",
+      "dob": "Date of birth",
+      "phoneNumber": "Mobile number (optional)"
+    },
+    "closed": {
+      "title": "Registration is closed",
+      "body": "Applications are not being accepted at the moment. Please check back later."
+    },
+    "errors": {
+      "nationalId": "Enter the 18-digit national ID number.",
+      "fullName": "Enter the full name.",
+      "dob": "Enter the date of birth.",
+      "samePerson": "The two applicants must be different people.",
+      "wilaya": "Select a wilaya.",
+      "commune": "Select a commune.",
+      "alreadyApplied": "An application already exists for this draw year for one of the applicants.",
+      "notEligible": "This application cannot be accepted because an applicant is not eligible to take part.",
+      "invalidCommune": "Select a commune from the chosen wilaya.",
+      "closed": "Registration is not currently open.",
+      "tooMany": "Too many attempts from this connection. Please try again later.",
+      "validation": "Please check the details you entered.",
+      "unknown": "Something went wrong. Please try again."
+    },
+    "receipt": {
+      "pageTitle": "Registration received",
+      "title": "Registration successful",
+      "subtitle": "Your application has been received.",
+      "reference": "Application reference",
+      "drawYear": "Draw year",
+      "status": "Status",
+      "statusPending": "Registration received",
+      "entryType": "Application type",
+      "submittedAt": "Submitted",
+      "keepReference": "Keep this reference. You will need it to check your application later.",
+      "copy": "Copy reference",
+      "copied": "Copied",
+      "print": "Print"
+    }
   }
 }
