@@ -121,17 +121,16 @@ in all of those cases so the distinction cannot leak by accident, and a dummy
 argon2 verification runs on the unknown-user path so response timing does not
 reveal which usernames exist.
 
-## Relationship to the temporary internal API key
+## The temporary internal API key is gone
 
-`x-internal-api-key` (Step 04) still guards the participant endpoints and is
-unchanged. It is **not** an administrator authentication mechanism: it has no
-identity, no roles, and no audit trail. Its usage was not expanded in this
-step, and it is expected to be removed once the participant endpoints move
-behind `requireAuthenticatedUser` plus the role checks from the RBAC step.
+`x-internal-api-key` (Step 04) has been removed. The participant endpoints it
+guarded now require a real session plus `requireRole(SUPER_ADMIN)`, so the
+shared secret — which had no identity, no roles and no audit trail, and
+bypassed both — no longer exists anywhere in the codebase or configuration.
+See [authorization.md](authorization.md).
 
 ## Not yet implemented
 
-- Role/permission enforcement (`requireRole`, wilaya/commune scoping)
 - Password change and reset flows
 - Session listing/revocation UI, and "sign out everywhere"
 - Audit logging of authentication events

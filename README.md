@@ -31,6 +31,13 @@ transparent results, across Arabic (RTL), French, and English.
 > and commune scoping — is deliberately still absent, as are the lottery
 > engine, registration and annual applications.
 
+> **Status:** Step 06 — role-based access control and geographic scoping.
+> Administrators are scoped to a wilaya or commune in the database (enforced by
+> CHECK and composite-foreign-key constraints), `requireRole` guards routes, and
+> every scoped query intersects the request with the caller's own reach. The
+> temporary internal API key is gone. The lottery engine, registration and
+> annual applications remain unimplemented.
+
 ## Architecture
 
 ```
@@ -160,10 +167,10 @@ reference a participant by `id` rather than duplicating the person.
 | `GET /api/participants/:id`                        | Fetch by internal id            |
 | `GET /api/participants/by-national-id/:nationalId` | Fetch by national ID (any form) |
 
-These endpoints expose personal data, so they are **not public**: every
-request must carry the `x-internal-api-key` header matching `INTERNAL_API_KEY`.
-That gate is a placeholder — it fails closed when the variable is unset, and
-is replaced by real admin authentication in a later step.
+These endpoints expose personal data, so they require an authenticated
+`SUPER_ADMIN` session. They are national rather than geographically scoped
+because a participant has no commune of their own — see
+[docs/authorization.md](docs/authorization.md).
 
 ## Administrator authentication
 
@@ -185,6 +192,26 @@ controlled bootstrap, `npm run admin:create`.
 See [docs/authentication.md](docs/authentication.md) for the cookie strategy,
 the CSRF decision and its deployment constraint, and the first-administrator
 procedure.
+
+## Roles and geographic scope
+
+`SUPER_ADMIN` is national; `WILAYA_ADMIN` is limited to one wilaya and its
+communes; `COMMUNE_ADMIN` to a single commune. Scope lives in the database and
+is enforced by PostgreSQL — a CHECK constraint for the legal role/scope shapes,
+and a composite foreign key so an administrator's commune must belong to their
+wilaya.
+
+| Endpoint              | Auth | Role      | Scope  |
+| --------------------- | ---- | --------- | ------ |
+| `/api/admin/wilayas`  | yes  | any admin | scoped |
+| `/api/admin/communes` | yes  | any admin | scoped |
+
+Scoped queries intersect the caller's ceiling with any requested filter, so a
+query parameter can only ever narrow results — never widen them. Resources
+outside an administrator's territory return 404, indistinguishable from ones
+that do not exist; an insufficient _role_ returns 403.
+
+See [docs/authorization.md](docs/authorization.md).
 
 National IDs are normalized in exactly one place
 ([server/src/lib/national-id.ts](server/src/lib/national-id.ts)): Arabic-Indic
