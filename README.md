@@ -25,6 +25,12 @@ transparent results, across Arabic (RTL), French, and English.
 > participant API. The lottery engine, weighting, annual applications and
 > winner processing are still not implemented.
 
+> **Status:** Step 05 — authentication foundation. Administrators sign in
+> against PostgreSQL-backed sessions (argon2id, HttpOnly cookie); `/admin` is
+> protected on both the client and the server. Authorization — roles, wilaya
+> and commune scoping — is deliberately still absent, as are the lottery
+> engine, registration and annual applications.
+
 ## Architecture
 
 ```
@@ -158,6 +164,27 @@ These endpoints expose personal data, so they are **not public**: every
 request must carry the `x-internal-api-key` header matching `INTERNAL_API_KEY`.
 That gate is a placeholder — it fails closed when the variable is unset, and
 is replaced by real admin authentication in a later step.
+
+## Administrator authentication
+
+Session-based, with the session stored in PostgreSQL and carried by an
+`HttpOnly` cookie — no tokens in `localStorage`, nothing sensitive in the
+frontend bundle.
+
+| Endpoint                | Auth | Purpose                    |
+| ----------------------- | ---- | -------------------------- |
+| `POST /api/auth/login`  | no   | Establish a session        |
+| `GET /api/auth/me`      | yes  | Current administrator      |
+| `POST /api/auth/logout` | yes  | Revoke the current session |
+
+Create a development administrator with `npm run seed:admin` after setting
+`DEV_ADMIN_USERNAME` / `DEV_ADMIN_PASSWORD` in `.env`. There is no default
+password: with those unset, no account is created. For production use the
+controlled bootstrap, `npm run admin:create`.
+
+See [docs/authentication.md](docs/authentication.md) for the cookie strategy,
+the CSRF decision and its deployment constraint, and the first-administrator
+procedure.
 
 National IDs are normalized in exactly one place
 ([server/src/lib/national-id.ts](server/src/lib/national-id.ts)): Arabic-Indic
