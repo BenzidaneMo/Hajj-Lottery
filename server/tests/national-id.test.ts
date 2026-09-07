@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { limitToDigits, NATIONAL_ID_LENGTH } from '@hajj-lottery/shared'
+
 import { isValidNationalId, normalizeNationalId } from '../src/lib/national-id.js'
 
 const VALID = '112233445566778899'
@@ -50,5 +52,29 @@ describe('isValidNationalId', () => {
 
   it('rejects an empty string', () => {
     expect(isValidNationalId('')).toBe(false)
+  })
+})
+
+describe('limitToDigits', () => {
+  it('keeps at most the requested number of digits', () => {
+    expect(limitToDigits('12345678901234567890', 18)).toBe('123456789012345678')
+    expect(limitToDigits('123', 18)).toBe('123')
+  })
+
+  it('drops anything that is not a digit', () => {
+    expect(limitToDigits('11-22 33.44/55', 18)).toBe('1122334455')
+    expect(limitToDigits('abc123def', 18)).toBe('123')
+  })
+
+  it('counts Arabic-Indic digits and leaves them in their own script', () => {
+    // The registration field must not rewrite what an Arabic keyboard typed.
+    expect(limitToDigits('١١٢٢٣٣٤٤٥٥٦٦٧٧٨٨٩٩٩٩', 18)).toBe('١١٢٢٣٣٤٤٥٥٦٦٧٧٨٨٩٩')
+    expect(limitToDigits('١٢٣', 18)).toBe('١٢٣')
+  })
+
+  it('stops a 19th digit from being typed into an 18-digit field', () => {
+    const eighteen = '1'.repeat(NATIONAL_ID_LENGTH)
+
+    expect(limitToDigits(`${eighteen}9`, NATIONAL_ID_LENGTH)).toBe(eighteen)
   })
 })
