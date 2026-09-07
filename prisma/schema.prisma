@@ -1,7 +1,8 @@
 // Prisma schema.
-// Lottery and annual application models are intentionally deferred to later
-// steps. So far this covers the geographic hierarchy (wilaya/commune), the
-// participant identity registry, and administrator authentication.
+// Lottery selection, weighting, historical participation and winner
+// processing are intentionally deferred to later steps. So far this covers
+// the geographic hierarchy (wilaya/commune), the participant identity
+// registry, administrator authentication, and annual applications.
 
 generator client {
   provider = "prisma-client-js"
@@ -34,20 +35,21 @@ model Wilaya {
 /// One of Algeria's 1541 communes, each belonging to exactly one wilaya.
 /// Each commune later runs its own independent lottery draw.
 model Commune {
-  id        String   @id @default(cuid())
-  wilayaId  String   @map("wilaya_id")
+  id           String        @id @default(cuid())
+  wilayaId     String        @map("wilaya_id")
   /// Official numeric commune code, unique within its wilaya.
-  code      String
-  nameAr    String   @map("name_ar")
-  nameFr    String   @map("name_fr")
+  code         String
+  nameAr       String        @map("name_ar")
+  nameFr       String        @map("name_fr")
   /// No official English name exists; this holds the established Latin/French
   /// transliteration (nameFr) rather than an invented translation.
-  nameEn    String   @map("name_en")
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  wilaya    Wilaya   @relation(fields: [wilayaId], references: [id])
-  admins    User[]
+  nameEn       String        @map("name_en")
+  isActive     Boolean       @default(true) @map("is_active")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  wilaya       Wilaya        @relation(fields: [wilayaId], references: [id])
+  admins       User[]
+  applications Application[]
 
   @@unique([wilayaId, code])
   /// Redundant on its own (id is already unique), but it gives User a
@@ -62,8 +64,8 @@ model Commune {
 ///
 /// A participant answers "who is this person?", never "how are they taking
 /// part this year?". Draw year, commune, application status, computed weight
-/// and entry type belong to the future annual-application models, which
-/// reference this record instead of duplicating the person.
+/// and entry type live on Application, which references this record instead
+/// of duplicating the person.
 model Participant {
   id String @id @default(cuid())
 
@@ -77,12 +79,26 @@ model Participant {
   /// Date only; no time component, no timezone shifting.
   dob      DateTime @db.Date
 
+  /// Contact information, never a credential. Stored in the canonical
+  /// +213XXXXXXXXX form produced by normalizePhoneNumber(), so one person
+  /// cannot become two identities by typing 0555… one year and +213555…
+  /// the next.
+  phoneNumber String? @map("phone_number")
+
+  /// Reserved for a future verification flow. Nothing sets it yet — there is
+  /// no OTP in this system, and a phone number is not proof of identity.
+  phoneVerifiedAt DateTime? @map("phone_verified_at")
+
   /// Permanent state: a past Hajj winner is excluded from future draws.
   /// Set transactionally by the later winner-processing step, never here.
   hasWonHajj Boolean @default(false) @map("has_won_hajj")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+
+  primaryApplications   Application[]            @relation("PrimaryApplicant")
+  secondaryApplications Application[]            @relation("SecondaryApplicant")
+  participations        ApplicationParticipant[]
 
   @@map("participants")
 }
@@ -165,4 +181,104 @@ model Session {
   @@index([userId])
   @@index([expiresAt])
   @@map("sessions")
+}
+
+/// How a citizen takes part in a given year's draw.
+enum EntryType {
+  /// One applicant, alone.
+  SINGLE
+  /// Two applicants who travel together and share one outcome.
+  PAIRED
+
+  @@map("entry_type")
+}
+
+/// Lifecycle of an annual application. Only the intake state exists so far;
+/// eligibility evaluation and its transitions arrive with the next step.
+enum ApplicationStatus {
+  /// Received, not yet evaluated.
+  PENDING
+
+  @@map("application_status")
+}
+
+enum ApplicationRole {
+  PRIMARY
+  SECONDARY
+
+  @@map("application_role")
+}
+
+/// One citizen's participation in one draw year, in exactly one commune.
+///
+/// Identity is never copied here: names, national IDs, dates of birth and
+/// phone numbers live on Participant, and this record points at them.
+model Application {
+  id String @id @default(cuid())
+
+  /// Citizen-facing receipt, e.g. HZ-2027-MES-8F42K1. Random rather than
+  /// sequential, and carries no database id and no national ID.
+  applicationReference String @unique @map("application_reference")
+
+  /// Always the server's current draw year — never a value from the browser.
+  drawYear Int @map("draw_year")
+
+  communeId String @map("commune_id")
+
+  primaryParticipantId   String  @map("primary_participant_id")
+  secondaryParticipantId String? @map("secondary_participant_id")
+
+  entryType EntryType         @map("entry_type")
+  status    ApplicationStatus @default(PENDING)
+
+  /// Left NULL until weighting is implemented. Nothing computes it yet.
+  calculatedWeight Decimal? @map("calculated_weight") @db.Decimal(12, 6)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  commune              Commune                  @relation(fields: [communeId], references: [id], onDelete: Restrict)
+  primaryParticipant   Participant              @relation("PrimaryApplicant", fields: [primaryParticipantId], references: [id], onDelete: Restrict)
+  secondaryParticipant Participant?             @relation("SecondaryApplicant", fields: [secondaryParticipantId], references: [id], onDelete: Restrict)
+  participants         ApplicationParticipant[]
+
+  /// Catch same-role duplicates directly. The cross-role case (someone
+  /// primary on one application and secondary on another in the same year)
+  /// is caught by ApplicationParticipant's primary key.
+  @@unique([drawYear, primaryParticipantId])
+  @@unique([drawYear, secondaryParticipantId])
+  /// Target for ApplicationParticipant's composite foreign key, so a
+  /// participation row can never claim a different year than its application.
+  @@unique([id, drawYear])
+  @@index([drawYear, communeId])
+  @@map("applications")
+}
+
+/// One row per participant per application — the table that makes "at most
+/// one application per person per draw year" a database guarantee.
+///
+/// Two unique constraints on Application alone cannot express the rule: a
+/// person listed as primary on one application and secondary on another
+/// satisfies both. Here every participant of every application occupies the
+/// same (draw_year, participant_id) primary key regardless of role, so the
+/// second attempt collides no matter which slot it arrives in — including
+/// under concurrent requests, where the loser gets a clean constraint
+/// violation instead of a lost update.
+model ApplicationParticipant {
+  applicationId String          @map("application_id")
+  participantId String          @map("participant_id")
+  drawYear      Int             @map("draw_year")
+  role          ApplicationRole
+
+  /// Composite reference: the year here is the application's own year, not a
+  /// copy that could drift from it.
+  application Application @relation(fields: [applicationId, drawYear], references: [id, drawYear], onDelete: Cascade)
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Restrict)
+
+  /// The constraint this table exists for.
+  @@id([drawYear, participantId])
+  /// One primary and at most one secondary per application.
+  @@unique([applicationId, role])
+  @@index([participantId])
+  @@map("application_participants")
 }

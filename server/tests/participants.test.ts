@@ -348,6 +348,9 @@ describe('identity is independent of geography and applications', () => {
     `
     const names = columns.map((c) => c.column_name).sort()
 
+    // Pinned deliberately: identity and contact details only. Anything about
+    // a particular year's participation — draw year, commune, status, weight,
+    // entry type — belongs on `applications`, and adding it here should fail.
     expect(names).toEqual([
       'created_at',
       'dob',
@@ -355,6 +358,8 @@ describe('identity is independent of geography and applications', () => {
       'has_won_hajj',
       'id',
       'national_id',
+      'phone_number',
+      'phone_verified_at',
       'updated_at',
     ])
   })
