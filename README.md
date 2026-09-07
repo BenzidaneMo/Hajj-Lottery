@@ -310,11 +310,14 @@ participation history. Nothing selects winners yet.
 | ---------------------------------------- | ---- | ------------------------ |
 | `GET /api/admin/applications/:id/weight` | yes  | Inspect a weight, scoped |
 
-An individual's weight is their consecutive verified non-winning streak, with a
-floor of 1 — a first-time applicant must still be drawable, and a weight of zero
-would make them ineligible by arithmetic rather than by the eligibility rules.
-A **paired application takes the higher of its two weights**, so pairing with
-someone newer never costs a long-waiting applicant the claim they have built up.
+An individual's weight is their consecutive verified non-winning streak **plus
+one** — taking part earns a baseline of 1, and each year of being passed over
+adds one on top, so a streak of 0, 1 or 5 weighs 1, 2 or 6. Added rather than
+floored, so that the first year of patience actually counts for something, and
+so a weight of zero — which would make somebody undrawable by arithmetic rather
+than by the eligibility rules — never arises. A **paired application takes the
+higher of its two weights**, so pairing with someone newer never costs a
+long-waiting applicant the claim they have built up.
 
 Calculating a weight never writes; freezing one does, and says so in its name.
 Once frozen, a weight is the claim that application **entered with**: verifying

@@ -26,41 +26,61 @@ later.
 
 ## Individual weight
 
-One person's weight for a target draw year **is their streak** — the
-consecutive verified, participating, non-winning years immediately before that
-year:
-
 ```
-2023 ✓  2024 ✓  2025 ✓     → target 2026, weight 3
+weight = historical streak + 1
 ```
 
-The streak comes from the participation ledger and is **reused, not
-reimplemented**. Two copies of "which years count" would eventually disagree,
-and the ledger's copy is the one carrying the tests about missing years. So
-everything documented in [participation history](participation-history.md)
-applies unchanged: a missing year, an unverified record, a known absence and a
-win each stop the count, and the target year itself is never included.
+The streak is the consecutive verified, participating, non-winning years
+immediately before the target draw year. The weight is that, plus one:
+
+| Streak | Weight |
+| ------ | ------ |
+| 0      | 1      |
+| 1      | 2      |
+| 5      | 6      |
+
+```
+2023 ✓  2024 ✓  2025 ✓     → target 2026, streak 3, weight 4
+```
+
+Taking part at all earns the baseline of 1; each consecutive year of having
+applied and been passed over adds one on top.
+
+### Why added, not floored
+
+The baseline is **added** to the streak rather than used as a minimum. A floor
+would leave a first-time applicant and a once-passed-over applicant both at 1,
+so the first year of patience would count for nothing — the very thing
+weighting exists to recognise.
+
+It also keeps zero out of the domain entirely. A weight of zero would make
+somebody undrawable — ineligible by arithmetic rather than by the eligibility
+rules, which is precisely the confusion this design keeps apart. A CHECK
+constraint on the column enforces the same thing at the database level.
+
+### The streak is not recalculated here
+
+It comes from the participation ledger and is **reused, not reimplemented**.
+Two copies of "which years count" would eventually disagree, and the ledger's
+copy is the one carrying the tests about missing years. So everything
+documented in [participation history](participation-history.md) applies
+unchanged: a missing year, an unverified record, a known absence and a win each
+stop the count, and the target year itself is never included.
 
 That policy is load-bearing here. An unreviewed legacy import cannot raise
 anybody's weight, because it never reaches the streak in the first place.
 
-### The floor of one
-
-A first-time applicant has no consecutive years, so their streak is zero. Their
-weight is **1**, not 0.
-
-Zero would make them undrawable — ineligible by arithmetic rather than by the
-eligibility rules, which is precisely the confusion this design keeps apart. So
-every eligible application starts at 1 and rises with each year of waiting. A
-CHECK constraint on the column enforces the same thing at the database level.
-
 ## Paired applications: MAX
 
-```
-primary 5, secondary 3  → 5
-primary 3, secondary 5  → 5
-primary 4, secondary 4  → 4
-```
+The higher of the two applicants' weights — each already being their own
+streak plus one.
+
+| Primary streak → weight | Secondary streak → weight | Application |
+| ----------------------- | ------------------------- | ----------- |
+| 5 → 6                   | 3 → 4                     | **6**       |
+| 3 → 4                   | 5 → 6                     | **6**       |
+| 4 → 5                   | 4 → 5                     | **5**       |
+| 4 → 5                   | 0 → 1                     | **5**       |
 
 A pair travels together and shares one outcome, so pairing with somebody newer
 must not cost a long-waiting applicant the claim they have accumulated. The
@@ -77,6 +97,7 @@ someone's claim.
 |        | Streak                            | Weight                           |
 | ------ | --------------------------------- | -------------------------------- |
 | About  | A person                          | An application                   |
+| Is     | A count of years                  | That count, plus one             |
 | Source | Derived from history, always live | Calculated, then frozen          |
 | Stored | **Never**                         | `applications.calculated_weight` |
 
@@ -104,13 +125,13 @@ stored value untouched.
 ### Why a later correction does not rewrite it
 
 ```
-Application for 2027 frozen at 4
+Application for 2027 frozen at 5   (streak 4, plus one)
    ↓
 A 2024 legacy record is verified in March
    ↓
-The live streak would now be 5
+The live streak would now be 5, so the weight would be 6
    ↓
-The application's frozen weight is still 4
+The application's frozen weight is still 5
 ```
 
 This is deliberate. The snapshot records the claim the application _entered
@@ -137,10 +158,10 @@ computed it) with `CHECK (calculated_weight IS NULL OR BETWEEN 1 AND 1000)`.
 
 The upper bound is an overflow guard rather than a domain rule: a streak cannot
 structurally exceed the span of years the ledger can express — `draw_year` is
-constrained to 2000–2200, so about 200 — and 1000 leaves headroom while still
-refusing a value that could only come from corrupt input. The rules refuse a
-non-integer, negative or out-of-range streak rather than turning it into a
-weight nobody notices is wrong.
+constrained to 2000–2200, so about 200, and a weight is one more than that —
+and 1000 leaves headroom while still refusing a value that could only come from
+corrupt input. The rules refuse a non-integer, negative or out-of-range streak
+rather than turning it into a weight nobody notices is wrong.
 
 ## Who may see a weight
 
@@ -162,9 +183,9 @@ caller has no claim on. Weight inspection must not become a side channel into
 another commune's ledger, and the same reasoning withholds the streak itself in
 [participation history](participation-history.md).
 
-**A known limit of that line:** for a `SINGLE` application, the weight _is_ the
-applicant's streak, so a commune administrator can infer it — including years
-that happened elsewhere. This is inherent to a commune-scoped weighted draw:
+**A known limit of that line:** for a `SINGLE` application, the weight is the
+applicant's streak plus one, so a commune administrator can subtract and
+recover the streak — including years that happened elsewhere. This is inherent to a commune-scoped weighted draw:
 you cannot run one without knowing the weights in your own pool. What is
 prevented is learning about people whose applications are not yours, and
 learning how a pair's weight was composed.
