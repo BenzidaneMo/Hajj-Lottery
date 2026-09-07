@@ -38,6 +38,13 @@ transparent results, across Arabic (RTL), French, and English.
 > temporary internal API key is gone. The lottery engine, registration and
 > annual applications remain unimplemented.
 
+> **Status:** Step 07 — citizen registration. Citizens submit single or paired
+> applications for the server's draw year without an account, participants are
+> reused rather than duplicated, and "one application per person per year" is a
+> database guarantee that holds across roles and concurrent requests. The
+> lottery engine, weighting, historical participation and winner processing
+> remain unimplemented.
+
 ## Architecture
 
 ```
@@ -192,6 +199,28 @@ controlled bootstrap, `npm run admin:create`.
 See [docs/authentication.md](docs/authentication.md) for the cookie strategy,
 the CSRF decision and its deployment constraint, and the first-administrator
 procedure.
+
+## Citizen registration
+
+Public and account-free: a citizen submits one application per draw year, for
+exactly one commune.
+
+| Endpoint                                    | Auth | Purpose                     |
+| ------------------------------------------- | ---- | --------------------------- |
+| `POST /api/applications`                    | no   | Submit an application       |
+| `GET /api/applications/registration-window` | no   | Current draw year and state |
+
+A **Participant** is who someone is; an **Application** is how they take part
+in one year. Identity is never copied onto an application.
+
+"One application per person per draw year" holds whether someone applies alone,
+as a primary, or as somebody's partner — enforced by a
+`(draw_year, participant_id)` primary key on `application_participants` rather
+than by application code, so concurrent submissions resolve correctly.
+
+Every successful registration returns a receipt carrying a reference like
+`HZ-2027-MES-8F42K1` and nothing personal. See
+[docs/registration.md](docs/registration.md).
 
 ## Roles and geographic scope
 
