@@ -1,6 +1,9 @@
 import { Router } from 'express'
 
-import { getApplicationEligibility } from '../controllers/admin-application.controller.js'
+import {
+  getApplicationEligibility,
+  getApplicationWeight,
+} from '../controllers/admin-application.controller.js'
 import { getCommune, getWilaya, listCommunes, listWilayas } from '../controllers/admin-geo.controller.js'
 import { getHistoryRecord, getParticipantHistory } from '../controllers/admin-history.controller.js'
 import { asyncHandler } from '../middleware/error-handler.js'
@@ -23,6 +26,8 @@ adminRouter.get('/communes/:id', asyncHandler(getCommune))
 // but only the ones in their own territory, which the query enforces rather
 // than this line.
 adminRouter.get('/applications/:id/eligibility', asyncHandler(getApplicationEligibility))
+// Inspection only: reading a weight never freezes one.
+adminRouter.get('/applications/:id/weight', asyncHandler(getApplicationWeight))
 
 // The participation ledger. Both are scoped by the *record's* commune, not by
 // the participant — see the controller for why a participant id is not

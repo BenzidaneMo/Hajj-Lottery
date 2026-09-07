@@ -1,10 +1,11 @@
-import type { ApplicationEligibilityDto } from '@hajj-lottery/shared'
+import type { ApplicationEligibilityDto, ApplicationWeightDto } from '@hajj-lottery/shared'
 import type { RequestHandler } from 'express'
 
 import { NotFoundError } from '../lib/errors.js'
 import { getAuthenticatedUser } from '../middleware/require-authenticated-user.js'
 import { authorizationService } from '../services/authorization.service.js'
 import { eligibilityService } from '../services/eligibility.service.js'
+import { weightService } from '../services/weight.service.js'
 
 /**
  * GET /api/admin/applications/:id/eligibility
@@ -53,6 +54,48 @@ export const getApplicationEligibility: RequestHandler = async (req, res) => {
       nameEn: commune.wilaya.nameEn,
     },
     evaluatedAt: new Date().toISOString(),
+  }
+
+  res.json(body)
+}
+
+/**
+ * GET /api/admin/applications/:id/weight
+ *
+ * What an application weighs, for the administrator responsible for it.
+ * Read-only — inspecting a weight never freezes one, because a snapshot is a
+ * deliberate act and looking is not.
+ *
+ * The application's own weight is shown to anyone who administers it: the draw
+ * is commune-scoped, so a commune's administrator necessarily sees the weights
+ * in their own pool. The per-applicant breakdown is not, because a person's
+ * participation history may span communes this caller has no claim on — see
+ * docs/weighting.md for where that line falls and what it does not cover.
+ */
+export const getApplicationWeight: RequestHandler = async (req, res) => {
+  const user = getAuthenticatedUser(req)
+
+  const application = await authorizationService.findApplication(user, req.params.id ?? '')
+  if (!application) throw new NotFoundError('APPLICATION_NOT_FOUND', 'Application not found')
+
+  const calculation = await weightService.calculateApplicationWeight(application.id)
+
+  const body: ApplicationWeightDto = {
+    applicationReference: calculation.applicationReference,
+    drawYear: calculation.drawYear,
+    entryType: calculation.entryType,
+    rule: calculation.rule,
+    calculatedWeight: calculation.calculatedWeight,
+    frozenWeight: calculation.frozenWeight,
+    // A frozen weight that no longer matches a fresh calculation is not an
+    // error — history moved after the snapshot was taken. Showing both is how
+    // an administrator sees that, rather than being quietly told only one.
+    matchesFrozen: calculation.frozenWeight === calculation.calculatedWeight,
+    breakdown:
+      user.role === 'SUPER_ADMIN'
+        ? { primaryWeight: calculation.primaryWeight, secondaryWeight: calculation.secondaryWeight }
+        : null,
+    calculatedAt: new Date().toISOString(),
   }
 
   res.json(body)
