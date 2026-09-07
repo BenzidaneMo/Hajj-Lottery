@@ -22,19 +22,37 @@
     "subtitle": "Transparent registration and tracking of the communal Hajj lottery."
   },
   "pages": {
-    "register": { "title": "Register" },
-    "applicationStatus": { "title": "Application Status" },
-    "winners": { "title": "Winners" },
-    "draw": { "title": "Draw" },
-    "about": { "title": "About the platform" }
+    "register": {
+      "title": "Register"
+    },
+    "applicationStatus": {
+      "title": "Application Status"
+    },
+    "winners": {
+      "title": "Winners"
+    },
+    "draw": {
+      "title": "Draw"
+    },
+    "about": {
+      "title": "About the platform"
+    }
   },
   "admin": {
     "login": {
-      "title": "Admin Login"
+      "title": "Admin Login",
+      "username": "Username",
+      "password": "Password",
+      "submit": "Sign in",
+      "submitting": "Signing in…",
+      "failed": "Invalid username or password.",
+      "usernameRequired": "Enter your username.",
+      "passwordRequired": "Enter your password."
     },
     "profile": {
       "role": "System Administrator",
-      "signOut": "Sign out"
+      "signOut": "Sign out",
+      "signingOut": "Signing out…"
     },
     "nav": {
       "ariaLabel": "Admin navigation",
@@ -52,9 +70,15 @@
       "settings": "Settings"
     },
     "pages": {
-      "dashboard": { "title": "Dashboard" },
-      "participants": { "title": "Participants" },
-      "applications": { "title": "Applications" },
+      "dashboard": {
+        "title": "Dashboard"
+      },
+      "participants": {
+        "title": "Participants"
+      },
+      "applications": {
+        "title": "Applications"
+      },
       "communes": {
         "title": "Communes",
         "description": "Browse the seeded wilaya/commune reference data.",
@@ -64,14 +88,30 @@
         "nameFr": "French name",
         "nameEn": "English name"
       },
-      "draws": { "title": "Draws" },
-      "winners": { "title": "Winners" },
-      "history": { "title": "Historical Data" },
-      "imports": { "title": "Imports" },
-      "approvals": { "title": "Approvals" },
-      "audit": { "title": "Audit Logs" },
-      "admins": { "title": "Administrators" },
-      "settings": { "title": "Settings" }
+      "draws": {
+        "title": "Draws"
+      },
+      "winners": {
+        "title": "Winners"
+      },
+      "history": {
+        "title": "Historical Data"
+      },
+      "imports": {
+        "title": "Imports"
+      },
+      "approvals": {
+        "title": "Approvals"
+      },
+      "audit": {
+        "title": "Audit Logs"
+      },
+      "admins": {
+        "title": "Administrators"
+      },
+      "settings": {
+        "title": "Settings"
+      }
     }
   },
   "geo": {
@@ -98,6 +138,7 @@
     "pagination": "Pagination",
     "noResults": "No results",
     "retry": "Retry",
-    "close": "Close"
+    "close": "Close",
+    "loading": "Loading…"
   }
 }

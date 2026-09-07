@@ -22,19 +22,37 @@
     "subtitle": "Inscription et suivi transparent de la loterie du Hajj au niveau communal."
   },
   "pages": {
-    "register": { "title": "Inscription" },
-    "applicationStatus": { "title": "Statut de la demande" },
-    "winners": { "title": "Lauréats" },
-    "draw": { "title": "Tirage au sort" },
-    "about": { "title": "À propos de la plateforme" }
+    "register": {
+      "title": "Inscription"
+    },
+    "applicationStatus": {
+      "title": "Statut de la demande"
+    },
+    "winners": {
+      "title": "Lauréats"
+    },
+    "draw": {
+      "title": "Tirage au sort"
+    },
+    "about": {
+      "title": "À propos de la plateforme"
+    }
   },
   "admin": {
     "login": {
-      "title": "Connexion administrateur"
+      "title": "Connexion administrateur",
+      "username": "Nom d'utilisateur",
+      "password": "Mot de passe",
+      "submit": "Se connecter",
+      "submitting": "Connexion…",
+      "failed": "Nom d'utilisateur ou mot de passe invalide.",
+      "usernameRequired": "Saisissez votre nom d'utilisateur.",
+      "passwordRequired": "Saisissez votre mot de passe."
     },
     "profile": {
       "role": "Administrateur système",
-      "signOut": "Déconnexion"
+      "signOut": "Déconnexion",
+      "signingOut": "Déconnexion…"
     },
     "nav": {
       "ariaLabel": "Navigation de l'administration",
@@ -52,9 +70,15 @@
       "settings": "Paramètres"
     },
     "pages": {
-      "dashboard": { "title": "Tableau de bord" },
-      "participants": { "title": "Participants" },
-      "applications": { "title": "Demandes" },
+      "dashboard": {
+        "title": "Tableau de bord"
+      },
+      "participants": {
+        "title": "Participants"
+      },
+      "applications": {
+        "title": "Demandes"
+      },
       "communes": {
         "title": "Communes",
         "description": "Parcourir les données de référence des wilayas et communes.",
@@ -64,14 +88,30 @@
         "nameFr": "Nom en français",
         "nameEn": "Nom en anglais"
       },
-      "draws": { "title": "Tirages" },
-      "winners": { "title": "Lauréats" },
-      "history": { "title": "Données historiques" },
-      "imports": { "title": "Importations" },
-      "approvals": { "title": "Approbations" },
-      "audit": { "title": "Journal d'audit" },
-      "admins": { "title": "Administrateurs" },
-      "settings": { "title": "Paramètres" }
+      "draws": {
+        "title": "Tirages"
+      },
+      "winners": {
+        "title": "Lauréats"
+      },
+      "history": {
+        "title": "Données historiques"
+      },
+      "imports": {
+        "title": "Importations"
+      },
+      "approvals": {
+        "title": "Approbations"
+      },
+      "audit": {
+        "title": "Journal d'audit"
+      },
+      "admins": {
+        "title": "Administrateurs"
+      },
+      "settings": {
+        "title": "Paramètres"
+      }
     }
   },
   "geo": {
@@ -98,6 +138,7 @@
     "pagination": "Navigation entre les pages",
     "noResults": "Aucun résultat",
     "retry": "Réessayer",
-    "close": "Fermer"
+    "close": "Fermer",
+    "loading": "Chargement…"
   }
 }

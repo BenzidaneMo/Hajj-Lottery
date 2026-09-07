@@ -22,19 +22,37 @@
     "subtitle": "تسجيل ومتابعة قرعة الحج على مستوى البلدية بكل شفافية."
   },
   "pages": {
-    "register": { "title": "التسجيل" },
-    "applicationStatus": { "title": "حالة الطلب" },
-    "winners": { "title": "الفائزون" },
-    "draw": { "title": "القرعة" },
-    "about": { "title": "حول المنصة" }
+    "register": {
+      "title": "التسجيل"
+    },
+    "applicationStatus": {
+      "title": "حالة الطلب"
+    },
+    "winners": {
+      "title": "الفائزون"
+    },
+    "draw": {
+      "title": "القرعة"
+    },
+    "about": {
+      "title": "حول المنصة"
+    }
   },
   "admin": {
     "login": {
-      "title": "دخول الإدارة"
+      "title": "دخول الإدارة",
+      "username": "اسم المستخدم",
+      "password": "كلمة المرور",
+      "submit": "تسجيل الدخول",
+      "submitting": "جارٍ تسجيل الدخول…",
+      "failed": "اسم المستخدم أو كلمة المرور غير صحيحة.",
+      "usernameRequired": "أدخل اسم المستخدم.",
+      "passwordRequired": "أدخل كلمة المرور."
     },
     "profile": {
       "role": "مسؤول النظام",
-      "signOut": "تسجيل الخروج"
+      "signOut": "تسجيل الخروج",
+      "signingOut": "جارٍ تسجيل الخروج…"
     },
     "nav": {
       "ariaLabel": "تنقل الإدارة",
@@ -52,9 +70,15 @@
       "settings": "الإعدادات"
     },
     "pages": {
-      "dashboard": { "title": "لوحة التحكم" },
-      "participants": { "title": "المشاركون" },
-      "applications": { "title": "الطلبات" },
+      "dashboard": {
+        "title": "لوحة التحكم"
+      },
+      "participants": {
+        "title": "المشاركون"
+      },
+      "applications": {
+        "title": "الطلبات"
+      },
       "communes": {
         "title": "البلديات",
         "description": "تصفح بيانات الولايات والبلديات المرجعية.",
@@ -64,14 +88,30 @@
         "nameFr": "الاسم بالفرنسية",
         "nameEn": "الاسم بالإنجليزية"
       },
-      "draws": { "title": "القرعات" },
-      "winners": { "title": "الفائزون" },
-      "history": { "title": "البيانات التاريخية" },
-      "imports": { "title": "الاستيراد" },
-      "approvals": { "title": "الموافقات" },
-      "audit": { "title": "سجل التدقيق" },
-      "admins": { "title": "المسؤولون" },
-      "settings": { "title": "الإعدادات" }
+      "draws": {
+        "title": "القرعات"
+      },
+      "winners": {
+        "title": "الفائزون"
+      },
+      "history": {
+        "title": "البيانات التاريخية"
+      },
+      "imports": {
+        "title": "الاستيراد"
+      },
+      "approvals": {
+        "title": "الموافقات"
+      },
+      "audit": {
+        "title": "سجل التدقيق"
+      },
+      "admins": {
+        "title": "المسؤولون"
+      },
+      "settings": {
+        "title": "الإعدادات"
+      }
     }
   },
   "geo": {
@@ -98,6 +138,7 @@
     "pagination": "التصفح بين الصفحات",
     "noResults": "لا توجد نتائج",
     "retry": "إعادة المحاولة",
-    "close": "إغلاق"
+    "close": "إغلاق",
+    "loading": "جارٍ التحميل…"
   }
 }

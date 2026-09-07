@@ -2,6 +2,7 @@ import { createBrowserRouter } from 'react-router-dom'
 
 import { AdminLayout } from '../components/layout/AdminLayout'
 import { AppLayout } from '../components/layout/AppLayout'
+import { RequireAuth } from '../components/RequireAuth'
 import { About } from '../pages/About'
 import { AdminAdmins } from '../pages/admin/AdminAdmins'
 import { AdminApplications } from '../pages/admin/AdminApplications'
@@ -35,24 +36,31 @@ export const router = createBrowserRouter([
       { path: 'about', element: <About /> },
     ],
   },
-  // Outside AdminLayout: there is no sidebar/session chrome until an admin is signed in.
+  // Outside AdminLayout: there is no sidebar/session chrome until an admin is
+  // signed in, and this route must stay reachable without a session.
   { path: '/admin/login', element: <AdminLogin /> },
   {
     path: '/admin',
-    element: <AdminLayout />,
+    // UX guard only — every admin API is protected server-side regardless.
+    element: <RequireAuth />,
     children: [
-      { index: true, element: <AdminDashboard /> },
-      { path: 'participants', element: <AdminParticipants /> },
-      { path: 'applications', element: <AdminApplications /> },
-      { path: 'communes', element: <AdminCommunes /> },
-      { path: 'draws', element: <AdminDraws /> },
-      { path: 'winners', element: <AdminWinners /> },
-      { path: 'history', element: <AdminHistory /> },
-      { path: 'imports', element: <AdminImports /> },
-      { path: 'approvals', element: <AdminApprovals /> },
-      { path: 'audit', element: <AdminAudit /> },
-      { path: 'admins', element: <AdminAdmins /> },
-      { path: 'settings', element: <AdminSettings /> },
+      {
+        element: <AdminLayout />,
+        children: [
+          { index: true, element: <AdminDashboard /> },
+          { path: 'participants', element: <AdminParticipants /> },
+          { path: 'applications', element: <AdminApplications /> },
+          { path: 'communes', element: <AdminCommunes /> },
+          { path: 'draws', element: <AdminDraws /> },
+          { path: 'winners', element: <AdminWinners /> },
+          { path: 'history', element: <AdminHistory /> },
+          { path: 'imports', element: <AdminImports /> },
+          { path: 'approvals', element: <AdminApprovals /> },
+          { path: 'audit', element: <AdminAudit /> },
+          { path: 'admins', element: <AdminAdmins /> },
+          { path: 'settings', element: <AdminSettings /> },
+        ],
+      },
     ],
   },
 ])
