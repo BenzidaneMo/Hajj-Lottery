@@ -47,7 +47,9 @@ export function ApplicationReceipt({ receipt }: ApplicationReceiptProps) {
         </div>
 
         <Field label={t('register.receipt.drawYear')}>{receipt.drawYear}</Field>
-        <Field label={t('register.receipt.status')}>{t('register.receipt.statusPending')}</Field>
+        {/* Keyed by the status the server returned, not by assuming one: the
+            citizen sees the verdict their application actually carries. */}
+        <Field label={t('register.receipt.status')}>{t(`register.receipt.statuses.${receipt.status}`)}</Field>
         <Field label={t('geo.wilaya.label')}>{localizedGeoName(receipt.wilaya, locale)}</Field>
         <Field label={t('geo.commune.label')}>{localizedGeoName(receipt.commune, locale)}</Field>
         <Field label={t('register.receipt.entryType')}>{t(`register.entryType.${receipt.entryType}`)}</Field>

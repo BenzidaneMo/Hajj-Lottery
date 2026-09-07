@@ -201,7 +201,11 @@
       "reference": "Référence de la demande",
       "drawYear": "Année du tirage",
       "status": "Statut",
-      "statusPending": "Demande reçue",
+      "statuses": {
+        "PENDING": "Demande reçue",
+        "ELIGIBLE": "Acceptée — inscrite au tirage",
+        "INELIGIBLE": "Non éligible"
+      },
       "entryType": "Type de demande",
       "submittedAt": "Envoyée le",
       "keepReference": "Conservez cette référence. Elle vous sera demandée pour suivre votre demande.",

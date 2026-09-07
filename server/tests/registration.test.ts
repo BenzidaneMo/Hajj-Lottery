@@ -83,7 +83,9 @@ describe('POST /api/applications — single', () => {
     expect(response.body).toMatchObject({
       drawYear: DRAW_YEAR,
       entryType: 'SINGLE',
-      status: 'PENDING',
+      // Registration evaluates before it stores, so an accepted application is
+      // never PENDING — see docs/eligibility.md.
+      status: 'ELIGIBLE',
       applicantCount: 1,
     })
     expect(response.body.applicationReference).toMatch(/^HZ-\d{4}-[A-Z]{3}-[0-9A-Z]{6}$/)

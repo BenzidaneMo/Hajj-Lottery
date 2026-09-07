@@ -201,7 +201,11 @@
       "reference": "مرجع الطلب",
       "drawYear": "سنة القرعة",
       "status": "الحالة",
-      "statusPending": "تم استلام الطلب",
+      "statuses": {
+        "PENDING": "تم استلام الطلب",
+        "ELIGIBLE": "مقبول — مشارك في القرعة",
+        "INELIGIBLE": "غير مؤهل للمشاركة"
+      },
       "entryType": "نوع الطلب",
       "submittedAt": "تاريخ الإرسال",
       "keepReference": "احتفظ بهذا المرجع. ستحتاج إليه لمتابعة طلبك لاحقًا.",

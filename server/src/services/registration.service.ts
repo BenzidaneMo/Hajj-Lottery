@@ -12,8 +12,10 @@ import {
 
 import { currentRegistrationWindow } from '../config/registration.js'
 import { generateApplicationReference } from '../lib/application-reference.js'
+import { registrationErrorFor } from '../lib/eligibility-errors.js'
 import { ApiError, BadRequestError, ConflictError } from '../lib/errors.js'
 import { prisma as defaultPrisma } from '../lib/prisma.js'
+import { eligibilityService, EligibilityService } from './eligibility.service.js'
 import type { CreateApplicationInput } from '../validation/application.js'
 
 /** One applicant after validation: identity fields already canonical. */
@@ -33,18 +35,21 @@ const REFERENCE_ATTEMPTS = 3
 
 export class RegistrationService {
   private readonly db: PrismaClient
+  private readonly eligibility: EligibilityService
 
-  constructor(db: PrismaClient = defaultPrisma) {
+  constructor(db: PrismaClient = defaultPrisma, eligibility: EligibilityService = eligibilityService) {
     this.db = db
+    this.eligibility = eligibility
   }
 
   /**
    * Registers one application for the server's current draw year.
    *
-   * Everything that decides whether this is allowed happens here, on the
-   * server: which year it belongs to, whether the commune is real and sits in
-   * the claimed wilaya, whether either applicant has already applied, and
-   * whether either has previously won. The browser is not consulted.
+   * Registration decides two things and delegates the rest: whether intake is
+   * running at all, and what the year is. Whether this particular application
+   * may take part is EligibilityService's question — the rules live there, in
+   * one place, so re-evaluating a stored application later cannot reach a
+   * different conclusion than registration did.
    */
   async register(input: CreateApplicationInput): Promise<ApplicationReceiptDto> {
     const window = currentRegistrationWindow()
@@ -52,67 +57,90 @@ export class RegistrationService {
       throw new ApiError(503, 'REGISTRATION_CLOSED', 'Registration is not currently open')
     }
 
-    const commune = await this.resolveCommune(input.wilayaId, input.communeId)
+    const commune = await this.loadCommune(input.communeId)
 
     const primary: ApplicantData = { ...input.primary }
     const secondary: ApplicantData | undefined = input.secondary && { ...input.secondary }
 
-    const application = await this.createApplication(window.drawYear, commune, primary, secondary)
+    const { application, commune: confirmed } = await this.createApplication(
+      window.drawYear,
+      input.wilayaId,
+      commune,
+      primary,
+      secondary,
+    )
 
-    return toReceipt(application, commune, commune.wilaya)
+    return toReceipt(application, confirmed, confirmed.wilaya)
   }
 
   /**
-   * The commune must exist, be active, and actually belong to the wilaya the
-   * form claimed. The stored `commune.wilayaId` is authoritative — the
-   * submitted `wilayaId` is only ever checked against it, never trusted.
+   * Loads the claimed commune, without judging it.
+   *
+   * Whether it is usable — active, in an active wilaya, and in the wilaya the
+   * form claimed — is an eligibility rule, so it is decided there rather than
+   * here. A commune id matching nothing yields null, which the rules read as
+   * INVALID_COMMUNE exactly as a mismatched wilaya does; a caller cannot tell
+   * the two apart and so cannot map commune ids to wilayas by probing.
    */
-  private async resolveCommune(wilayaId: string, communeId: string): Promise<Commune & { wilaya: Wilaya }> {
-    const commune = await this.db.commune.findFirst({
-      where: { id: communeId, isActive: true },
+  private async loadCommune(communeId: string): Promise<(Commune & { wilaya: Wilaya }) | null> {
+    return this.db.commune.findUnique({
+      where: { id: communeId },
       include: { wilaya: true },
     })
-
-    // One message for "no such commune" and "commune is in another wilaya":
-    // both mean the selection was invalid, and distinguishing them would let
-    // a caller map commune ids to wilayas by probing.
-    if (!commune || commune.wilayaId !== wilayaId || !commune.wilaya.isActive) {
-      throw new BadRequestError('INVALID_COMMUNE', 'Select a commune from the chosen wilaya')
-    }
-
-    return commune
   }
 
   /**
    * Creates the application and everything it depends on in one transaction,
    * retrying only when the citizen-facing reference collides.
    *
-   * Participants are created inside the transaction too, so a failed
+   * Participants are created inside the transaction too, so a refused
    * application never leaves a half-registered citizen behind. A participant
    * that already existed is reused untouched.
    */
   private async createApplication(
     drawYear: number,
-    commune: Commune,
+    claimedWilayaId: string,
+    commune: (Commune & { wilaya: Wilaya }) | null,
     primary: ApplicantData,
     secondary: ApplicantData | undefined,
-  ): Promise<Application> {
+  ): Promise<{ application: Application; commune: Commune & { wilaya: Wilaya } }> {
     for (let attempt = 1; attempt <= REFERENCE_ATTEMPTS; attempt += 1) {
-      const reference = generateApplicationReference(drawYear, commune.nameFr)
-
       try {
         return await this.db.$transaction(async (tx) => {
           const primaryParticipant = await findOrCreateParticipant(tx, primary)
           const secondaryParticipant = secondary ? await findOrCreateParticipant(tx, secondary) : undefined
 
-          assertEligible(primaryParticipant, secondaryParticipant)
+          const verdict = await this.eligibility.evaluateProposedApplication(tx, {
+            drawYear,
+            expectedDrawYear: drawYear,
+            entryType: secondaryParticipant ? EntryType.PAIRED : EntryType.SINGLE,
+            commune,
+            claimedWilayaId,
+            primary: primaryParticipant,
+            secondary: secondaryParticipant,
+          })
 
-          return tx.application.create({
+          if (!verdict.eligible) throw registrationErrorFor(verdict)
+
+          // Unreachable: a null commune is an INVALID_COMMUNE reason, so the
+          // verdict above would not have been eligible. Present so the
+          // narrowing is the compiler's conclusion rather than a comment's.
+          if (!commune)
+            throw new BadRequestError('INVALID_COMMUNE', 'Select a commune from the chosen wilaya')
+
+          const reference = generateApplicationReference(drawYear, commune.nameFr)
+
+          const application = await tx.application.create({
             data: {
               applicationReference: reference,
               drawYear,
               communeId: commune.id,
               entryType: secondaryParticipant ? EntryType.PAIRED : EntryType.SINGLE,
+              // The verdict this application was admitted on, written in the
+              // same transaction that created it. Nothing is ever stored as
+              // PENDING by this route: an unevaluated application would be a
+              // state no code here can produce.
+              status: verdict.status,
               primaryParticipantId: primaryParticipant.id,
               secondaryParticipantId: secondaryParticipant?.id ?? null,
               // Written in the same transaction as the application: these
@@ -137,6 +165,8 @@ export class RegistrationService {
               },
             },
           })
+
+          return { application, commune }
         })
       } catch (error) {
         if (isReferenceCollision(error) && attempt < REFERENCE_ATTEMPTS) continue
@@ -178,24 +208,6 @@ async function findOrCreateParticipant(
       // settable from a public form.
     },
   })
-}
-
-/**
- * A past Hajj winner is permanently excluded, and so is their partner's
- * application.
- *
- * The refusal names neither applicant nor the reason. A legitimate citizen
- * knows their own history; anyone probing national IDs learns nothing about
- * who has won.
- */
-function assertEligible(primary: Participant, secondary: Participant | undefined): void {
-  if (primary.hasWonHajj || secondary?.hasWonHajj) {
-    throw new ApiError(
-      422,
-      'APPLICANT_NOT_ELIGIBLE',
-      'This application cannot be accepted because an applicant is not eligible to take part',
-    )
-  }
 }
 
 function uniqueTarget(error: unknown): string[] | undefined {

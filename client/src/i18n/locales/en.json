@@ -201,7 +201,11 @@
       "reference": "Application reference",
       "drawYear": "Draw year",
       "status": "Status",
-      "statusPending": "Registration received",
+      "statuses": {
+        "PENDING": "Registration received",
+        "ELIGIBLE": "Accepted — entered in the draw",
+        "INELIGIBLE": "Not eligible"
+      },
       "entryType": "Application type",
       "submittedAt": "Submitted",
       "keepReference": "Keep this reference. You will need it to check your application later.",
