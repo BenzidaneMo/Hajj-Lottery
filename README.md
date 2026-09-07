@@ -72,6 +72,7 @@ npm run --workspace server start
 
 | Command                 | Description                                   |
 | ----------------------- | --------------------------------------------- |
+| `npm test`              | Vitest suites (needs `TEST_DATABASE_URL`)     |
 | `npm run lint`          | ESLint across the whole repository            |
 | `npm run format`        | Prettier — write                              |
 | `npm run format:check`  | Prettier — check only                         |

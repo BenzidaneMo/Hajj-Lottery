@@ -20,6 +20,7 @@
     "build:shared": "npm run build --workspace shared",
     "build:server": "npm run build --workspace server",
     "build:client": "npm run build --workspace client",
+    "test": "npm run test --workspaces --if-present",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
