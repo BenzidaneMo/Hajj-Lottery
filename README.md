@@ -52,6 +52,13 @@ transparent results, across Arabic (RTL), French, and English.
 > territory. Weighting, historical participation, the draw itself and winner
 > processing remain unimplemented.
 
+> **Status:** Step 09 — historical participation ledger. `ParticipationHistory`
+> records what happened to a person in previous draw years, with source and
+> verification metadata, and a service that derives the consecutive
+> non-winning streak before a target year without ever inventing a missing
+> year. Weighting, the draw itself, winner processing and legacy import
+> tooling remain unimplemented.
+
 ## Architecture
 
 ```
@@ -254,6 +261,38 @@ Eligibility's duplicate check is a read and may lose a race; the
 application per person per year.
 
 See [docs/eligibility.md](docs/eligibility.md).
+
+## Participation history
+
+What happened to a person in previous draw years — the future input to priority
+weighting, and the third record in the model alongside Participant ("who is
+this?") and Application ("how are they taking part this year?").
+
+| Endpoint                                  | Auth | Purpose                               |
+| ----------------------------------------- | ---- | ------------------------------------- |
+| `GET /api/admin/participants/:id/history` | yes  | One person's years, filtered by scope |
+| `GET /api/admin/history/:id`              | yes  | One record, scoped to its commune     |
+
+Records carry a `source` (`LEGACY_IMPORT` / `APPLICATION` / `ADMIN_CORRECTION`),
+a `verified` flag and free-text `notes`, so gaps and uncertainty in transcribed
+paper registers stay explicit. Imported history does not count toward anything
+until a human vouches for it.
+
+**A missing year is not a non-participation.** No record means the ledger has no
+authoritative information; an explicit `participated = false` means it knows the
+person did not take part. The streak calculation walks backward over _years_
+rather than over rows, so a hole in the register stops the count instead of
+being quietly bridged.
+
+Nothing is stored that could drift: there is no `consecutive_years` column and
+no weight. The streak is derived on demand, and turning years into a lottery
+weight is a later, separate decision.
+
+Authorization is on each record's own commune, never on the participant — a
+person may take part in different communes in different years, and an
+administrator is never told about the years outside their territory.
+
+See [docs/participation-history.md](docs/participation-history.md).
 
 ## Roles and geographic scope
 
