@@ -8,6 +8,11 @@ transparent results, across Arabic (RTL), French, and English.
 > authentication, and the admin dashboard are not yet implemented; routes
 > exist as placeholders only.
 
+> **Status:** Step 02 — application shell and visual foundation. Public and
+> admin layouts, routing, the component library, and i18n/RTL are in place;
+> every page is still a placeholder. Authentication, registration, the
+> lottery engine, and admin permissions are not yet implemented.
+
 ## Architecture
 
 ```
@@ -61,14 +66,46 @@ npm run --workspace server start
 | `npm run typecheck`     | TypeScript project checks for every workspace |
 | `npm run prisma:studio` | Prisma Studio (visual database browser)       |
 
+## Application shell
+
+**Public routes** (`AppLayout`: header with logo/nav/language switcher,
+footer, mobile hamburger menu below `md`):
+
+- `/`, `/register`, `/application-status`, `/winners`, `/draw`, `/about`
+
+**Admin routes** (`AdminLayout`: sidebar + topbar, sidebar becomes a
+dismissible overlay below `md`; `/admin/login` is deliberately outside this
+layout since there is no session yet):
+
+- `/admin/login`
+- `/admin`, `/admin/participants`, `/admin/applications`, `/admin/communes`,
+  `/admin/draws`, `/admin/winners`, `/admin/history`, `/admin/imports`,
+  `/admin/approvals`, `/admin/audit`, `/admin/admins`, `/admin/settings`
+
+All of the above render placeholder content only — no business logic.
+
+## UI components
+
+Reusable, generic components live under `client/src/components/ui/`: `Button`,
+`IconButton`, `Input`, `Select`, `Textarea`, `Checkbox`, `RadioGroup`, `Badge`,
+`Alert`, `Card`, `Modal`, `Dropdown`, `Table`, `Pagination`, `Skeleton`,
+`EmptyState`, `ErrorState`, `PageHeader`. The brand accent is a single
+`primary-*` color token defined in `client/src/index.css`; status colors
+(success/warning/error/info) use Tailwind's stock palettes.
+
+All spacing/alignment uses CSS logical properties (`ps-`/`pe-`, `ms-`/`me-`,
+`start-`/`end-`, `text-start`) instead of `left`/`right` so layouts mirror
+correctly under RTL.
+
 ## Internationalization
 
 The client uses `i18next`/`react-i18next` with translation files under
 `client/src/i18n/locales/`. Arabic (`ar`) is the default language and
-automatically sets `dir="rtl"` on `<html>`; French and English use `ltr`.
-Only a small set of sample strings is translated so far — the architecture
-(centralized translation keys, a language switcher, automatic RTL) is what
-this step establishes.
+automatically sets `dir="rtl"` on `<html>`; French and English use `ltr`. All
+visible UI text — navigation, the admin sidebar, common actions — goes
+through translation keys; no strings are hardcoded in components. Page
+_content_ (registration forms, dashboards, etc.) is still untranslated
+placeholder text, since that content doesn't exist yet.
 
 ## Geographic data
 

@@ -1,5 +1,5 @@
 import { PlaceholderPage } from '../PlaceholderPage'
 
 export function AdminDashboard() {
-  return <PlaceholderPage titleKey="pages.admin.title" />
+  return <PlaceholderPage titleKey="admin.pages.dashboard.title" />
 }

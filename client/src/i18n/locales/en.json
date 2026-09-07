@@ -3,12 +3,13 @@
     "name": "Hajj Lottery"
   },
   "nav": {
+    "ariaLabel": "Main navigation",
     "home": "Home",
     "register": "Register",
     "applicationStatus": "Application Status",
     "winners": "Winners",
     "draw": "Draw",
-    "about": "About"
+    "about": "About the System"
   },
   "footer": {
     "rights": "All rights reserved"
@@ -25,11 +26,57 @@
     "applicationStatus": { "title": "Application Status" },
     "winners": { "title": "Winners" },
     "draw": { "title": "Draw" },
-    "about": { "title": "About the platform" },
-    "adminLogin": { "title": "Admin Login" },
-    "admin": { "title": "Admin Dashboard" }
+    "about": { "title": "About the platform" }
+  },
+  "admin": {
+    "login": {
+      "title": "Admin Login"
+    },
+    "profile": {
+      "role": "System Administrator",
+      "signOut": "Sign out"
+    },
+    "nav": {
+      "ariaLabel": "Admin navigation",
+      "dashboard": "Dashboard",
+      "participants": "Participants",
+      "applications": "Applications",
+      "communes": "Communes",
+      "draws": "Draws",
+      "winners": "Winners",
+      "history": "Historical Data",
+      "imports": "Imports",
+      "approvals": "Approvals",
+      "audit": "Audit Logs",
+      "admins": "Administrators",
+      "settings": "Settings"
+    },
+    "pages": {
+      "dashboard": { "title": "Dashboard" },
+      "participants": { "title": "Participants" },
+      "applications": { "title": "Applications" },
+      "communes": { "title": "Communes" },
+      "draws": { "title": "Draws" },
+      "winners": { "title": "Winners" },
+      "history": { "title": "Historical Data" },
+      "imports": { "title": "Imports" },
+      "approvals": { "title": "Approvals" },
+      "audit": { "title": "Audit Logs" },
+      "admins": { "title": "Administrators" },
+      "settings": { "title": "Settings" }
+    }
   },
   "common": {
-    "comingSoon": "This page is under construction."
+    "comingSoon": "This page is under construction.",
+    "skipToContent": "Skip to main content",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "previous": "Previous",
+    "next": "Next",
+    "pageOf": "Page {{current}} of {{total}}",
+    "pagination": "Pagination",
+    "noResults": "No results",
+    "retry": "Retry",
+    "close": "Close"
   }
 }

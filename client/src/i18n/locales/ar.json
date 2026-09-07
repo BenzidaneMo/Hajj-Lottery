@@ -3,12 +3,13 @@
     "name": "قرعة الحج"
   },
   "nav": {
+    "ariaLabel": "التنقل الرئيسي",
     "home": "الرئيسية",
     "register": "التسجيل",
     "applicationStatus": "حالة الطلب",
     "winners": "الفائزون",
     "draw": "القرعة",
-    "about": "حول"
+    "about": "حول النظام"
   },
   "footer": {
     "rights": "جميع الحقوق محفوظة"
@@ -25,11 +26,57 @@
     "applicationStatus": { "title": "حالة الطلب" },
     "winners": { "title": "الفائزون" },
     "draw": { "title": "القرعة" },
-    "about": { "title": "حول المنصة" },
-    "adminLogin": { "title": "دخول الإدارة" },
-    "admin": { "title": "لوحة الإدارة" }
+    "about": { "title": "حول المنصة" }
+  },
+  "admin": {
+    "login": {
+      "title": "دخول الإدارة"
+    },
+    "profile": {
+      "role": "مسؤول النظام",
+      "signOut": "تسجيل الخروج"
+    },
+    "nav": {
+      "ariaLabel": "تنقل الإدارة",
+      "dashboard": "لوحة التحكم",
+      "participants": "المشاركون",
+      "applications": "الطلبات",
+      "communes": "البلديات",
+      "draws": "القرعات",
+      "winners": "الفائزون",
+      "history": "البيانات التاريخية",
+      "imports": "الاستيراد",
+      "approvals": "الموافقات",
+      "audit": "سجل التدقيق",
+      "admins": "المسؤولون",
+      "settings": "الإعدادات"
+    },
+    "pages": {
+      "dashboard": { "title": "لوحة التحكم" },
+      "participants": { "title": "المشاركون" },
+      "applications": { "title": "الطلبات" },
+      "communes": { "title": "البلديات" },
+      "draws": { "title": "القرعات" },
+      "winners": { "title": "الفائزون" },
+      "history": { "title": "البيانات التاريخية" },
+      "imports": { "title": "الاستيراد" },
+      "approvals": { "title": "الموافقات" },
+      "audit": { "title": "سجل التدقيق" },
+      "admins": { "title": "المسؤولون" },
+      "settings": { "title": "الإعدادات" }
+    }
   },
   "common": {
-    "comingSoon": "هذه الصفحة قيد الإنشاء."
+    "comingSoon": "هذه الصفحة قيد الإنشاء.",
+    "skipToContent": "تخطَّ إلى المحتوى الرئيسي",
+    "openMenu": "فتح القائمة",
+    "closeMenu": "إغلاق القائمة",
+    "previous": "السابق",
+    "next": "التالي",
+    "pageOf": "صفحة {{current}} من {{total}}",
+    "pagination": "التصفح بين الصفحات",
+    "noResults": "لا توجد نتائج",
+    "retry": "إعادة المحاولة",
+    "close": "إغلاق"
   }
 }

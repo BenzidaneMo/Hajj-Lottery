@@ -1,4 +1,8 @@
 import { useEffect, type PropsWithChildren } from 'react'
+import { useTranslation } from 'react-i18next'
+
+import { CloseIcon } from '../icons'
+import { IconButton } from './IconButton'
 
 export interface ModalProps extends PropsWithChildren {
   isOpen: boolean
@@ -7,6 +11,8 @@ export interface ModalProps extends PropsWithChildren {
 }
 
 export function Modal({ isOpen, onClose, title, children }: ModalProps) {
+  const { t } = useTranslation()
+
   useEffect(() => {
     if (!isOpen) return
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -32,14 +38,12 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
               {title}
             </h2>
           )}
-          <button
-            type="button"
+          <IconButton
+            icon={<CloseIcon className="h-5 w-5" />}
+            label={t('common.close')}
+            variant="ghost"
             onClick={onClose}
-            aria-label="Close"
-            className="text-stone-400 hover:text-stone-600"
-          >
-            ✕
-          </button>
+          />
         </div>
         <div className="mt-4">{children}</div>
       </div>

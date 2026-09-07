@@ -1,5 +1,17 @@
 @import 'tailwindcss';
 
+/* Brand accent used for interactive/primary elements. Status colors (success,
+   warning, error, info) intentionally use Tailwind's stock palettes instead —
+   only the brand accent needs a single point of control. */
+@theme {
+  --color-primary-50: #ecfdf5;
+  --color-primary-100: #d1fae5;
+  --color-primary-200: #a7f3d0;
+  --color-primary-600: #059669;
+  --color-primary-700: #047857;
+  --color-primary-800: #065f46;
+}
+
 /* Arabic gets a native RTL-friendly stack; Latin scripts fall back normally. */
 :root {
   font-family:

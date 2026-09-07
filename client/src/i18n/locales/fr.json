@@ -3,12 +3,13 @@
     "name": "Loterie du Hajj"
   },
   "nav": {
+    "ariaLabel": "Navigation principale",
     "home": "Accueil",
     "register": "Inscription",
     "applicationStatus": "Statut de la demande",
     "winners": "Lauréats",
     "draw": "Tirage au sort",
-    "about": "À propos"
+    "about": "À propos du système"
   },
   "footer": {
     "rights": "Tous droits réservés"
@@ -25,11 +26,57 @@
     "applicationStatus": { "title": "Statut de la demande" },
     "winners": { "title": "Lauréats" },
     "draw": { "title": "Tirage au sort" },
-    "about": { "title": "À propos de la plateforme" },
-    "adminLogin": { "title": "Connexion administrateur" },
-    "admin": { "title": "Tableau de bord administrateur" }
+    "about": { "title": "À propos de la plateforme" }
+  },
+  "admin": {
+    "login": {
+      "title": "Connexion administrateur"
+    },
+    "profile": {
+      "role": "Administrateur système",
+      "signOut": "Déconnexion"
+    },
+    "nav": {
+      "ariaLabel": "Navigation de l'administration",
+      "dashboard": "Tableau de bord",
+      "participants": "Participants",
+      "applications": "Demandes",
+      "communes": "Communes",
+      "draws": "Tirages",
+      "winners": "Lauréats",
+      "history": "Données historiques",
+      "imports": "Importations",
+      "approvals": "Approbations",
+      "audit": "Journal d'audit",
+      "admins": "Administrateurs",
+      "settings": "Paramètres"
+    },
+    "pages": {
+      "dashboard": { "title": "Tableau de bord" },
+      "participants": { "title": "Participants" },
+      "applications": { "title": "Demandes" },
+      "communes": { "title": "Communes" },
+      "draws": { "title": "Tirages" },
+      "winners": { "title": "Lauréats" },
+      "history": { "title": "Données historiques" },
+      "imports": { "title": "Importations" },
+      "approvals": { "title": "Approbations" },
+      "audit": { "title": "Journal d'audit" },
+      "admins": { "title": "Administrateurs" },
+      "settings": { "title": "Paramètres" }
+    }
   },
   "common": {
-    "comingSoon": "Cette page est en cours de construction."
+    "comingSoon": "Cette page est en cours de construction.",
+    "skipToContent": "Aller au contenu principal",
+    "openMenu": "Ouvrir le menu",
+    "closeMenu": "Fermer le menu",
+    "previous": "Précédent",
+    "next": "Suivant",
+    "pageOf": "Page {{current}} sur {{total}}",
+    "pagination": "Navigation entre les pages",
+    "noResults": "Aucun résultat",
+    "retry": "Réessayer",
+    "close": "Fermer"
   }
 }
