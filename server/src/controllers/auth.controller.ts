@@ -8,6 +8,7 @@ import {
 import { UnauthorizedError } from '../lib/errors.js'
 import { getAuthenticatedUser } from '../middleware/require-authenticated-user.js'
 import { authService, toAuthenticatedUserDto } from '../services/auth.service.js'
+import { authorizationService } from '../services/authorization.service.js'
 import { loginSchema } from '../validation/auth.js'
 
 /**
@@ -35,13 +36,16 @@ export const login: RequestHandler = async (req, res) => {
   const previousLoginAt = user.lastLoginAt
 
   const session = await authService.startSession(user.id)
+  const scope = await authorizationService.describeScope(user)
+
   res.cookie(SESSION_COOKIE_NAME, session.token, sessionCookieOptions())
-  res.json(toAuthenticatedUserDto({ ...user, lastLoginAt: previousLoginAt }))
+  res.json(toAuthenticatedUserDto({ ...user, lastLoginAt: previousLoginAt }, scope))
 }
 
 /** GET /api/auth/me */
-export const getCurrentUser: RequestHandler = (req, res) => {
-  res.json(toAuthenticatedUserDto(getAuthenticatedUser(req)))
+export const getCurrentUser: RequestHandler = async (req, res) => {
+  const user = getAuthenticatedUser(req)
+  res.json(toAuthenticatedUserDto(user, await authorizationService.describeScope(user)))
 }
 
 /**

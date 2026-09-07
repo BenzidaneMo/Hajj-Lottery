@@ -1,4 +1,4 @@
-import type { AuthenticatedUserDto } from '@hajj-lottery/shared'
+import type { AdminScopeDto, AuthenticatedUserDto } from '@hajj-lottery/shared'
 import type { PrismaClient, Session, User } from '@prisma/client'
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 
@@ -145,12 +145,18 @@ export class AuthService {
  * The only shape of a user that may leave the server. Password hash, session
  * data and internal timestamps are omitted by construction rather than by
  * remembering to delete them.
+ *
+ * The scope is descriptive: the client uses it to label the UI and hide
+ * irrelevant navigation. It is never read back as authorization — the server
+ * re-derives scope from the stored record on every request.
  */
-export function toAuthenticatedUserDto(user: User): AuthenticatedUserDto {
+export function toAuthenticatedUserDto(user: User, scope: AdminScopeDto): AuthenticatedUserDto {
   return {
     id: user.id,
     username: user.username,
     role: user.role,
+    isActive: user.isActive,
+    scope,
     lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
   }
 }

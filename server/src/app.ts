@@ -5,6 +5,7 @@ import express from 'express'
 import { allowedOrigins } from './config/env.js'
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js'
 import { verifyRequestOrigin } from './middleware/verify-request-origin.js'
+import { adminRouter } from './routes/admin.js'
 import { createAuthRouter } from './routes/auth.js'
 import { communesRouter } from './routes/communes.js'
 import { healthRouter } from './routes/health.js'
@@ -30,8 +31,12 @@ export function createApp() {
 
   app.use('/api/health', healthRouter)
   app.use('/api/auth', createAuthRouter())
+  // Public geography: the registration form must be able to list every
+  // commune, so these stay unrestricted. The administrator's own, scoped view
+  // lives under /api/admin.
   app.use('/api/wilayas', wilayasRouter)
   app.use('/api/communes', communesRouter)
+  app.use('/api/admin', adminRouter)
   app.use('/api/participants', participantsRouter)
 
   // Order matters: unmatched /api routes 404 as JSON, then every error —

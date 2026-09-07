@@ -9,10 +9,15 @@ export type ApiErrorCode =
   | 'INVALID_NATIONAL_ID'
   | 'DUPLICATE_NATIONAL_ID'
   | 'PARTICIPANT_NOT_FOUND'
+  | 'USER_NOT_FOUND'
   | 'WILAYA_NOT_FOUND'
   | 'COMMUNE_NOT_FOUND'
   | 'ROUTE_NOT_FOUND'
   | 'UNAUTHORIZED'
+  | 'FORBIDDEN_ROLE'
+  | 'FORBIDDEN_SCOPE'
+  | 'INVALID_SCOPE_ASSIGNMENT'
+  | 'LAST_SUPER_ADMIN'
   | 'FORBIDDEN_ORIGIN'
   | 'TOO_MANY_ATTEMPTS'
   | 'NOT_CONFIGURED'
@@ -45,6 +50,21 @@ export class UnauthorizedError extends ApiError {
   constructor(message = 'Unauthorized') {
     super(401, 'UNAUTHORIZED', message)
     this.name = 'UnauthorizedError'
+  }
+}
+
+/**
+ * 403 — the caller is authenticated but not permitted.
+ *
+ * Used for role failures, where the endpoint's existence is not a secret and
+ * the caller already knows their own role. Resources outside an
+ * administrator's *geographic* scope return 404 instead, so that out-of-scope
+ * and nonexistent are indistinguishable — see docs/authorization.md.
+ */
+export class ForbiddenError extends ApiError {
+  constructor(code: ApiErrorCode, message: string) {
+    super(403, code, message)
+    this.name = 'ForbiddenError'
   }
 }
 
