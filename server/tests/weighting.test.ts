@@ -107,16 +107,25 @@ afterAll(async () => {
 })
 
 describe('the weighting rules, in isolation', () => {
-  it('makes a weight out of a streak', () => {
-    expect(individualWeight(1)).toBe(1)
-    expect(individualWeight(5)).toBe(5)
-    expect(individualWeight(42)).toBe(42)
+  it('adds one to the streak', () => {
+    expect(individualWeight(1)).toBe(2)
+    expect(individualWeight(5)).toBe(6)
+    expect(individualWeight(42)).toBe(43)
   })
 
-  it('floors a first-time applicant at one rather than zero', () => {
-    // Zero would make them undrawable — ineligible by arithmetic, which is a
+  it('gives a first-time applicant the baseline of one', () => {
+    // Taking part earns 1; zero would make them undrawable, which is a
     // decision only the eligibility rules get to make.
     expect(individualWeight(0)).toBe(1)
+  })
+
+  it('lets every extra year of waiting change the weight', () => {
+    // A floor would leave 0 and 1 both at 1, so the first year of patience
+    // would count for nothing.
+    const weights = [0, 1, 2, 3].map(individualWeight)
+
+    expect(weights).toEqual([1, 2, 3, 4])
+    expect(new Set(weights).size).toBe(weights.length)
   })
 
   it('uses the primary applicant alone for a single application', () => {
@@ -141,22 +150,22 @@ describe('the weighting rules, in isolation', () => {
 })
 
 describe('weighting an application', () => {
-  it('weighs one verified non-winning year as one', async () => {
+  it('weighs one verified non-winning year as two', async () => {
     const application = await register(singleBody())
     await giveConsecutiveYears((await participantByNationalId(NATIONAL_IDS.ahmed)).id, 1)
 
     const result = await weightService.calculateApplicationWeight(application.id)
 
-    expect(result.calculatedWeight).toBe(1)
+    expect(result.calculatedWeight).toBe(2)
     expect(result.rule).toBe('SINGLE')
     expect(result.secondaryWeight).toBeNull()
   })
 
-  it('weighs five consecutive verified non-winning years as five', async () => {
+  it('weighs five consecutive verified non-winning years as six', async () => {
     const application = await register(singleBody())
     await giveConsecutiveYears((await participantByNationalId(NATIONAL_IDS.ahmed)).id, 5)
 
-    expect((await weightService.calculateApplicationWeight(application.id)).calculatedWeight).toBe(5)
+    expect((await weightService.calculateApplicationWeight(application.id)).calculatedWeight).toBe(6)
   })
 
   it('gives a first-time applicant a positive weight', async () => {
@@ -186,7 +195,8 @@ describe('weighting an application', () => {
       })
     }
 
-    expect((await weightService.calculateApplicationWeight(application.id)).calculatedWeight).toBe(2)
+    // Two countable years, plus the baseline.
+    expect((await weightService.calculateApplicationWeight(application.id)).calculatedWeight).toBe(3)
   })
 
   it('does not count an unverified record', async () => {
@@ -203,8 +213,9 @@ describe('weighting an application', () => {
       verified: false,
     })
 
-    // The unverified 2nd year back neither counts nor is bridged over.
-    expect((await weightService.calculateApplicationWeight(application.id)).calculatedWeight).toBe(1)
+    // The unverified 2nd year back neither counts nor is bridged over, so one
+    // countable year plus the baseline.
+    expect((await weightService.calculateApplicationWeight(application.id)).calculatedWeight).toBe(2)
   })
 
   it('does not count a year the person did not take part in', async () => {
@@ -221,7 +232,7 @@ describe('weighting an application', () => {
       verified: true,
     })
 
-    expect((await weightService.calculateApplicationWeight(application.id)).calculatedWeight).toBe(1)
+    expect((await weightService.calculateApplicationWeight(application.id)).calculatedWeight).toBe(2)
   })
 
   it('stops at a year the person won', async () => {
@@ -239,7 +250,7 @@ describe('weighting an application', () => {
       verified: true,
     })
 
-    expect((await weightService.calculateApplicationWeight(application.id)).calculatedWeight).toBe(2)
+    expect((await weightService.calculateApplicationWeight(application.id)).calculatedWeight).toBe(3)
   })
 
   it('does not count the target draw year itself', async () => {
@@ -257,7 +268,7 @@ describe('weighting an application', () => {
       verified: true,
     })
 
-    expect((await weightService.calculateApplicationWeight(application.id)).calculatedWeight).toBe(1)
+    expect((await weightService.calculateApplicationWeight(application.id)).calculatedWeight).toBe(2)
   })
 
   it('takes the higher weight of a pair', async () => {
@@ -268,9 +279,9 @@ describe('weighting an application', () => {
     const result = await weightService.calculateApplicationWeight(application.id)
 
     expect(result).toMatchObject({
-      primaryWeight: 5,
-      secondaryWeight: 3,
-      calculatedWeight: 5,
+      primaryWeight: 6,
+      secondaryWeight: 4,
+      calculatedWeight: 6,
       rule: 'MAX',
     })
   })
@@ -282,7 +293,7 @@ describe('weighting an application', () => {
 
     const result = await weightService.calculateApplicationWeight(application.id)
 
-    expect(result).toMatchObject({ primaryWeight: 3, secondaryWeight: 5, calculatedWeight: 5 })
+    expect(result).toMatchObject({ primaryWeight: 4, secondaryWeight: 6, calculatedWeight: 6 })
   })
 
   it('keeps the shared weight when both of a pair are equal', async () => {
@@ -290,7 +301,17 @@ describe('weighting an application', () => {
     await giveConsecutiveYears((await participantByNationalId(NATIONAL_IDS.ahmed)).id, 4)
     await giveConsecutiveYears((await participantByNationalId(NATIONAL_IDS.fatima)).id, 4)
 
-    expect((await weightService.calculateApplicationWeight(application.id)).calculatedWeight).toBe(4)
+    expect((await weightService.calculateApplicationWeight(application.id)).calculatedWeight).toBe(5)
+  })
+
+  it('pairs a first-time applicant with a waiting one at the waiting weight', async () => {
+    const application = await register(pairedBody())
+    await giveConsecutiveYears((await participantByNationalId(NATIONAL_IDS.ahmed)).id, 4)
+
+    // The partner has never applied: baseline 1 against the other's 5.
+    const result = await weightService.calculateApplicationWeight(application.id)
+
+    expect(result).toMatchObject({ primaryWeight: 5, secondaryWeight: 1, calculatedWeight: 5 })
   })
 
   it('refuses to weight an ineligible application', async () => {
@@ -345,8 +366,8 @@ describe('freezing a weight', () => {
 
     const result = await weightService.freezeApplicationWeight(application.id)
 
-    expect(result.frozenWeight).toBe(4)
-    expect(await weightService.frozenWeight(application.id)).toBe(4)
+    expect(result.frozenWeight).toBe(5)
+    expect(await weightService.frozenWeight(application.id)).toBe(5)
   })
 
   it('stores an integer, not a decimal', async () => {
@@ -356,7 +377,7 @@ describe('freezing a weight', () => {
     await weightService.freezeApplicationWeight(application.id)
     const stored = await prisma.application.findUniqueOrThrow({ where: { id: application.id } })
 
-    expect(stored.calculatedWeight).toBe(3)
+    expect(stored.calculatedWeight).toBe(4)
     expect(Number.isInteger(stored.calculatedWeight)).toBe(true)
   })
 
@@ -379,13 +400,13 @@ describe('freezing a weight', () => {
     })
 
     const afterCorrection = await weightService.calculateApplicationWeight(application.id)
-    expect(afterCorrection.calculatedWeight).toBe(5)
-    expect(afterCorrection.frozenWeight).toBe(4)
+    expect(afterCorrection.calculatedWeight).toBe(6)
+    expect(afterCorrection.frozenWeight).toBe(5)
 
     // Re-freezing does not overwrite either — that needs a pre-draw
     // recalculation workflow, which does not exist yet.
     await weightService.freezeApplicationWeight(application.id)
-    expect(await weightService.frozenWeight(application.id)).toBe(4)
+    expect(await weightService.frozenWeight(application.id)).toBe(5)
   })
 
   it('refuses to freeze a weight for an ineligible application', async () => {
@@ -412,8 +433,8 @@ describe('freezing a weight', () => {
     ])
 
     // Every caller sees the same authoritative snapshot, and so does the row.
-    for (const result of results) expect(result.frozenWeight).toBe(3)
-    expect(await weightService.frozenWeight(application.id)).toBe(3)
+    for (const result of results) expect(result.frozenWeight).toBe(4)
+    expect(await weightService.frozenWeight(application.id)).toBe(4)
   })
 
   it('does not touch participant history or winner status', async () => {
@@ -452,10 +473,10 @@ describe('administrative weight inspection', () => {
 
     expect(response.status).toBe(200)
     expect(response.body).toMatchObject({
-      calculatedWeight: 5,
+      calculatedWeight: 6,
       rule: 'MAX',
       frozenWeight: null,
-      breakdown: { primaryWeight: 5, secondaryWeight: 2 },
+      breakdown: { primaryWeight: 6, secondaryWeight: 3 },
     })
   })
 
@@ -466,7 +487,7 @@ describe('administrative weight inspection', () => {
 
     const response = await weightOf(application.id, cookie)
 
-    expect(response.body).toMatchObject({ frozenWeight: 3, calculatedWeight: 3, matchesFrozen: true })
+    expect(response.body).toMatchObject({ frozenWeight: 4, calculatedWeight: 4, matchesFrozen: true })
   })
 
   it('shows a scoped administrator the weight but not the breakdown', async () => {
@@ -480,7 +501,7 @@ describe('administrative weight inspection', () => {
     const response = await weightOf(application.id, cookie)
 
     expect(response.status).toBe(200)
-    expect(response.body.calculatedWeight).toBe(3)
+    expect(response.body.calculatedWeight).toBe(4)
     // A person's history can span communes, so the per-applicant figures are
     // not this administrator's to see.
     expect(response.body.breakdown).toBeNull()

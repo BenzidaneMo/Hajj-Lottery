@@ -23,14 +23,19 @@ export const WEIGHT_RULES = [
 export type WeightRule = (typeof WEIGHT_RULES)[number]
 
 /**
- * The floor for any eligible application.
+ * What every eligible application is worth before any waiting is counted.
  *
- * A first-time applicant has no consecutive years behind them, but a weight of
- * zero would make them undrawable — ineligible by arithmetic, which the domain
- * separates carefully from ineligible by rule. So every eligible application
- * starts at one and rises with each year of waiting.
+ * The weight is this baseline **plus** the historical streak, so a first-time
+ * applicant weighs 1, someone passed over once weighs 2, and five consecutive
+ * years weigh 6. Taking part at all is what earns the baseline; each year of
+ * being passed over adds one on top.
+ *
+ * It is an addition rather than a floor, so every additional year of waiting
+ * changes the weight — with a floor, a first-timer and a once-passed-over
+ * applicant would both sit at 1 and the first year of patience would count for
+ * nothing.
  */
-export const MINIMUM_APPLICATION_WEIGHT = 1
+export const BASE_APPLICATION_WEIGHT = 1
 
 /**
  * A weight calculation, kept auditable.

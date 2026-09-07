@@ -1,4 +1,4 @@
-import { MINIMUM_APPLICATION_WEIGHT, type WeightRule } from '@hajj-lottery/shared'
+import { BASE_APPLICATION_WEIGHT, type WeightRule } from '@hajj-lottery/shared'
 
 /**
  * The weighting rules, as a pure function of already-known numbers.
@@ -16,25 +16,30 @@ import { MINIMUM_APPLICATION_WEIGHT, type WeightRule } from '@hajj-lottery/share
  * Overflow guard, not a domain rule.
  *
  * A streak cannot structurally exceed the span of years the ledger can express
- * (`draw_year` is constrained to 2000-2200, so roughly 200), and the same
- * bound is a CHECK constraint on the column. This leaves generous headroom
- * while still refusing a value that could only come from corrupt input.
+ * (`draw_year` is constrained to 2000-2200, so roughly 200, and a weight is
+ * one more than that), and the same bound is a CHECK constraint on the
+ * column. This leaves generous headroom while still refusing a value that
+ * could only come from corrupt input.
  */
 export const MAX_APPLICATION_WEIGHT = 1000
 
 /**
- * One person's weight for a target draw year.
+ * One person's weight for a target draw year: their streak **plus one**.
  *
- * The weight *is* the streak — five consecutive years of applying and being
- * passed over is a weight of five — with a floor of one, because an eligible
- * applicant who has never applied before must still be drawable. Zero would
- * remove them from the draw entirely, which is a decision for the eligibility
- * rules to make, not for arithmetic.
+ * Taking part at all earns the baseline of 1, and each consecutive year of
+ * having applied and been passed over adds one on top — so a first-time
+ * applicant weighs 1, five years of waiting weigh 6.
+ *
+ * The baseline is added rather than used as a floor. A floor would leave a
+ * first-timer and a once-passed-over applicant both at 1, making the first
+ * year of patience count for nothing; and it would let a weight of zero exist
+ * in principle, which would make somebody undrawable — a decision for the
+ * eligibility rules, never for arithmetic.
  */
 export function individualWeight(consecutiveNonWinningYears: number): number {
   assertUsableStreak(consecutiveNonWinningYears)
 
-  return Math.max(consecutiveNonWinningYears, MINIMUM_APPLICATION_WEIGHT)
+  return assertUsableWeight(consecutiveNonWinningYears + BASE_APPLICATION_WEIGHT)
 }
 
 /** What a pair's two weights combine into, and by which rule. */
@@ -75,11 +80,7 @@ function assertUsableStreak(streak: number): void {
 }
 
 function assertUsableWeight(weight: number): number {
-  if (
-    !Number.isSafeInteger(weight) ||
-    weight < MINIMUM_APPLICATION_WEIGHT ||
-    weight > MAX_APPLICATION_WEIGHT
-  ) {
+  if (!Number.isSafeInteger(weight) || weight < BASE_APPLICATION_WEIGHT || weight > MAX_APPLICATION_WEIGHT) {
     throw new Error(`Refusing to produce an out-of-range application weight: ${weight}`)
   }
 
