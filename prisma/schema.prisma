@@ -241,8 +241,15 @@ model Application {
   entryType EntryType         @map("entry_type")
   status    ApplicationStatus @default(PENDING)
 
-  /// Left NULL until weighting is implemented. Nothing computes it yet.
-  calculatedWeight Decimal? @map("calculated_weight") @db.Decimal(12, 6)
+  /// The application's lottery weight, once frozen. NULL means "not yet
+  /// calculated" — it is a snapshot written by an explicit freeze, never a
+  /// value that recomputes itself when history changes underneath it.
+  ///
+  /// An integer, because a weight is a count of years and nothing here needs
+  /// fractions. A CHECK keeps it positive: a zero-weight application could
+  /// never be drawn, which would make it ineligible by arithmetic rather than
+  /// by the eligibility rules.
+  calculatedWeight Int? @map("calculated_weight")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
