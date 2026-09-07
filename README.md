@@ -45,6 +45,13 @@ transparent results, across Arabic (RTL), French, and English.
 > lottery engine, weighting, historical participation and winner processing
 > remain unimplemented.
 
+> **Status:** Step 08 — eligibility engine. Whether an application may take part
+> is now one deterministic domain service rather than rules scattered through
+> registration: a pure rule function, typed reason codes, and a status the
+> server alone writes. Administrators can review any application in their own
+> territory. Weighting, historical participation, the draw itself and winner
+> processing remain unimplemented.
+
 ## Architecture
 
 ```
@@ -221,6 +228,32 @@ than by application code, so concurrent submissions resolve correctly.
 Every successful registration returns a receipt carrying a reference like
 `HZ-2027-MES-8F42K1` and nothing personal. See
 [docs/registration.md](docs/registration.md).
+
+## Eligibility
+
+Whether an application may take part is a separate question from whether the
+request was well-formed, and it has a single home.
+
+| Endpoint                                      | Auth | Purpose                        |
+| --------------------------------------------- | ---- | ------------------------------ |
+| `GET /api/admin/applications/:id/eligibility` | yes  | Review one application, scoped |
+
+The rules are a **pure function** — no database, no clock, no randomness — so
+re-evaluating an unchanged application always reaches the same verdict.
+Registration and administrative review both go through it, which is why an
+application cannot be accepted under one set of rules and judged by another.
+
+Reason codes (`PARTICIPANT_HAS_ALREADY_WON`, `DUPLICATE_ANNUAL_APPLICATION`, …)
+are for administrators. A citizen never sees them: naming the exact rule would
+confirm which national IDs exist and who has won before, so several distinct
+reasons collapse onto one deliberately vague public message.
+
+Status is `PENDING` → `ELIGIBLE` / `INELIGIBLE`, written only by the server.
+Eligibility's duplicate check is a read and may lose a race; the
+`(draw_year, participant_id)` constraint remains what actually guarantees one
+application per person per year.
+
+See [docs/eligibility.md](docs/eligibility.md).
 
 ## Roles and geographic scope
 

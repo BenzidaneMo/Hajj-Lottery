@@ -119,9 +119,19 @@ or database ids — it is safe to print at a shared counter or photograph.
   commune reads identically whether it does not exist or belongs to another
   wilaya.
 
+## Eligibility
+
+Whether an application may take part is not decided here. Registration checks
+that intake is open and settles the draw year, then hands everything else to
+`EligibilityService` — including the commune's validity and the previous-winner
+rule, which used to live in this service.
+
+The verdict is reached inside the same transaction that creates the
+application, so an accepted one is stored as `ELIGIBLE` and a refused one is
+never stored at all. See [eligibility](eligibility.md).
+
 ## Deferred
 
-- Eligibility evaluation and status transitions beyond `PENDING`
 - Weighting — `calculated_weight` exists and stays NULL
 - Historical participation, the draw itself, winner processing
 - Status lookup by reference for citizens
