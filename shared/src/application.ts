@@ -2,8 +2,15 @@
 export const ENTRY_TYPES = ['SINGLE', 'PAIRED'] as const
 export type EntryType = (typeof ENTRY_TYPES)[number]
 
-/** Lifecycle states an application can be in. Only intake exists so far. */
-export const APPLICATION_STATUSES = ['PENDING'] as const
+/**
+ * Lifecycle states an application can be in.
+ *
+ * `PENDING` is intake: received, not yet evaluated. The other two are verdicts
+ * of the eligibility engine and are only ever written by the server — see
+ * docs/eligibility.md. Selection, weighting and winner states are separate
+ * concerns and deliberately absent.
+ */
+export const APPLICATION_STATUSES = ['PENDING', 'ELIGIBLE', 'INELIGIBLE'] as const
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number]
 
 /** One applicant, as submitted by the registration form. */

@@ -193,11 +193,19 @@ enum EntryType {
   @@map("entry_type")
 }
 
-/// Lifecycle of an annual application. Only the intake state exists so far;
-/// eligibility evaluation and its transitions arrive with the next step.
+/// Lifecycle of an annual application.
+///
+/// Only the server writes this: it is the conclusion of EligibilityService,
+/// never a field a client can set. Draw outcomes (selected, waitlisted, won)
+/// are a separate concern and are deliberately not here yet.
 enum ApplicationStatus {
   /// Received, not yet evaluated.
   PENDING
+  /// Evaluated and allowed to take part in its commune's draw.
+  ELIGIBLE
+  /// Evaluated and refused. The reasons are not stored — they are derived on
+  /// demand, so a stale copy can never contradict the current facts.
+  INELIGIBLE
 
   @@map("application_status")
 }
