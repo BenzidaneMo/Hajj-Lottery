@@ -9,7 +9,6 @@ import { resolveTestDatabaseUrl } from './test-database.js'
 const databaseUrl = resolveTestDatabaseUrl()
 process.env.DATABASE_URL = databaseUrl
 process.env.NODE_ENV = 'test'
-process.env.INTERNAL_API_KEY = 'test-internal-api-key'
 
 const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } })
 

@@ -1,12 +1,11 @@
-import { PrismaClient } from '@prisma/client'
+import { AdminRole, PrismaClient } from '@prisma/client'
 import request from 'supertest'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { createApp } from '../src/app.js'
-import { INTERNAL_API_KEY_HEADER } from '../src/middleware/require-internal-api-key.js'
 import { ParticipantService } from '../src/services/participant.service.js'
+import { createAdminAndSignIn, ensureTestGeography } from './helpers/admins.js'
 
-const API_KEY = 'test-internal-api-key'
 const app = createApp()
 const prisma = new PrismaClient()
 const service = new ParticipantService(prisma)
@@ -21,13 +20,24 @@ function body(overrides: Record<string, unknown> = {}) {
   }
 }
 
-const post = (payload: Record<string, unknown>) =>
-  request(app).post('/api/participants').set(INTERNAL_API_KEY_HEADER, API_KEY).send(payload)
+// Participant endpoints are SUPER_ADMIN-only (identity is national; there is
+// no commune to scope by until applications exist).
+let superAdminCookie: string
 
-const get = (path: string) => request(app).get(path).set(INTERNAL_API_KEY_HEADER, API_KEY)
+const post = (payload: Record<string, unknown>) =>
+  request(app).post('/api/participants').set('Cookie', superAdminCookie).send(payload)
+
+const get = (path: string) => request(app).get(path).set('Cookie', superAdminCookie)
 
 beforeAll(async () => {
   await prisma.$connect()
+})
+
+// setup.ts truncates users between tests, so the signed-in administrator is
+// recreated for each one.
+beforeEach(async () => {
+  const signedIn = await createAdminAndSignIn(app, prisma, { role: AdminRole.SUPER_ADMIN })
+  superAdminCookie = signedIn.cookie
 })
 
 afterAll(async () => {
@@ -219,24 +229,46 @@ describe('GET /api/participants/by-national-id/:nationalId', () => {
 })
 
 describe('access control', () => {
-  it('rejects a request with no API key', async () => {
+  it('rejects an unauthenticated request', async () => {
     const response = await request(app).get('/api/participants/by-national-id/112233445566778899')
 
     expect(response.status).toBe(401)
     expect(response.body.code).toBe('UNAUTHORIZED')
   })
 
-  it('rejects a request with the wrong API key', async () => {
+  it('rejects a forged session cookie', async () => {
     const response = await request(app)
       .post('/api/participants')
-      .set(INTERNAL_API_KEY_HEADER, 'wrong-key')
+      .set('Cookie', 'hajj_admin_session=not-a-real-token')
       .send(body())
 
     expect(response.status).toBe(401)
     expect(await prisma.participant.count()).toBe(0)
   })
 
-  it('leaves the public geographic API reachable without a key', async () => {
+  it('rejects an authenticated administrator without the SUPER_ADMIN role', async () => {
+    const { wilayaA, communeA1 } = await ensureTestGeography(prisma)
+
+    for (const options of [
+      { role: AdminRole.WILAYA_ADMIN, wilayaId: wilayaA.id },
+      { role: AdminRole.COMMUNE_ADMIN, wilayaId: wilayaA.id, communeId: communeA1.id },
+    ]) {
+      const { cookie } = await createAdminAndSignIn(app, prisma, options)
+
+      const read = await request(app)
+        .get('/api/participants/by-national-id/112233445566778899')
+        .set('Cookie', cookie)
+      expect(read.status).toBe(403)
+      expect(read.body.code).toBe('FORBIDDEN_ROLE')
+
+      const write = await request(app).post('/api/participants').set('Cookie', cookie).send(body())
+      expect(write.status).toBe(403)
+    }
+
+    expect(await prisma.participant.count()).toBe(0)
+  })
+
+  it('leaves the public API reachable without a session', async () => {
     const response = await request(app).get('/api/health')
 
     expect(response.status).toBe(200)
