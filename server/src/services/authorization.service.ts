@@ -1,5 +1,5 @@
 import type { AdminScopeDto, ScopePlaceDto } from '@hajj-lottery/shared'
-import type { Commune, PrismaClient, User, Wilaya } from '@prisma/client'
+import type { Application, Commune, PrismaClient, User, Wilaya } from '@prisma/client'
 
 import {
   canAccessCommune,
@@ -87,6 +87,29 @@ export class AuthorizationService {
 
     return this.db.commune.findFirst({
       where: { ...intersectFilters(ceiling, { id: communeId }), isActive: true },
+    })
+  }
+
+  /**
+   * A single application, or null when it does not exist *or* belongs to a
+   * commune the caller does not administer.
+   *
+   * An application has no scope of its own — it inherits the commune's, which
+   * is why the filter nests through the relation rather than comparing a
+   * column here. A COMMUNE_ADMIN sees only their commune's applications, a
+   * WILAYA_ADMIN their wilaya's, a SUPER_ADMIN every one; and because the
+   * ceiling is part of the query, an application from another territory comes
+   * back as null exactly like an id that was never issued.
+   */
+  async findApplication(
+    user: User,
+    applicationId: string,
+  ): Promise<(Application & { commune: Commune & { wilaya: Wilaya } }) | null> {
+    const ceiling = communeScopeFilter(this.scopeFor(user))
+
+    return this.db.application.findFirst({
+      where: { id: applicationId, commune: ceiling },
+      include: { commune: { include: { wilaya: true } } },
     })
   }
 

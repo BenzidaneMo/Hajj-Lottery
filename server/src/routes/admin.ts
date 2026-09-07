@@ -1,5 +1,6 @@
 import { Router } from 'express'
 
+import { getApplicationEligibility } from '../controllers/admin-application.controller.js'
 import { getCommune, getWilaya, listCommunes, listWilayas } from '../controllers/admin-geo.controller.js'
 import { asyncHandler } from '../middleware/error-handler.js'
 import { requireAuthenticatedUser } from '../middleware/require-authenticated-user.js'
@@ -16,3 +17,8 @@ adminRouter.get('/wilayas', asyncHandler(listWilayas))
 adminRouter.get('/wilayas/:id', asyncHandler(getWilaya))
 adminRouter.get('/communes', asyncHandler(listCommunes))
 adminRouter.get('/communes/:id', asyncHandler(getCommune))
+
+// Same rule: no role gate, because every administrator reviews applications —
+// but only the ones in their own territory, which the query enforces rather
+// than this line.
+adminRouter.get('/applications/:id/eligibility', asyncHandler(getApplicationEligibility))
