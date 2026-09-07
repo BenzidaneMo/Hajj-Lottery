@@ -13,6 +13,16 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   prettierConfig,
   {
+    // An `_` prefix marks a parameter that exists only to satisfy a signature
+    // — Express error handlers, for instance, must take all four arguments.
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
+    },
+  },
+  {
     files: ['client/**/*.{ts,tsx}'],
     languageOptions: {
       globals: globals.browser,

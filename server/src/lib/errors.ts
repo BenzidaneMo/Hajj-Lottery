@@ -1,0 +1,71 @@
+/**
+ * API error vocabulary. Handlers throw these; the error middleware turns them
+ * into the single response shape `{ error, code, details? }`. Nothing that
+ * reveals the database or the stack ever reaches the client.
+ */
+
+export type ApiErrorCode =
+  | 'VALIDATION_FAILED'
+  | 'INVALID_NATIONAL_ID'
+  | 'DUPLICATE_NATIONAL_ID'
+  | 'PARTICIPANT_NOT_FOUND'
+  | 'WILAYA_NOT_FOUND'
+  | 'COMMUNE_NOT_FOUND'
+  | 'ROUTE_NOT_FOUND'
+  | 'UNAUTHORIZED'
+  | 'NOT_CONFIGURED'
+  | 'INTERNAL_ERROR'
+
+export class ApiError extends Error {
+  readonly status: number
+  readonly code: ApiErrorCode
+  readonly details: unknown
+
+  constructor(status: number, code: ApiErrorCode, message: string, details?: unknown) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.code = code
+    this.details = details
+  }
+}
+
+/** 400 — the request body/params did not satisfy the schema. */
+export class BadRequestError extends ApiError {
+  constructor(code: ApiErrorCode, message: string, details?: unknown) {
+    super(400, code, message, details)
+    this.name = 'BadRequestError'
+  }
+}
+
+/** 401 — caller did not present valid credentials for a protected route. */
+export class UnauthorizedError extends ApiError {
+  constructor(message = 'Unauthorized') {
+    super(401, 'UNAUTHORIZED', message)
+    this.name = 'UnauthorizedError'
+  }
+}
+
+/** 404 — the addressed resource does not exist. */
+export class NotFoundError extends ApiError {
+  constructor(code: ApiErrorCode, message: string) {
+    super(404, code, message)
+    this.name = 'NotFoundError'
+  }
+}
+
+/** 409 — the request conflicts with a record that already exists. */
+export class ConflictError extends ApiError {
+  constructor(code: ApiErrorCode, message: string) {
+    super(409, code, message)
+    this.name = 'ConflictError'
+  }
+}
+
+/** 503 — the route is unavailable because the server is missing config. */
+export class NotConfiguredError extends ApiError {
+  constructor(message: string) {
+    super(503, 'NOT_CONFIGURED', message)
+    this.name = 'NotConfiguredError'
+  }
+}
