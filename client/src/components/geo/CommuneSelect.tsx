@@ -11,6 +11,8 @@ export interface CommuneSelectProps {
   onChange: (communeId: string | undefined) => void
   label?: string
   required?: boolean
+  /** Restrict the list to the signed-in administrator's territory. */
+  scoped?: boolean
 }
 
 /**
@@ -18,9 +20,9 @@ export interface CommuneSelectProps {
  * Disabled until a wilaya is selected; resets its own selection whenever the
  * wilaya changes, so callers can't end up with a stale wilaya/commune pair.
  */
-export function CommuneSelect({ wilayaId, value, onChange, label, required }: CommuneSelectProps) {
+export function CommuneSelect({ wilayaId, value, onChange, label, required, scoped }: CommuneSelectProps) {
   const { t, i18n } = useTranslation()
-  const { data: communes, isLoading, error } = useCommunesByWilaya(wilayaId)
+  const { data: communes, isLoading, error } = useCommunesByWilaya(wilayaId, { scoped })
   const locale = i18n.language as 'ar' | 'fr' | 'en'
 
   const previousWilayaId = useRef(wilayaId)

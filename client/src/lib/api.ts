@@ -11,6 +11,29 @@ export class ApiError extends Error {
     this.status = status
     this.code = code
   }
+
+  /** No usable session — the caller should be sent back to sign in. */
+  get isUnauthenticated(): boolean {
+    return this.status === 401
+  }
+
+  /** Signed in, but not permitted. Re-authenticating would not help. */
+  get isForbidden(): boolean {
+    return this.status === 403
+  }
+}
+
+type UnauthenticatedHandler = () => void
+
+let onUnauthenticated: UnauthenticatedHandler | undefined
+
+/**
+ * Registered by AuthProvider so that a session expiring mid-visit is noticed
+ * on the next request, rather than leaving the UI showing an admin shell the
+ * server will refuse to serve.
+ */
+export function setUnauthenticatedHandler(handler: UnauthenticatedHandler | undefined): void {
+  onUnauthenticated = handler
 }
 
 interface ApiErrorBody {
@@ -40,7 +63,15 @@ async function toApiError(response: Response, path: string): Promise<ApiError> {
  */
 async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, { credentials: 'include', ...init })
-  if (!response.ok) throw await toApiError(response, path)
+
+  if (!response.ok) {
+    const error = await toApiError(response, path)
+    // `/api/auth/me` is how the provider *asks* whether a session exists, so
+    // its 401 is an answer rather than an expiry.
+    if (error.isUnauthenticated && path !== '/api/auth/me') onUnauthenticated?.()
+    throw error
+  }
+
   if (response.status === 204) return undefined as T
   return (await response.json()) as T
 }

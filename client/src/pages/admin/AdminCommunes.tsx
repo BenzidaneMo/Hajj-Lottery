@@ -11,7 +11,7 @@ export function AdminCommunes() {
   const [wilayaId, setWilayaId] = useState<string | undefined>(undefined)
   const [communeId, setCommuneId] = useState<string | undefined>(undefined)
 
-  const { data: communes } = useCommunesByWilaya(wilayaId)
+  const { data: communes } = useCommunesByWilaya(wilayaId, { scoped: true })
   const selectedCommune = communes?.find((commune) => commune.id === communeId)
 
   return (
@@ -22,8 +22,8 @@ export function AdminCommunes() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <WilayaSelect value={wilayaId} onChange={setWilayaId} />
-        <CommuneSelect wilayaId={wilayaId} value={communeId} onChange={setCommuneId} />
+        <WilayaSelect value={wilayaId} onChange={setWilayaId} scoped />
+        <CommuneSelect wilayaId={wilayaId} value={communeId} onChange={setCommuneId} scoped />
       </div>
 
       <div className="mt-6">

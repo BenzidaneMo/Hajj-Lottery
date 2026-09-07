@@ -52,7 +52,10 @@
     "profile": {
       "role": "مسؤول النظام",
       "signOut": "تسجيل الخروج",
-      "signingOut": "جارٍ تسجيل الخروج…"
+      "signingOut": "جارٍ تسجيل الخروج…",
+      "scope": {
+        "national": "جميع الولايات"
+      }
     },
     "nav": {
       "ariaLabel": "تنقل الإدارة",
@@ -112,6 +115,14 @@
       "settings": {
         "title": "الإعدادات"
       }
+    },
+    "roles": {
+      "SUPER_ADMIN": "مسؤول النظام",
+      "WILAYA_ADMIN": "مسؤول الولاية",
+      "COMMUNE_ADMIN": "مسؤول البلدية"
+    },
+    "errors": {
+      "forbidden": "ليست لديك صلاحية الاطلاع على هذا."
     }
   },
   "geo": {

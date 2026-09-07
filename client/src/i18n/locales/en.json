@@ -52,7 +52,10 @@
     "profile": {
       "role": "System Administrator",
       "signOut": "Sign out",
-      "signingOut": "Signing out…"
+      "signingOut": "Signing out…",
+      "scope": {
+        "national": "All wilayas"
+      }
     },
     "nav": {
       "ariaLabel": "Admin navigation",
@@ -112,6 +115,14 @@
       "settings": {
         "title": "Settings"
       }
+    },
+    "roles": {
+      "SUPER_ADMIN": "System Administrator",
+      "WILAYA_ADMIN": "Wilaya Administrator",
+      "COMMUNE_ADMIN": "Commune Administrator"
+    },
+    "errors": {
+      "forbidden": "You do not have permission to view this."
     }
   },
   "geo": {

@@ -1,7 +1,7 @@
 import type { AuthenticatedUserDto } from '@hajj-lottery/shared'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 
-import { ApiError, apiGet, apiPost } from './api'
+import { ApiError, apiGet, apiPost, setUnauthenticatedHandler } from './api'
 import { AuthContext, type AuthContextValue, type AuthStatus } from './auth-context'
 
 /**
@@ -16,6 +16,16 @@ import { AuthContext, type AuthContextValue, type AuthStatus } from './auth-cont
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('checking')
   const [user, setUser] = useState<AuthenticatedUserDto | undefined>(undefined)
+
+  // A session that expires while the tab is open shows up as a 401 on the
+  // next call; reflect that here so the route guard can redirect.
+  useEffect(() => {
+    setUnauthenticatedHandler(() => {
+      setUser(undefined)
+      setStatus('unauthenticated')
+    })
+    return () => setUnauthenticatedHandler(undefined)
+  }, [])
 
   useEffect(() => {
     let cancelled = false

@@ -9,12 +9,14 @@ export interface WilayaSelectProps {
   onChange: (wilayaId: string | undefined) => void
   label?: string
   required?: boolean
+  /** Restrict the list to the signed-in administrator's territory. */
+  scoped?: boolean
 }
 
 /** Reusable wilaya picker backed by GET /api/wilayas. No hardcoded data. */
-export function WilayaSelect({ value, onChange, label, required }: WilayaSelectProps) {
+export function WilayaSelect({ value, onChange, label, required, scoped }: WilayaSelectProps) {
   const { t, i18n } = useTranslation()
-  const { data: wilayas, isLoading, error } = useWilayas()
+  const { data: wilayas, isLoading, error } = useWilayas({ scoped })
   const locale = i18n.language as 'ar' | 'fr' | 'en'
 
   const options: SelectOption[] = [

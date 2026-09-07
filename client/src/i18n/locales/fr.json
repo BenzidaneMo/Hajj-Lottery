@@ -52,7 +52,10 @@
     "profile": {
       "role": "Administrateur système",
       "signOut": "Déconnexion",
-      "signingOut": "Déconnexion…"
+      "signingOut": "Déconnexion…",
+      "scope": {
+        "national": "Toutes les wilayas"
+      }
     },
     "nav": {
       "ariaLabel": "Navigation de l'administration",
@@ -112,6 +115,14 @@
       "settings": {
         "title": "Paramètres"
       }
+    },
+    "roles": {
+      "SUPER_ADMIN": "Administrateur système",
+      "WILAYA_ADMIN": "Administrateur de wilaya",
+      "COMMUNE_ADMIN": "Administrateur de commune"
+    },
+    "errors": {
+      "forbidden": "Vous n'avez pas l'autorisation de consulter ceci."
     }
   },
   "geo": {

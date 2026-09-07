@@ -9,13 +9,28 @@ interface WilayasResult {
   error: unknown
 }
 
-export function useWilayas(): { data: WilayaDto[] | undefined; isLoading: boolean; error: unknown } {
+export interface GeoSourceOptions {
+  /**
+   * Use the administrator's scoped view (/api/admin/...) instead of the
+   * public list. Admin screens pass this so an administrator only sees the
+   * territory they govern; the public registration form must not, since a
+   * citizen may pick any commune.
+   */
+  scoped?: boolean
+}
+
+export function useWilayas(options: GeoSourceOptions = {}): {
+  data: WilayaDto[] | undefined
+  isLoading: boolean
+  error: unknown
+} {
+  const scoped = options.scoped ?? false
   const [result, setResult] = useState<WilayasResult>({ loaded: false, data: undefined, error: undefined })
 
   useEffect(() => {
     let cancelled = false
 
-    apiGet<WilayaDto[]>('/api/wilayas')
+    apiGet<WilayaDto[]>(scoped ? '/api/admin/wilayas' : '/api/wilayas')
       .then((data) => {
         if (!cancelled) setResult({ loaded: true, data, error: undefined })
       })
@@ -26,7 +41,7 @@ export function useWilayas(): { data: WilayaDto[] | undefined; isLoading: boolea
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [scoped])
 
   return { data: result.data, isLoading: !result.loaded, error: result.error }
 }
@@ -39,11 +54,15 @@ interface CommunesResult {
 }
 
 /** Communes for a wilaya. Pass `undefined` when no wilaya is selected yet. */
-export function useCommunesByWilaya(wilayaId: string | undefined): {
+export function useCommunesByWilaya(
+  wilayaId: string | undefined,
+  options: GeoSourceOptions = {},
+): {
   data: CommuneDto[] | undefined
   isLoading: boolean
   error: unknown
 } {
+  const scoped = options.scoped ?? false
   const [result, setResult] = useState<CommunesResult>({
     wilayaId: undefined,
     data: undefined,
@@ -55,7 +74,11 @@ export function useCommunesByWilaya(wilayaId: string | undefined): {
 
     let cancelled = false
 
-    apiGet<CommuneDto[]>(`/api/wilayas/${wilayaId}/communes`)
+    const path = scoped
+      ? `/api/admin/communes?wilayaId=${encodeURIComponent(wilayaId)}`
+      : `/api/wilayas/${wilayaId}/communes`
+
+    apiGet<CommuneDto[]>(path)
       .then((data) => {
         if (!cancelled) setResult({ wilayaId, data, error: undefined })
       })
@@ -66,7 +89,7 @@ export function useCommunesByWilaya(wilayaId: string | undefined): {
     return () => {
       cancelled = true
     }
-  }, [wilayaId])
+  }, [wilayaId, scoped])
 
   const isCurrent = result.wilayaId === wilayaId
   return {
