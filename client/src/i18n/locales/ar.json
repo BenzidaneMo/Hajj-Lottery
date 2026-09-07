@@ -1,0 +1,35 @@
+{
+  "app": {
+    "name": "قرعة الحج"
+  },
+  "nav": {
+    "home": "الرئيسية",
+    "register": "التسجيل",
+    "applicationStatus": "حالة الطلب",
+    "winners": "الفائزون",
+    "draw": "القرعة",
+    "about": "حول"
+  },
+  "footer": {
+    "rights": "جميع الحقوق محفوظة"
+  },
+  "language": {
+    "label": "اللغة"
+  },
+  "home": {
+    "title": "منصة قرعة الحج المحلية",
+    "subtitle": "تسجيل ومتابعة قرعة الحج على مستوى البلدية بكل شفافية."
+  },
+  "pages": {
+    "register": { "title": "التسجيل" },
+    "applicationStatus": { "title": "حالة الطلب" },
+    "winners": { "title": "الفائزون" },
+    "draw": { "title": "القرعة" },
+    "about": { "title": "حول المنصة" },
+    "adminLogin": { "title": "دخول الإدارة" },
+    "admin": { "title": "لوحة الإدارة" }
+  },
+  "common": {
+    "comingSoon": "هذه الصفحة قيد الإنشاء."
+  }
+}

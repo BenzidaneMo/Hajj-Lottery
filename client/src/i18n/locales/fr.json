@@ -1,0 +1,35 @@
+{
+  "app": {
+    "name": "Loterie du Hajj"
+  },
+  "nav": {
+    "home": "Accueil",
+    "register": "Inscription",
+    "applicationStatus": "Statut de la demande",
+    "winners": "Lauréats",
+    "draw": "Tirage au sort",
+    "about": "À propos"
+  },
+  "footer": {
+    "rights": "Tous droits réservés"
+  },
+  "language": {
+    "label": "Langue"
+  },
+  "home": {
+    "title": "Plateforme locale de la loterie du Hajj",
+    "subtitle": "Inscription et suivi transparent de la loterie du Hajj au niveau communal."
+  },
+  "pages": {
+    "register": { "title": "Inscription" },
+    "applicationStatus": { "title": "Statut de la demande" },
+    "winners": { "title": "Lauréats" },
+    "draw": { "title": "Tirage au sort" },
+    "about": { "title": "À propos de la plateforme" },
+    "adminLogin": { "title": "Connexion administrateur" },
+    "admin": { "title": "Tableau de bord administrateur" }
+  },
+  "common": {
+    "comingSoon": "Cette page est en cours de construction."
+  }
+}

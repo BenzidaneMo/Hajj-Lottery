@@ -1,0 +1,42 @@
+// Prisma schema — foundation only.
+// Lottery, participant, and admin/auth models are intentionally deferred to
+// later steps. This step establishes the PostgreSQL connection and the
+// geographic hierarchy (wilaya/commune) that all future models will reference.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// One of Algeria's 69 wilayas (provinces).
+model Wilaya {
+  id        String  @id @default(cuid())
+  /// Official numeric wilaya code (e.g. "16" for Algiers).
+  code      String  @unique
+  nameAr    String
+  nameFr    String
+  nameEn    String
+  communes  Commune[]
+
+  @@map("wilayas")
+}
+
+/// One of Algeria's 1541 communes, each belonging to exactly one wilaya.
+/// Each commune later runs its own independent lottery draw.
+model Commune {
+  id        String  @id @default(cuid())
+  /// Official numeric commune code, unique within its wilaya.
+  code      String
+  nameAr    String
+  nameFr    String
+  nameEn    String
+  wilayaId  String
+  wilaya    Wilaya  @relation(fields: [wilayaId], references: [id])
+
+  @@unique([wilayaId, code])
+  @@map("communes")
+}

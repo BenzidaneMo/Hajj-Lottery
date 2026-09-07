@@ -1,0 +1,43 @@
+{
+  "name": "hajj-lottery",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Communal Hajj lottery platform (Algeria) — قرعة الحج",
+  "workspaces": [
+    "client",
+    "server",
+    "shared"
+  ],
+  "overrides": {
+    "qs": "^6.16.0"
+  },
+  "scripts": {
+    "postinstall": "npm run build --workspace shared",
+    "dev:client": "npm run dev --workspace client",
+    "dev:server": "npm run dev --workspace server",
+    "build": "npm run build --workspace shared && npm run build --workspace server && npm run build --workspace client",
+    "build:shared": "npm run build --workspace shared",
+    "build:server": "npm run build --workspace server",
+    "build:client": "npm run build --workspace client",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "prisma:generate": "prisma generate --schema prisma/schema.prisma",
+    "prisma:migrate": "prisma migrate dev --schema prisma/schema.prisma",
+    "prisma:studio": "prisma studio --schema prisma/schema.prisma"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.9.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.4",
+    "globals": "^17.11.0",
+    "prettier": "^3.3.3",
+    "prisma": "^5.20.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.67.0"
+  }
+}

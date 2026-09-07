@@ -1,0 +1,14 @@
+@import 'tailwindcss';
+
+/* Arabic gets a native RTL-friendly stack; Latin scripts fall back normally. */
+:root {
+  font-family:
+    'Segoe UI',
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+
+html[dir='rtl'] body {
+  font-family: 'Segoe UI', Tahoma, system-ui, sans-serif;
+}

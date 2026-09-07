@@ -1,0 +1,35 @@
+{
+  "app": {
+    "name": "Hajj Lottery"
+  },
+  "nav": {
+    "home": "Home",
+    "register": "Register",
+    "applicationStatus": "Application Status",
+    "winners": "Winners",
+    "draw": "Draw",
+    "about": "About"
+  },
+  "footer": {
+    "rights": "All rights reserved"
+  },
+  "language": {
+    "label": "Language"
+  },
+  "home": {
+    "title": "Local Hajj Lottery Platform",
+    "subtitle": "Transparent registration and tracking of the communal Hajj lottery."
+  },
+  "pages": {
+    "register": { "title": "Register" },
+    "applicationStatus": { "title": "Application Status" },
+    "winners": { "title": "Winners" },
+    "draw": { "title": "Draw" },
+    "about": { "title": "About the platform" },
+    "adminLogin": { "title": "Admin Login" },
+    "admin": { "title": "Admin Dashboard" }
+  },
+  "common": {
+    "comingSoon": "This page is under construction."
+  }
+}
