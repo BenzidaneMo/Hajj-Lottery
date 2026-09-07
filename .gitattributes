@@ -1,0 +1,11 @@
+# Store LF in the repository and check out LF on every platform.
+#
+# Without this, a Windows checkout (core.autocrlf=true) writes CRLF while
+# Prettier writes LF, so a freshly formatted file shows as modified in
+# `git status` and fails `format:check` without differing in content.
+* text=auto eol=lf
+
+# Batch files are the one case where CRLF is load-bearing: the Windows
+# command interpreter can mis-parse them with LF endings.
+*.bat text eol=crlf
+*.cmd text eol=crlf
