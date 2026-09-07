@@ -14,12 +14,17 @@ datasource db {
 
 /// One of Algeria's 69 wilayas (provinces).
 model Wilaya {
-  id        String  @id @default(cuid())
+  id        String    @id @default(cuid())
   /// Official numeric wilaya code (e.g. "16" for Algiers).
-  code      String  @unique
-  nameAr    String
-  nameFr    String
-  nameEn    String
+  code      String    @unique
+  nameAr    String    @map("name_ar")
+  nameFr    String    @map("name_fr")
+  /// No official English name exists; this holds the established Latin/French
+  /// transliteration (nameFr) rather than an invented translation.
+  nameEn    String    @map("name_en")
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
   communes  Commune[]
 
   @@map("wilayas")
@@ -28,15 +33,21 @@ model Wilaya {
 /// One of Algeria's 1541 communes, each belonging to exactly one wilaya.
 /// Each commune later runs its own independent lottery draw.
 model Commune {
-  id        String  @id @default(cuid())
+  id        String   @id @default(cuid())
+  wilayaId  String   @map("wilaya_id")
   /// Official numeric commune code, unique within its wilaya.
   code      String
-  nameAr    String
-  nameFr    String
-  nameEn    String
-  wilayaId  String
-  wilaya    Wilaya  @relation(fields: [wilayaId], references: [id])
+  nameAr    String   @map("name_ar")
+  nameFr    String   @map("name_fr")
+  /// No official English name exists; this holds the established Latin/French
+  /// transliteration (nameFr) rather than an invented translation.
+  nameEn    String   @map("name_en")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  wilaya    Wilaya   @relation(fields: [wilayaId], references: [id])
 
   @@unique([wilayaId, code])
+  @@index([wilayaId])
   @@map("communes")
 }

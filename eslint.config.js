@@ -27,7 +27,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['server/**/*.ts', 'shared/**/*.ts', '*.config.{js,ts}'],
+    files: ['server/**/*.ts', 'shared/**/*.ts', 'prisma/**/*.{js,mjs,ts}', '*.config.{js,ts}'],
     languageOptions: {
       globals: globals.node,
     },

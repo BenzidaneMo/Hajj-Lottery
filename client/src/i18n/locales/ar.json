@@ -55,7 +55,15 @@
       "dashboard": { "title": "لوحة التحكم" },
       "participants": { "title": "المشاركون" },
       "applications": { "title": "الطلبات" },
-      "communes": { "title": "البلديات" },
+      "communes": {
+        "title": "البلديات",
+        "description": "تصفح بيانات الولايات والبلديات المرجعية.",
+        "selectPrompt": "اختر ولاية وبلدية لعرض التفاصيل.",
+        "code": "الرمز",
+        "nameAr": "الاسم بالعربية",
+        "nameFr": "الاسم بالفرنسية",
+        "nameEn": "الاسم بالإنجليزية"
+      },
       "draws": { "title": "القرعات" },
       "winners": { "title": "الفائزون" },
       "history": { "title": "البيانات التاريخية" },
@@ -64,6 +72,19 @@
       "audit": { "title": "سجل التدقيق" },
       "admins": { "title": "المسؤولون" },
       "settings": { "title": "الإعدادات" }
+    }
+  },
+  "geo": {
+    "wilaya": {
+      "label": "الولاية",
+      "placeholder": "اختر ولاية",
+      "loadError": "تعذّر تحميل الولايات"
+    },
+    "commune": {
+      "label": "البلدية",
+      "placeholder": "اختر بلدية",
+      "selectWilayaFirst": "اختر الولاية أولاً",
+      "loadError": "تعذّر تحميل البلديات"
     }
   },
   "common": {

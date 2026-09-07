@@ -55,7 +55,15 @@
       "dashboard": { "title": "Tableau de bord" },
       "participants": { "title": "Participants" },
       "applications": { "title": "Demandes" },
-      "communes": { "title": "Communes" },
+      "communes": {
+        "title": "Communes",
+        "description": "Parcourir les données de référence des wilayas et communes.",
+        "selectPrompt": "Sélectionnez une wilaya et une commune pour voir les détails.",
+        "code": "Code",
+        "nameAr": "Nom en arabe",
+        "nameFr": "Nom en français",
+        "nameEn": "Nom en anglais"
+      },
       "draws": { "title": "Tirages" },
       "winners": { "title": "Lauréats" },
       "history": { "title": "Données historiques" },
@@ -64,6 +72,19 @@
       "audit": { "title": "Journal d'audit" },
       "admins": { "title": "Administrateurs" },
       "settings": { "title": "Paramètres" }
+    }
+  },
+  "geo": {
+    "wilaya": {
+      "label": "Wilaya",
+      "placeholder": "Sélectionner une wilaya",
+      "loadError": "Échec du chargement des wilayas"
+    },
+    "commune": {
+      "label": "Commune",
+      "placeholder": "Sélectionner une commune",
+      "selectWilayaFirst": "Sélectionnez d'abord une wilaya",
+      "loadError": "Échec du chargement des communes"
     }
   },
   "common": {

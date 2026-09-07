@@ -13,6 +13,12 @@ transparent results, across Arabic (RTL), French, and English.
 > every page is still a placeholder. Authentication, registration, the
 > lottery engine, and admin permissions are not yet implemented.
 
+> **Status:** Step 03 — geographic data foundation. Wilaya/commune reference
+> data (69 wilayas, 1541 communes) is seeded and served read-only via the API;
+> reusable `WilayaSelect`/`CommuneSelect` frontend components consume it.
+> Registration, the lottery engine, authentication, and historical
+> participation are still not implemented.
+
 ## Architecture
 
 ```
@@ -109,4 +115,21 @@ placeholder text, since that content doesn't exist yet.
 
 ## Geographic data
 
-See [docs/geographic-data.md](docs/geographic-data.md).
+Read-only API, seeded from Algeria's official wilaya/commune reference data:
+
+| Endpoint                        | Description                               |
+| ------------------------------- | ----------------------------------------- |
+| `GET /api/wilayas`              | All active wilayas                        |
+| `GET /api/wilayas/:id`          | A single wilaya                           |
+| `GET /api/wilayas/:id/communes` | Communes belonging to that wilaya         |
+| `GET /api/communes`             | All active communes (`?wilayaId=` filter) |
+| `GET /api/communes/:id`         | A single commune                          |
+
+Each record carries `nameAr`/`nameFr`/`nameEn` together, so clients pick the
+label matching the active locale without extra requests. On the frontend,
+`WilayaSelect`/`CommuneSelect` (`client/src/components/geo/`) are reusable,
+API-backed selectors — no commune/wilaya data is hardcoded in React; changing
+the wilaya resets the commune selection.
+
+See [docs/geographic-data.md](docs/geographic-data.md) for the source dataset,
+normalization, and seeding process.

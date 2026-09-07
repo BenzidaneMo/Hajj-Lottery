@@ -55,7 +55,15 @@
       "dashboard": { "title": "Dashboard" },
       "participants": { "title": "Participants" },
       "applications": { "title": "Applications" },
-      "communes": { "title": "Communes" },
+      "communes": {
+        "title": "Communes",
+        "description": "Browse the seeded wilaya/commune reference data.",
+        "selectPrompt": "Select a wilaya and a commune to see its details.",
+        "code": "Code",
+        "nameAr": "Arabic name",
+        "nameFr": "French name",
+        "nameEn": "English name"
+      },
       "draws": { "title": "Draws" },
       "winners": { "title": "Winners" },
       "history": { "title": "Historical Data" },
@@ -64,6 +72,19 @@
       "audit": { "title": "Audit Logs" },
       "admins": { "title": "Administrators" },
       "settings": { "title": "Settings" }
+    }
+  },
+  "geo": {
+    "wilaya": {
+      "label": "Wilaya",
+      "placeholder": "Select a wilaya",
+      "loadError": "Failed to load wilayas"
+    },
+    "commune": {
+      "label": "Commune",
+      "placeholder": "Select a commune",
+      "selectWilayaFirst": "Select a wilaya first",
+      "loadError": "Failed to load communes"
     }
   },
   "common": {
