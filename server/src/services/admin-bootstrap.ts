@@ -76,6 +76,10 @@ export async function createInitialAdmin(options: BootstrapOptions): Promise<Boo
       username,
       passwordHash: await hashPassword(options.password),
       role: AdminRole.SUPER_ADMIN,
+      // A SUPER_ADMIN is national; the role/scope CHECK constraint rejects
+      // any geographic assignment here.
+      wilayaId: null,
+      communeId: null,
     },
   })
 

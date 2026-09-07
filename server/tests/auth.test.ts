@@ -329,7 +329,9 @@ describe('brute-force protection', () => {
       data: {
         username: 'other.admin',
         passwordHash: await hashPassword(PASSWORD),
-        role: AdminRole.WILAYA_ADMIN,
+        // National, so this fixture needs no wilaya; the role/scope CHECK
+        // constraint would reject a WILAYA_ADMIN without one.
+        role: AdminRole.SUPER_ADMIN,
       },
     })
     const isolated = createApp()

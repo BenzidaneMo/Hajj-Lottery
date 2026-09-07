@@ -26,6 +26,7 @@ model Wilaya {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   communes  Commune[]
+  admins    User[]
 
   @@map("wilayas")
 }
@@ -46,8 +47,13 @@ model Commune {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   wilaya    Wilaya   @relation(fields: [wilayaId], references: [id])
+  admins    User[]
 
   @@unique([wilayaId, code])
+  /// Redundant on its own (id is already unique), but it gives User a
+  /// composite foreign key target so PostgreSQL can enforce that an
+  /// administrator's commune really belongs to their wilaya.
+  @@unique([id, wilayaId])
   @@index([wilayaId])
   @@map("communes")
 }
@@ -94,9 +100,8 @@ enum AdminRole {
 
 /// An administrator who can sign in to the admin portal.
 ///
-/// Scoping fields (which wilaya or commune an admin governs) belong to the
-/// authorization step and are deliberately absent: this step establishes
-/// identity only, not permission boundaries.
+/// Geographic scope is stored here and is the *only* authoritative source of
+/// what this administrator may reach. It is never taken from the request.
 model User {
   id String @id @default(cuid())
 
@@ -111,12 +116,33 @@ model User {
   /// Deactivated administrators keep their record but cannot authenticate.
   isActive Boolean @default(true) @map("is_active")
 
+  /// Geographic scope, by role:
+  ///   SUPER_ADMIN    both NULL           (national)
+  ///   WILAYA_ADMIN   wilayaId only
+  ///   COMMUNE_ADMIN  both set
+  /// A CHECK constraint (see the migration) rejects any other combination.
+  wilayaId  String? @map("wilaya_id")
+  communeId String? @map("commune_id")
+
+  /// Restrict, not Cascade: deleting geography must never silently widen or
+  /// destroy an administrator's scope.
+  wilaya Wilaya? @relation(fields: [wilayaId], references: [id], onDelete: Restrict)
+
+  /// Composite reference on purpose. Pointing at (id, wilayaId) makes
+  /// PostgreSQL reject a commune that belongs to a different wilaya than the
+  /// one assigned here — the inconsistency cannot be written at all. With a
+  /// NULL commune (SUPER_ADMIN, WILAYA_ADMIN) the constraint simply does not
+  /// apply.
+  commune Commune? @relation(fields: [communeId, wilayaId], references: [id, wilayaId], onDelete: Restrict)
+
   lastLoginAt DateTime? @map("last_login_at")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
   sessions Session[]
 
+  @@index([wilayaId])
+  @@index([communeId])
   @@map("users")
 }
 
