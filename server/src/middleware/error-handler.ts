@@ -33,6 +33,17 @@ export const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
     return
   }
 
+  // Raised by express.json() before any handler runs, so it cannot be caught
+  // where the route is defined.
+  if (isBodyParserError(error)) {
+    const tooLarge = error.type === 'entity.too.large'
+    res.status(tooLarge ? 413 : 400).json({
+      error: tooLarge ? 'Request body is too large' : 'Request body is not valid JSON',
+      code: tooLarge ? 'PAYLOAD_TOO_LARGE' : 'VALIDATION_FAILED',
+    })
+    return
+  }
+
   // A unique constraint that slipped past the service layer's own check.
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
     console.error('Unhandled unique constraint violation:', error.meta)
@@ -42,4 +53,21 @@ export const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
 
   console.error('Unhandled error:', error)
   res.status(500).json({ error: 'Internal server error', code: 'INTERNAL_ERROR' })
+}
+
+interface BodyParserError extends Error {
+  type: string
+  status?: number
+}
+
+/**
+ * body-parser tags its failures with a `type`. Detected structurally rather
+ * than by message so the check does not depend on wording.
+ */
+function isBodyParserError(error: unknown): error is BodyParserError {
+  return (
+    error instanceof Error &&
+    typeof (error as BodyParserError).type === 'string' &&
+    (error as BodyParserError).type.startsWith('entity.')
+  )
 }

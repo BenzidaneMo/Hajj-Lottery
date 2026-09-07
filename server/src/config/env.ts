@@ -37,6 +37,22 @@ const envSchema = z.object({
   /** Explicit credentials for the production bootstrap (`npm run admin:create`). */
   ADMIN_USERNAME: optionalString,
   ADMIN_PASSWORD: optionalString,
+
+  /**
+   * The draw year citizens are currently registering for. Defaults to the
+   * calendar year. This is the server's answer — a draw_year in a request
+   * body is ignored — and is a placeholder for the real draw lifecycle.
+   */
+  DRAW_YEAR: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.coerce.number().int().min(2000).max(2200).optional(),
+  ),
+
+  /** Whether public registration accepts applications at all. */
+  REGISTRATION_OPEN: z.preprocess(
+    (value) => (typeof value === 'string' ? value.trim().toLowerCase() !== 'false' : value),
+    z.boolean().default(true),
+  ),
 })
 
 const parsed = envSchema.safeParse(process.env)

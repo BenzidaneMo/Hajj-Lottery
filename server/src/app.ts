@@ -6,6 +6,7 @@ import { allowedOrigins } from './config/env.js'
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js'
 import { verifyRequestOrigin } from './middleware/verify-request-origin.js'
 import { adminRouter } from './routes/admin.js'
+import { createApplicationsRouter } from './routes/applications.js'
 import { createAuthRouter } from './routes/auth.js'
 import { communesRouter } from './routes/communes.js'
 import { healthRouter } from './routes/health.js'
@@ -25,7 +26,10 @@ export function createApp() {
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     }),
   )
-  app.use(express.json())
+  // Every endpoint here takes a small JSON body — the largest is a two-person
+  // registration form. Capping globally is what actually bounds an oversized
+  // request, since the parser runs before any router could impose its own.
+  app.use(express.json({ limit: '32kb' }))
   app.use(cookieParser())
   app.use(verifyRequestOrigin)
 
@@ -38,6 +42,8 @@ export function createApp() {
   app.use('/api/communes', communesRouter)
   app.use('/api/admin', adminRouter)
   app.use('/api/participants', participantsRouter)
+  // Public: citizens register without an account, by design.
+  app.use('/api/applications', createApplicationsRouter())
 
   // Order matters: unmatched /api routes 404 as JSON, then every error —
   // thrown or forwarded — leaves through the single handler.
