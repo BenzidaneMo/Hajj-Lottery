@@ -28,6 +28,8 @@
     "prisma:generate": "prisma generate --schema prisma/schema.prisma",
     "prisma:migrate": "prisma migrate dev --schema prisma/schema.prisma",
     "prisma:seed": "prisma db seed --schema prisma/schema.prisma",
+    "seed:admin": "npm run seed:admin --workspace server",
+    "admin:create": "npm run admin:create --workspace server",
     "prisma:studio": "prisma studio --schema prisma/schema.prisma",
     "build:geo-data": "node prisma/seed-data/build.mjs"
   },

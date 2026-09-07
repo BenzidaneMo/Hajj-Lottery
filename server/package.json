@@ -10,6 +10,8 @@
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
+    "seed:admin": "tsx src/scripts/create-admin.ts",
+    "admin:create": "tsx src/scripts/create-admin.ts --explicit",
     "typecheck": "tsc -p tsconfig.test.json"
   },
   "dependencies": {
