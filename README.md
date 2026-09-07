@@ -59,6 +59,13 @@ transparent results, across Arabic (RTL), French, and English.
 > year. Weighting, the draw itself, winner processing and legacy import
 > tooling remain unimplemented.
 
+> **Status:** Step 10 — priority/weight engine. An eligible application's
+> lottery weight is derived from verified participation history, with paired
+> applications taking the higher of their two weights, and frozen onto the
+> application as a snapshot that later historical corrections cannot silently
+> rewrite. The draw itself — selection, sampling, spot allocation — and winner
+> processing remain unimplemented.
+
 ## Architecture
 
 ```
@@ -293,6 +300,30 @@ person may take part in different communes in different years, and an
 administrator is never told about the years outside their territory.
 
 See [docs/participation-history.md](docs/participation-history.md).
+
+## Weighting
+
+How strong an eligible application's claim is, derived from verified
+participation history. Nothing selects winners yet.
+
+| Endpoint                                 | Auth | Purpose                  |
+| ---------------------------------------- | ---- | ------------------------ |
+| `GET /api/admin/applications/:id/weight` | yes  | Inspect a weight, scoped |
+
+An individual's weight is their consecutive verified non-winning streak, with a
+floor of 1 — a first-time applicant must still be drawable, and a weight of zero
+would make them ineligible by arithmetic rather than by the eligibility rules.
+A **paired application takes the higher of its two weights**, so pairing with
+someone newer never costs a long-waiting applicant the claim they have built up.
+
+Calculating a weight never writes; freezing one does, and says so in its name.
+Once frozen, a weight is the claim that application **entered with**: verifying
+a legacy record next month may grow the live streak, but the snapshot stands,
+because a draw run against weights shifting underneath it could not be
+reproduced or defended. Administrators can see the divergence; nothing acts on
+it automatically.
+
+See [docs/weighting.md](docs/weighting.md).
 
 ## Roles and geographic scope
 
