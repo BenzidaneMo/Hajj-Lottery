@@ -47,9 +47,10 @@ model Commune {
   isActive     Boolean       @default(true) @map("is_active")
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
-  wilaya       Wilaya        @relation(fields: [wilayaId], references: [id])
+  wilaya       Wilaya                 @relation(fields: [wilayaId], references: [id])
   admins       User[]
   applications Application[]
+  history      ParticipationHistory[]
 
   @@unique([wilayaId, code])
   /// Redundant on its own (id is already unique), but it gives User a
@@ -99,6 +100,7 @@ model Participant {
   primaryApplications   Application[]            @relation("PrimaryApplicant")
   secondaryApplications Application[]            @relation("SecondaryApplicant")
   participations        ApplicationParticipant[]
+  history               ParticipationHistory[]
 
   @@map("participants")
 }
@@ -260,6 +262,84 @@ model Application {
   @@unique([id, drawYear])
   @@index([drawYear, communeId])
   @@map("applications")
+}
+
+/// Where a historical fact came from. An enum rather than free text so a
+/// record's provenance is always one of a known set — "who told us this?" is
+/// half of whether it can be trusted.
+enum ParticipationSource {
+  /// Transcribed from paper registers or another pre-platform official record.
+  LEGACY_IMPORT
+  /// Derived from an Application this platform processed through a draw.
+  APPLICATION
+  /// Entered or amended by an administrator fixing a known error.
+  ADMIN_CORRECTION
+
+  @@map("participation_source")
+}
+
+/// What happened to one person in one previous draw year.
+///
+/// The third question in the model, distinct from the other two: Participant
+/// answers "who is this person?", Application answers "how are they taking
+/// part this year?", and this answers "what happened to them across previous
+/// years?". Merging any two of them loses something — a person is not a year,
+/// and an application is an intention, not an outcome.
+///
+/// This ledger is the future input to priority weighting. It stores facts, not
+/// conclusions: no streak counter, no weight, nothing derived. Anything
+/// computable from these rows is computed on demand, so a stored summary can
+/// never drift from the rows it summarises.
+model ParticipationHistory {
+  id String @id @default(cuid())
+
+  participantId String @map("participant_id")
+
+  /// Where this person took part *that year*. Nobody belongs to a commune
+  /// permanently, so the commune is a property of the year rather than of the
+  /// participant, and it is what geographic authorization is decided on.
+  ///
+  /// Wilaya is deliberately not stored: the commune already determines it, and
+  /// a second copy could disagree with the first.
+  communeId String @map("commune_id")
+
+  drawYear Int @map("draw_year")
+
+  /// Whether the person took part in that year's draw. False is a *positive
+  /// claim* that they did not — meaningfully different from having no row at
+  /// all, which means the ledger simply has nothing authoritative to say.
+  participated Boolean
+
+  /// Whether they were selected. A CHECK constraint forbids winning a draw you
+  /// did not take part in.
+  won Boolean @default(false)
+
+  source ParticipationSource
+
+  /// Whether a human has confirmed this record against its source. Imported
+  /// history lands as false and stays uncounted until someone vouches for it —
+  /// see docs/participation-history.md.
+  verified Boolean @default(false)
+
+  /// Free text for provenance and uncertainty: which register, which page,
+  /// what was illegible, why a correction was made. Never identity data.
+  notes String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Restrict)
+  commune     Commune     @relation(fields: [communeId], references: [id], onDelete: Restrict)
+
+  /// One person cannot have two contradictory stories about the same year.
+  /// PostgreSQL decides this, so concurrent writes resolve correctly rather
+  /// than both believing they checked first.
+  @@unique([participantId, drawYear])
+  /// The streak walk reads one participant's years in descending order.
+  @@index([participantId, drawYear])
+  /// The administrative view reads one commune's year.
+  @@index([communeId, drawYear])
+  @@map("participation_history")
 }
 
 /// One row per participant per application — the table that makes "at most
