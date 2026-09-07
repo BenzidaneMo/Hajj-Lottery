@@ -14,10 +14,12 @@ process.env.INTERNAL_API_KEY = 'test-internal-api-key'
 const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } })
 
 beforeEach(async () => {
-  // Participants are the only table these tests write to; the geographic
-  // tables are left alone so an accidental misconfiguration cannot quietly
-  // wipe seeded reference data.
-  await prisma.$executeRawUnsafe('TRUNCATE TABLE "participants" RESTART IDENTITY CASCADE')
+  // Only the tables these tests write to. The geographic tables are left
+  // alone so an accidental misconfiguration cannot quietly wipe seeded
+  // reference data. Truncating "users" cascades to "sessions".
+  await prisma.$executeRawUnsafe(
+    'TRUNCATE TABLE "participants", "sessions", "users" RESTART IDENTITY CASCADE',
+  )
 })
 
 afterAll(async () => {
