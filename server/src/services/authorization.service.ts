@@ -10,6 +10,7 @@ import {
   wilayaScopeFilter,
   type AdminScope,
 } from '../lib/scope.js'
+import { sortByCode } from '../lib/geo-order.js'
 import { prisma as defaultPrisma } from '../lib/prisma.js'
 
 /**
@@ -43,10 +44,10 @@ export class AuthorizationService {
     const ceiling = wilayaScopeFilter(this.scopeFor(user))
     const narrowing = requested.wilayaId ? { id: requested.wilayaId } : {}
 
-    return this.db.wilaya.findMany({
+    const wilayas = await this.db.wilaya.findMany({
       where: { ...intersectFilters(ceiling, narrowing), isActive: true },
-      orderBy: { code: 'asc' },
     })
+    return sortByCode(wilayas)
   }
 
   /** A single wilaya, or null when it does not exist *or* is out of scope. */
@@ -74,10 +75,10 @@ export class AuthorizationService {
       ...(requested.communeId ? { id: requested.communeId } : {}),
     }
 
-    return this.db.commune.findMany({
+    const communes = await this.db.commune.findMany({
       where: { ...intersectFilters(ceiling, narrowing), isActive: true },
-      orderBy: [{ wilayaId: 'asc' }, { code: 'asc' }],
     })
+    return sortByCode(communes)
   }
 
   /** A single commune, or null when it does not exist *or* is out of scope. */

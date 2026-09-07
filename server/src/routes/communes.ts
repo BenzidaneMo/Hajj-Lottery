@@ -2,6 +2,7 @@ import { Router } from 'express'
 
 import { NotFoundError } from '../lib/errors.js'
 import { toCommuneDto } from '../lib/geo-dto.js'
+import { sortByCode } from '../lib/geo-order.js'
 import { prisma } from '../lib/prisma.js'
 import { asyncHandler } from '../middleware/error-handler.js'
 
@@ -14,9 +15,8 @@ communesRouter.get(
 
     const communes = await prisma.commune.findMany({
       where: { isActive: true, ...(wilayaId ? { wilayaId } : {}) },
-      orderBy: [{ wilayaId: 'asc' }, { code: 'asc' }],
     })
-    res.json(communes.map(toCommuneDto))
+    res.json(sortByCode(communes).map(toCommuneDto))
   }),
 )
 
