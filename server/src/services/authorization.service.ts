@@ -12,6 +12,7 @@ import {
 } from '../lib/scope.js'
 import { sortByCode } from '../lib/geo-order.js'
 import { prisma as defaultPrisma } from '../lib/prisma.js'
+import type { HistoryRecordWithPlace } from './participation-history.service.js'
 
 /**
  * Geographic authorization.
@@ -110,6 +111,46 @@ export class AuthorizationService {
     return this.db.application.findFirst({
       where: { id: applicationId, commune: ceiling },
       include: { commune: { include: { wilaya: true } } },
+    })
+  }
+
+  /**
+   * One historical record, or null when it does not exist *or* its commune is
+   * outside the caller's reach.
+   *
+   * Authorized on the commune of *that year*, never on the participant. A
+   * person may take part in different communes in different years, so a
+   * COMMUNE_ADMIN who may see their 2024 record has no claim on their 2025 one
+   * elsewhere — the participant is not the unit of ownership, the record is.
+   */
+  async findHistoryRecord(user: User, historyId: string): Promise<HistoryRecordWithPlace | null> {
+    const ceiling = communeScopeFilter(this.scopeFor(user))
+
+    return this.db.participationHistory.findFirst({
+      where: { id: historyId, commune: ceiling },
+      include: { commune: { include: { wilaya: true } } },
+    })
+  }
+
+  /**
+   * A participant's history, narrowed to the records this administrator may
+   * see, newest first.
+   *
+   * The filtering is the authorization. Asking for a participant by id is not
+   * a claim on that participant — there is nothing to claim, since a
+   * participant belongs to no commune — so the query returns their years in
+   * *this* administrator's territory and silently omits the rest. A
+   * COMMUNE_ADMIN never learns that someone also took part elsewhere, which
+   * they would if this authorized the participant as a whole and then returned
+   * everything.
+   */
+  async listParticipantHistory(user: User, participantId: string): Promise<HistoryRecordWithPlace[]> {
+    const ceiling = communeScopeFilter(this.scopeFor(user))
+
+    return this.db.participationHistory.findMany({
+      where: { participantId, commune: ceiling },
+      include: { commune: { include: { wilaya: true } } },
+      orderBy: { drawYear: 'desc' },
     })
   }
 

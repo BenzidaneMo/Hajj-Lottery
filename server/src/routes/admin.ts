@@ -2,6 +2,7 @@ import { Router } from 'express'
 
 import { getApplicationEligibility } from '../controllers/admin-application.controller.js'
 import { getCommune, getWilaya, listCommunes, listWilayas } from '../controllers/admin-geo.controller.js'
+import { getHistoryRecord, getParticipantHistory } from '../controllers/admin-history.controller.js'
 import { asyncHandler } from '../middleware/error-handler.js'
 import { requireAuthenticatedUser } from '../middleware/require-authenticated-user.js'
 
@@ -22,3 +23,9 @@ adminRouter.get('/communes/:id', asyncHandler(getCommune))
 // but only the ones in their own territory, which the query enforces rather
 // than this line.
 adminRouter.get('/applications/:id/eligibility', asyncHandler(getApplicationEligibility))
+
+// The participation ledger. Both are scoped by the *record's* commune, not by
+// the participant — see the controller for why a participant id is not
+// something that can be authorized.
+adminRouter.get('/participants/:id/history', asyncHandler(getParticipantHistory))
+adminRouter.get('/history/:id', asyncHandler(getHistoryRecord))
