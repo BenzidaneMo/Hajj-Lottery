@@ -51,6 +51,7 @@ model Commune {
   admins       User[]
   applications Application[]
   history      ParticipationHistory[]
+  draws        CommuneDraw[]
 
   @@unique([wilayaId, code])
   /// Redundant on its own (id is already unique), but it gives User a
@@ -269,6 +270,110 @@ model Application {
   @@unique([id, drawYear])
   @@index([drawYear, communeId])
   @@map("applications")
+}
+
+/// The annual registration cycle's state.
+///
+/// This is the *national* lifecycle only: whether citizens may apply this
+/// year. What each commune's own draw is doing is CommuneDrawStatus, and the
+/// two move independently — a year can be open for registration while every
+/// commune draw is still a draft.
+///
+/// Deliberately short. States belonging to draw execution (preparing,
+/// completed) are absent because no code can reach them yet; adding them now
+/// would be inventing a lifecycle rather than recording one.
+enum DrawYearStatus {
+  /// Being configured. Registration is not running.
+  DRAFT
+  /// Citizens may submit applications. At most one year may be here at a time.
+  REGISTRATION_OPEN
+  /// Intake has finished. There is no route back — reopening is a policy
+  /// decision nobody has made.
+  REGISTRATION_CLOSED
+  /// Kept for the record, no longer operational. Draw years are archived
+  /// rather than deleted: they are the history of who ran which lottery.
+  ARCHIVED
+
+  @@map("draw_year_status")
+}
+
+/// One annual lottery cycle.
+///
+/// The authoritative answer to "which year is registration for?" — replacing
+/// the environment-variable placeholder that stood in for it. Exactly one year
+/// may be REGISTRATION_OPEN, enforced by a partial unique index in the
+/// migration, so the question can never have two answers.
+model DrawYear {
+  id String @id @default(cuid())
+
+  /// The calendar year of the pilgrimage draw. One cycle per year, ever.
+  year Int @unique
+
+  status DrawYearStatus @default(DRAFT)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  communeDraws CommuneDraw[]
+
+  @@map("draw_years")
+}
+
+/// Where one commune's draw stands, independently of the national cycle.
+enum CommuneDrawStatus {
+  /// Being configured. Spots may still change.
+  DRAFT
+  /// Configuration is settled and intake continues. Spots may still change.
+  READY
+  /// Allocation is fixed. Nothing may change the spots after this, and no
+  /// further applications join this commune's pool.
+  LOCKED
+  /// Called off for this year. Terminal.
+  CANCELLED
+
+  @@map("commune_draw_status")
+}
+
+/// One commune's lottery for one draw year.
+///
+/// The draw is run per commune, so this is where the number of Hajj places is
+/// configured — and it is *configuration*, never a calculation. Spots are not
+/// derived from how many people applied, from population, or from past
+/// winners; an official allocates them, and the system records what was
+/// allocated.
+///
+/// A commune with no record here is not running a draw that year, and
+/// registration refuses it rather than accepting applications into a lottery
+/// that does not exist.
+model CommuneDraw {
+  id String @id @default(cuid())
+
+  drawYearId String @map("draw_year_id")
+  communeId  String @map("commune_id")
+
+  /// How many winners this commune's draw may select. A positive integer,
+  /// bounded by a CHECK constraint. Never inferred from the applicant count:
+  /// 843 eligible applications for 12 places is the normal case, and so is
+  /// 100 places for 20 applicants.
+  allocatedSpots Int @map("allocated_spots")
+
+  status CommuneDrawStatus @default(DRAFT)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// Restrict, not Cascade, on both sides. These records are the configuration
+  /// a lottery was run under; deleting geography or a year must never quietly
+  /// erase the terms of a past draw.
+  drawYear DrawYear @relation(fields: [drawYearId], references: [id], onDelete: Restrict)
+  /// Wilaya is deliberately not copied here — the commune already determines
+  /// it, and geographic authorization reads it through this relation.
+  commune  Commune  @relation(fields: [communeId], references: [id], onDelete: Restrict)
+
+  /// One configuration per commune per year.
+  @@unique([drawYearId, communeId])
+  @@index([communeId])
+  @@map("commune_draws")
 }
 
 /// Where a historical fact came from. An enum rather than free text so a

@@ -1,6 +1,7 @@
 export * from './application.js'
 export * from './auth.js'
 export * from './digits.js'
+export * from './draw-configuration.js'
 export * from './eligibility.js'
 export * from './geo.js'
 export * from './locale.js'

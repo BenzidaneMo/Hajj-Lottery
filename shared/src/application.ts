@@ -66,8 +66,5 @@ export interface ApplicationReceiptDto {
   submittedAt: string
 }
 
-/** What GET /api/applications/registration-window reports to the form. */
-export interface RegistrationWindowDto {
-  drawYear: number
-  isOpen: boolean
-}
+// RegistrationWindowDto lives in draw-configuration.ts: what the form may
+// apply for is a property of the annual cycle, not of one application.
