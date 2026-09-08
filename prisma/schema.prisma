@@ -55,6 +55,8 @@ model Commune {
   history       ParticipationHistory[]
   draws         CommuneDraw[]
   winnerArchive WinnerArchive[]
+  legacyWinners LegacyWinner[]
+  importRows    ImportRow[]
   auditLogs     AuditLog[]
   approvals     ApprovalRequest[]
 
@@ -113,6 +115,9 @@ model Participant {
   winsAsSecondary        DrawWinner[]            @relation("WinnerSecondary")
   /// At most one, ever — a person wins the Hajj lottery once in their life.
   winnerArchive          WinnerArchive?
+  /// The pre-platform counterpart, and equally at most one.
+  legacyWinner           LegacyWinner?
+  importRows             ImportRow[]
 
   @@map("participants")
 }
@@ -173,6 +178,8 @@ model User {
   auditLogs         AuditLog[]
   approvalsRequested ApprovalRequest[] @relation("ApprovalRequester")
   approvalsReviewed  ApprovalRequest[] @relation("ApprovalReviewer")
+  importsUploaded    ImportBatch[]     @relation("ImportUploader")
+  importsApproved    ImportBatch[]     @relation("ImportApprover")
 
   @@index([wilayaId])
   @@index([communeId])
@@ -693,10 +700,10 @@ model WinnerArchive {
 /// exists here or cannot be logged, which is what makes the trail queryable and
 /// stops a typo becoming a category nobody notices.
 ///
-/// Only actions something can actually perform are listed. Import, participant
-/// identity correction and winner correction are absent because the operations
-/// they would describe do not exist — a catalogue of events that never fire
-/// reads like coverage while providing none.
+/// Only actions something can actually perform are listed. Participant identity
+/// correction and winner correction are absent because the operations they would
+/// describe do not exist — a catalogue of events that never fire reads like
+/// coverage while providing none.
 enum AuditAction {
   /// Authentication. A failure carries no actor: the account may not exist, and
   /// saying which is which would answer the question the login route refuses to.
@@ -728,6 +735,14 @@ enum AuditAction {
   /// hundreds of records at once, and the execution event is their provenance.
   HISTORICAL_RECORD_CORRECTED
 
+  /// The legacy import. Four events because the four moments differ in actor and
+  /// in consequence: uploading stages nothing authoritative, approving still
+  /// writes nothing, and only completion changes what a future lottery sees.
+  LEGACY_IMPORT_CREATED
+  LEGACY_IMPORT_APPROVED
+  LEGACY_IMPORT_REJECTED
+  LEGACY_IMPORT_COMPLETED
+
   /// Separation of duties.
   APPROVAL_CREATED
   APPROVAL_APPROVED
@@ -751,6 +766,7 @@ enum AuditTargetType {
   DRAW_RESULT
   PARTICIPATION_HISTORY
   APPROVAL_REQUEST
+  IMPORT_BATCH
 
   @@map("audit_target_type")
 }
@@ -952,6 +968,11 @@ model ParticipationHistory {
   participant Participant @relation(fields: [participantId], references: [id], onDelete: Restrict)
   commune     Commune     @relation(fields: [communeId], references: [id], onDelete: Restrict)
 
+  /// Set only for a record a legacy import produced, and its route back to the
+  /// register it was transcribed from.
+  importRow    ImportRow?
+  legacyWinner LegacyWinner?
+
   /// One person cannot have two contradictory stories about the same year.
   /// PostgreSQL decides this, so concurrent writes resolve correctly rather
   /// than both believing they checked first.
@@ -990,4 +1011,242 @@ model ApplicationParticipant {
   @@unique([applicationId, role])
   @@index([participantId])
   @@map("application_participants")
+}
+
+/// The file formats a legacy register may arrive in. Nothing else is parsed.
+enum ImportSourceFormat {
+  CSV
+  XLSX
+
+  @@map("import_source_format")
+}
+
+/// Where a batch stands.
+///
+/// The lifecycle exists to keep four things apart, because conflating any two of
+/// them is how unreviewed historical data becomes authoritative: a file arriving,
+/// its rows being checked, an administrator accepting it, and the authoritative
+/// tables actually changing. Nothing before IMPORTED has touched a participant,
+/// a historical record or anybody's winner status.
+///
+/// VALIDATING is a real state, not a formality. Staging and checking thousands of
+/// rows is not one transaction, so a batch can genuinely be caught here — and one
+/// stuck in VALIDATING is precisely what an administrator needs to see.
+enum ImportBatchStatus {
+  UPLOADED
+  VALIDATING
+  READY_FOR_REVIEW
+  /// Refused by a national administrator. Terminal.
+  REJECTED
+  /// Accepted, and still not written. Terminal only in the sense that it may
+  /// now be executed.
+  APPROVED
+  /// The authoritative tables hold it. Terminal, and there is no un-import.
+  IMPORTED
+  /// The file itself could not be staged. Terminal.
+  FAILED
+
+  @@map("import_batch_status")
+}
+
+/// What validation concluded about one staged row.
+///
+/// CONFLICT and INVALID both block, and mean different things. INVALID is a row
+/// that does not say anything usable — no national ID, an unparseable year.
+/// CONFLICT is a well-formed row that disagrees with something: another row, a
+/// known participant, an authoritative historical record. Only the second is a
+/// question for a human.
+enum ImportRowStatus {
+  VALID
+  WARNING
+  CONFLICT
+  INVALID
+
+  @@map("import_row_status")
+}
+
+/// One uploaded legacy register, and everything that happened to it.
+///
+/// The batch is the unit of review and the unit of provenance: every imported
+/// historical record and every legacy winner points back at the file it came
+/// from, so "why does this person have four years of priority?" always has an
+/// answer that names a source.
+///
+/// The uploaded file itself is *not* stored. It is parsed in memory, and what
+/// survives is the staged rows, the checksum and this record — enough to review,
+/// audit and explain the import without keeping a spreadsheet full of national
+/// IDs on disk indefinitely. See docs/legacy-import.md.
+model ImportBatch {
+  id String @id @default(cuid())
+
+  /// The name as uploaded, for recognition only. Never used as a path: nothing
+  /// here ever opens a file by a name a client chose.
+  sourceFilename String             @map("source_filename")
+  sourceFormat   ImportSourceFormat @map("source_format")
+
+  /// SHA-256 of the uploaded bytes. Unique, which is what makes re-uploading the
+  /// same register report the existing batch instead of quietly duplicating
+  /// thousands of historical records. An integrity and identity mechanism only —
+  /// never a credential, and never proof that the *contents* are new.
+  sourceChecksum String @unique @map("source_checksum")
+
+  /// The span of draw years the file turned out to cover, derived from its rows
+  /// once they are staged rather than declared by the uploader.
+  drawYearStart Int? @map("draw_year_start")
+  drawYearEnd   Int? @map("draw_year_end")
+
+  status ImportBatchStatus @default(UPLOADED)
+
+  /// Who uploaded it, and who accepted it. A CHECK constraint keeps them
+  /// different people: separation of duties, in the database rather than only in
+  /// a service a later refactor could simplify away.
+  uploadedByUserId String @map("uploaded_by_user_id")
+  uploadedBy       User   @relation("ImportUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  approvedByUserId String? @map("approved_by_user_id")
+  approvedBy       User?   @relation("ImportApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
+
+  /// Why it was accepted or refused. Mandatory for both, refused blank.
+  reviewReason String? @map("review_reason")
+  /// Why staging failed, where it did. Never the file's contents.
+  failureReason String? @map("failure_reason")
+
+  createdAt  DateTime  @default(now()) @map("created_at")
+  reviewedAt DateTime? @map("reviewed_at")
+  importedAt DateTime? @map("imported_at")
+
+  rows          ImportRow[]
+  legacyWinners LegacyWinner[]
+
+  @@index([status, createdAt])
+  @@index([uploadedByUserId, createdAt])
+  @@map("import_batches")
+}
+
+/// One line of an uploaded register, staged and checked before anything
+/// authoritative is written.
+///
+/// Staging is the whole point. An uploaded spreadsheet is untrusted input, and
+/// the cost of believing it is that somebody is excluded from the Hajj lottery
+/// for the rest of their life on the strength of a mistyped cell. So a row lands
+/// here first, is normalized by the same utilities the API uses, is checked
+/// against the file and against the database, and only then — after a national
+/// administrator has approved the batch — becomes a historical fact.
+///
+/// This table holds identity data by nature: a national ID is how a row is
+/// matched to a person. That is why it is staging rather than a permanent store,
+/// and why the audit trail records none of it.
+model ImportRow {
+  id String @id @default(cuid())
+
+  importBatchId String      @map("import_batch_id")
+  importBatch   ImportBatch @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
+
+  /// The line in the source file, 1-based and counting the header, so a reviewer
+  /// can find the row in the original register.
+  rowNumber Int @map("row_number")
+
+  /// Normalized by lib/national-id.ts, exactly as every other path into the
+  /// system normalizes one — Arabic-Indic digits folded, separators stripped.
+  /// Never the raw cell: a register written in Arabic digits must not create a
+  /// second identity for somebody already known.
+  nationalId String? @map("national_id")
+
+  fullName    String? @map("full_name")
+  dob         DateTime? @db.Date
+  /// Canonical +213XXXXXXXXX, or null. Optional throughout: a paper register
+  /// from 2009 has no phone number, and nothing here depends on one.
+  phoneNumber String? @map("phone_number")
+
+  /// The commune code as written, kept alongside the commune it resolved to so a
+  /// reviewer can see what the register actually said.
+  communeCode String  @map("commune_code")
+  communeId   String? @map("commune_id")
+  commune     Commune? @relation(fields: [communeId], references: [id], onDelete: Restrict)
+
+  drawYear Int? @map("draw_year")
+
+  /// Nullable on purpose, and this is load-bearing. An empty cell is an unknown,
+  /// and an unknown is not a false — coercing it would manufacture a positive
+  /// claim that somebody did not take part, which the ledger treats as
+  /// authoritative knowledge. A missing value is a validation error instead.
+  participated Boolean?
+  won          Boolean?
+
+  notes String?
+
+  status ImportRowStatus @default(VALID)
+  /// Every issue found, as `{ code, column, detail }` — codes from
+  /// shared/src/import.ts, so the admin UI translates rather than parses prose.
+  issues Json?
+
+  /// Resolved during validation and confirmed during import. `participantId`
+  /// being set does not mean anything was written: it means this row matched a
+  /// person who already existed.
+  participantId String?      @map("participant_id")
+  participant   Participant? @relation(fields: [participantId], references: [id], onDelete: Restrict)
+
+  /// The historical record this row produced, once the batch was imported. Null
+  /// for a row that was skipped because the ledger already held its year.
+  participationHistoryId String?               @unique @map("participation_history_id")
+  participationHistory   ParticipationHistory? @relation(fields: [participationHistoryId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  legacyWinner LegacyWinner?
+
+  /// One line number per batch.
+  @@unique([importBatchId, rowNumber])
+  @@index([importBatchId, status])
+  @@index([communeId])
+  @@index([nationalId, drawYear])
+  @@map("import_rows")
+}
+
+/// One person's Hajj win from before this platform existed.
+///
+/// A deliberate second winner model rather than a nullable-column version of
+/// `WinnerArchive`. An archived winner is the output of an executed draw: it
+/// names a draw result, a pool entry and a selection order, none of which a paper
+/// register from 2011 has or could have. Forcing legacy winners into that shape
+/// would mean four nullable foreign keys and a row that claims to describe a draw
+/// this system never ran — so the two provenances stay visibly different, and
+/// "was this a web-era draw or a transcribed register?" is answered by which
+/// table the row is in.
+///
+/// What the two share is the invariant that matters: `UNIQUE(participant_id)`,
+/// one win per person for life. A legacy import naming somebody who has already
+/// won — here or in a real draw — is a conflict for a human to resolve, never a
+/// second lifetime win.
+model LegacyWinner {
+  id String @id @default(cuid())
+
+  /// One legacy win per person, ever. The web-era counterpart is enforced
+  /// separately by winner_archive; a person appearing in both is refused during
+  /// validation and again inside the import transaction, since `has_won_hajj` is
+  /// set by a compare-and-set that a concurrent real draw would lose.
+  participantId String      @unique @map("participant_id")
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Restrict)
+
+  /// The year and commune of the win, as the register recorded them.
+  drawYear  Int     @map("draw_year")
+  communeId String  @map("commune_id")
+  commune   Commune @relation(fields: [communeId], references: [id], onDelete: Restrict)
+
+  /// Provenance: which upload, which line of it, and which historical record it
+  /// produced. A legacy winner is only ever as good as the register behind it,
+  /// so the register is never more than one join away.
+  importBatchId String      @map("import_batch_id")
+  importBatch   ImportBatch @relation(fields: [importBatchId], references: [id], onDelete: Restrict)
+
+  importRowId String    @unique @map("import_row_id")
+  importRow   ImportRow @relation(fields: [importRowId], references: [id], onDelete: Restrict)
+
+  participationHistoryId String               @unique @map("participation_history_id")
+  participationHistory   ParticipationHistory @relation(fields: [participationHistoryId], references: [id], onDelete: Restrict)
+
+  recordedAt DateTime @default(now()) @map("recorded_at")
+
+  @@index([drawYear])
+  @@index([communeId, drawYear])
+  @@map("legacy_winners")
 }
