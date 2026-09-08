@@ -757,13 +757,20 @@ describe('a draw has no side effects at all', () => {
 
     await lotteryWith(cryptoRandomIntSource).selectFromPool(communeDraw.id)
 
-    // A fabricated result row would be worse than none, so the tables that will
-    // eventually hold one do not exist yet.
+    // Selecting is not executing. The tables winner processing writes to exist
+    // now, and this must leave every one of them untouched — recording a result
+    // is DrawExecutionService's transaction, never a side effect of drawing.
+    expect(await prisma.drawResult.count()).toBe(0)
+    expect(await prisma.drawWinner.count()).toBe(0)
+    expect(await prisma.drawSelectionEvent.count()).toBe(0)
+    expect(await prisma.winnerArchive.count()).toBe(0)
+
+    // The audit table still does not exist: a fabricated audit row would be
+    // worse than none.
     const tables = await prisma.$queryRaw<Array<{ name: string | null }>>`
-      SELECT to_regclass(t)::text AS name
-      FROM (VALUES ('winners_archive'), ('draw_results'), ('draw_winners'), ('audit_logs')) AS v(t)
+      SELECT to_regclass('audit_logs')::text AS name
     `
-    expect(tables.map((row) => row.name)).toEqual([null, null, null, null])
+    expect(tables[0]?.name).toBeNull()
   })
 
   it('gives the same pool a different outcome each time, since nothing is recorded', async () => {

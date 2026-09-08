@@ -3,7 +3,11 @@ import request from 'supertest'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { createApp } from '../src/app.js'
-import { canTransitionCommuneDraw, canTransitionDrawYear } from '../src/lib/draw-lifecycle.js'
+import {
+  canTransitionCommuneDraw,
+  canTransitionDrawYear,
+  isAdministrativelySettable,
+} from '../src/lib/draw-lifecycle.js'
 import { drawConfigurationService } from '../src/services/draw-configuration.service.js'
 import { AdminRole, createAdminAndSignIn, ensureTestGeography, type TestGeography } from './helpers/admins.js'
 
@@ -87,8 +91,22 @@ describe('the lifecycle rules, in isolation', () => {
     expect(canTransitionCommuneDraw('LOCKED', 'READY')).toBe(false)
     expect(canTransitionCommuneDraw('LOCKED', 'DRAFT')).toBe(false)
     expect(canTransitionCommuneDraw('CANCELLED', 'DRAFT')).toBe(false)
-    // Draw execution does not exist, so nothing may claim to have completed.
-    expect(canTransitionCommuneDraw('LOCKED', 'COMPLETED' as never)).toBe(false)
+
+    // Executing the draw is the one way out of LOCKED, and there is no way out
+    // of COMPLETED at all: a concluded lottery has told people they won.
+    expect(canTransitionCommuneDraw('LOCKED', 'COMPLETED')).toBe(true)
+    expect(canTransitionCommuneDraw('COMPLETED', 'LOCKED')).toBe(false)
+    expect(canTransitionCommuneDraw('COMPLETED', 'CANCELLED')).toBe(false)
+  })
+
+  it('keeps COMPLETED out of an administrator’s hands', () => {
+    for (const status of ['DRAFT', 'READY', 'LOCKED', 'CANCELLED'] as const) {
+      expect(isAdministrativelySettable(status)).toBe(true)
+    }
+
+    // Legal as a transition, but only winner processing may perform it — a
+    // commune draw marked complete by hand would claim a lottery that never ran.
+    expect(isAdministrativelySettable('COMPLETED')).toBe(false)
   })
 })
 
