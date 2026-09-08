@@ -1,13 +1,25 @@
+import { AdminRole } from '@prisma/client'
 import { Router } from 'express'
 
 import {
   getApplicationEligibility,
   getApplicationWeight,
 } from '../controllers/admin-application.controller.js'
+import {
+  createCommuneDraw,
+  createDrawYear,
+  getCommuneDraw,
+  getDrawYear,
+  listCommuneDraws,
+  listDrawYears,
+  updateCommuneDraw,
+  updateDrawYear,
+} from '../controllers/admin-draw.controller.js'
 import { getCommune, getWilaya, listCommunes, listWilayas } from '../controllers/admin-geo.controller.js'
 import { getHistoryRecord, getParticipantHistory } from '../controllers/admin-history.controller.js'
 import { asyncHandler } from '../middleware/error-handler.js'
 import { requireAuthenticatedUser } from '../middleware/require-authenticated-user.js'
+import { requireRole } from '../middleware/require-role.js'
 
 export const adminRouter = Router()
 
@@ -34,3 +46,18 @@ adminRouter.get('/applications/:id/weight', asyncHandler(getApplicationWeight))
 // something that can be authorized.
 adminRouter.get('/participants/:id/history', asyncHandler(getParticipantHistory))
 adminRouter.get('/history/:id', asyncHandler(getHistoryRecord))
+
+// Draw configuration. Reading is for every administrator, narrowed to their
+// own territory by the query; changing it is national work, so the mutations
+// carry an explicit role gate rather than relying on scope to be restrictive
+// enough — a COMMUNE_ADMIN allocating their own commune's pilgrimage places is
+// precisely the conflict of interest the roles exist to prevent.
+adminRouter.get('/draw-years', asyncHandler(listDrawYears))
+adminRouter.get('/draw-years/:year', asyncHandler(getDrawYear))
+adminRouter.post('/draw-years', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(createDrawYear))
+adminRouter.patch('/draw-years/:id', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(updateDrawYear))
+
+adminRouter.get('/commune-draws', asyncHandler(listCommuneDraws))
+adminRouter.get('/commune-draws/:id', asyncHandler(getCommuneDraw))
+adminRouter.post('/commune-draws', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(createCommuneDraw))
+adminRouter.patch('/commune-draws/:id', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(updateCommuneDraw))

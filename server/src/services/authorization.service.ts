@@ -12,6 +12,7 @@ import {
 } from '../lib/scope.js'
 import { sortByCode } from '../lib/geo-order.js'
 import { prisma as defaultPrisma } from '../lib/prisma.js'
+import type { CommuneDrawWithPlace } from './draw-configuration.service.js'
 import type { HistoryRecordWithPlace } from './participation-history.service.js'
 
 /**
@@ -151,6 +152,43 @@ export class AuthorizationService {
       where: { participantId, commune: ceiling },
       include: { commune: { include: { wilaya: true } } },
       orderBy: { drawYear: 'desc' },
+    })
+  }
+
+  /**
+   * Commune draws the caller may see, optionally narrowed by year or commune.
+   *
+   * A commune draw has no scope of its own — it inherits its commune's, so the
+   * ceiling nests through that relation. Requested filters are intersected
+   * with it, so a WILAYA_ADMIN asking for a commune in another wilaya gets
+   * nothing rather than another territory's allocation.
+   */
+  async listCommuneDraws(
+    user: User,
+    requested: { drawYearId?: string; communeId?: string } = {},
+  ): Promise<CommuneDrawWithPlace[]> {
+    const ceiling = communeScopeFilter(this.scopeFor(user))
+
+    return this.db.communeDraw.findMany({
+      where: {
+        commune: ceiling,
+        ...(requested.drawYearId ? { drawYearId: requested.drawYearId } : {}),
+        ...(requested.communeId ? { communeId: requested.communeId } : {}),
+      },
+      include: { drawYear: true, commune: { include: { wilaya: true } } },
+    })
+  }
+
+  /**
+   * One commune draw, or null when it does not exist *or* its commune is
+   * outside the caller's reach — the two being indistinguishable is the point.
+   */
+  async findCommuneDraw(user: User, communeDrawId: string): Promise<CommuneDrawWithPlace | null> {
+    const ceiling = communeScopeFilter(this.scopeFor(user))
+
+    return this.db.communeDraw.findFirst({
+      where: { id: communeDrawId, commune: ceiling },
+      include: { drawYear: true, commune: { include: { wilaya: true } } },
     })
   }
 
