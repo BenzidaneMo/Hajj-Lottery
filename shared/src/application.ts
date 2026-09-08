@@ -5,12 +5,17 @@ export type EntryType = (typeof ENTRY_TYPES)[number]
 /**
  * Lifecycle states an application can be in.
  *
- * `PENDING` is intake: received, not yet evaluated. The other two are verdicts
- * of the eligibility engine and are only ever written by the server — see
- * docs/eligibility.md. Selection, weighting and winner states are separate
- * concerns and deliberately absent.
+ * `PENDING` is intake: received, not yet evaluated. `ELIGIBLE`/`INELIGIBLE` are
+ * verdicts of the eligibility engine — see docs/eligibility.md. `SELECTED` and
+ * `NOT_SELECTED` are outcomes of a concluded draw, written only by winner
+ * processing and only for applications that were in the frozen pool.
+ *
+ * All five are written by the server alone. `NOT_SELECTED` is deliberately not a
+ * refusal: that application took full part in the lottery and was not drawn,
+ * which is a different fact from `INELIGIBLE` and feeds the participation ledger
+ * differently.
  */
-export const APPLICATION_STATUSES = ['PENDING', 'ELIGIBLE', 'INELIGIBLE'] as const
+export const APPLICATION_STATUSES = ['PENDING', 'ELIGIBLE', 'INELIGIBLE', 'SELECTED', 'NOT_SELECTED'] as const
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number]
 
 /** One applicant, as submitted by the registration form. */

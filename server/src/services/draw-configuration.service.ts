@@ -8,7 +8,12 @@ import {
   type Wilaya,
 } from '@prisma/client'
 
-import { allowsSpotChanges, canTransitionCommuneDraw, canTransitionDrawYear } from '../lib/draw-lifecycle.js'
+import {
+  allowsSpotChanges,
+  canTransitionCommuneDraw,
+  canTransitionDrawYear,
+  isAdministrativelySettable,
+} from '../lib/draw-lifecycle.js'
 import { ConflictError, NotFoundError } from '../lib/errors.js'
 import { sortByCode } from '../lib/geo-order.js'
 import { prisma as defaultPrisma } from '../lib/prisma.js'
@@ -213,6 +218,17 @@ export class DrawConfigurationService {
       throw new ConflictError(
         'DRAW_CONFIGURATION_LOCKED',
         `Spot allocation cannot be changed once a commune draw is ${existing.status}`,
+      )
+    }
+
+    // COMPLETED belongs to winner processing alone. Setting it here would
+    // produce a draw that claims to have concluded with no winners to show, so
+    // it is refused before the transition table is even consulted — the
+    // transition itself is legal, but not from an administrator's hand.
+    if (changes.status !== undefined && !isAdministrativelySettable(changes.status)) {
+      throw new ConflictError(
+        'INVALID_STATUS_TRANSITION',
+        `A commune draw can only become ${changes.status} by executing its draw`,
       )
     }
 

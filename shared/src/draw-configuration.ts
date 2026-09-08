@@ -18,8 +18,14 @@ export const DRAW_YEAR_STATUSES = ['DRAFT', 'REGISTRATION_OPEN', 'REGISTRATION_C
 
 export type DrawYearStatus = (typeof DRAW_YEAR_STATUSES)[number]
 
-/** One commune's draw states. */
-export const COMMUNE_DRAW_STATUSES = ['DRAFT', 'READY', 'LOCKED', 'CANCELLED'] as const
+/**
+ * One commune's draw states.
+ *
+ * `COMPLETED` is terminal and cannot be set administratively — only winner
+ * processing reaches it, in the transaction that records the winners, and the
+ * database refuses to commit it without a result. See docs/winner-processing.md.
+ */
+export const COMMUNE_DRAW_STATUSES = ['DRAFT', 'READY', 'LOCKED', 'COMPLETED', 'CANCELLED'] as const
 
 export type CommuneDrawStatus = (typeof COMMUNE_DRAW_STATUSES)[number]
 

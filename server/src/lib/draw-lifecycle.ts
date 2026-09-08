@@ -8,9 +8,8 @@ import type { CommuneDrawStatus, DrawYearStatus } from '@hajj-lottery/shared'
  * is invisible. Anything not listed here cannot happen, which is the point —
  * a lifecycle enforced by omission rather than by remembering to check.
  *
- * Only transitions this phase can actually perform are present. Draw
- * execution, and the states that would come with it, are deferred; adding them
- * now would be inventing a lifecycle rather than recording one.
+ * Only transitions the system can actually perform are present. A state nothing
+ * can reach would be an invented lifecycle rather than a recorded one.
  */
 
 /**
@@ -29,21 +28,46 @@ const DRAW_YEAR_TRANSITIONS: Record<DrawYearStatus, readonly DrawYearStatus[]> =
 }
 
 /**
- * One commune's draw: configure it, settle it, lock it.
+ * One commune's draw: configure it, settle it, lock it, run it.
  *
  * READY can fall back to DRAFT, because "settled" is a statement about
  * intent and an official may reconsider before the allocation is fixed.
  * LOCKED cannot: it is the promise that the terms of the draw stopped moving,
  * and the whole value of that promise is that it cannot be taken back.
  *
- * COMPLETED is absent. It belongs to a draw having been executed, and no code
- * can execute one yet.
+ * COMPLETED is terminal, and there is no route back from it for anybody. A
+ * concluded lottery has told people they won; reopening it would take that
+ * back, and no correction workflow exists to do so responsibly.
+ *
+ * There is deliberately no DRAW_IN_PROGRESS between the two. Execution claims
+ * COMPLETED and writes every winner in a single transaction, so an intermediate
+ * state would be invisible to every other reader and undone by any failure —
+ * see docs/winner-processing.md.
  */
 const COMMUNE_DRAW_TRANSITIONS: Record<CommuneDrawStatus, readonly CommuneDrawStatus[]> = {
   DRAFT: ['READY', 'CANCELLED'],
   READY: ['DRAFT', 'LOCKED', 'CANCELLED'],
-  LOCKED: [],
+  LOCKED: ['COMPLETED'],
+  COMPLETED: [],
   CANCELLED: [],
+}
+
+/**
+ * States an administrator may never write by hand.
+ *
+ * LOCKED → COMPLETED is a legal transition, but only winner processing may
+ * perform it, and only alongside the result and winners it commits with. An
+ * administrator setting it directly would produce a draw that claims to have
+ * concluded with no winners to show — the worst state this system could reach.
+ *
+ * The database refuses it too, through a deferred constraint trigger. This check
+ * exists so the refusal arrives as a sentence rather than as a constraint
+ * violation at commit.
+ */
+const EXECUTION_ONLY_STATUSES: readonly CommuneDrawStatus[] = ['COMPLETED']
+
+export function isAdministrativelySettable(status: CommuneDrawStatus): boolean {
+  return !EXECUTION_ONLY_STATUSES.includes(status)
 }
 
 export function canTransitionDrawYear(from: DrawYearStatus, to: DrawYearStatus): boolean {
