@@ -48,6 +48,16 @@ export const AUDIT_ACTIONS = [
    *  once, and the execution event is their provenance. */
   'HISTORICAL_RECORD_CORRECTED',
 
+  /** The legacy import, which writes history in bulk and excludes people from
+   *  every future draw for life. Four events rather than one because the four
+   *  moments have different actors and different consequences: uploading stages
+   *  nothing authoritative, approving still writes nothing, and only completion
+   *  changes what the lottery will see. */
+  'LEGACY_IMPORT_CREATED',
+  'LEGACY_IMPORT_APPROVED',
+  'LEGACY_IMPORT_REJECTED',
+  'LEGACY_IMPORT_COMPLETED',
+
   'APPROVAL_CREATED',
   'APPROVAL_APPROVED',
   'APPROVAL_REJECTED',
@@ -65,6 +75,7 @@ export const AUDIT_TARGET_TYPES = [
   'DRAW_RESULT',
   'PARTICIPATION_HISTORY',
   'APPROVAL_REQUEST',
+  'IMPORT_BATCH',
 ] as const
 
 export type AuditTargetType = (typeof AUDIT_TARGET_TYPES)[number]
@@ -81,6 +92,10 @@ export const REASON_REQUIRED_ACTIONS: readonly AuditAction[] = [
   'HISTORICAL_RECORD_CORRECTED',
   'ADMIN_SCOPE_CHANGED',
   'ADMIN_DISABLED',
+  /** Accepting or refusing a legacy batch is a judgement about evidence nobody
+   *  else can re-examine once the paper register is filed away. */
+  'LEGACY_IMPORT_APPROVED',
+  'LEGACY_IMPORT_REJECTED',
   'APPROVAL_CREATED',
   'APPROVAL_APPROVED',
   'APPROVAL_REJECTED',

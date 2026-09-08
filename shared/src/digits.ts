@@ -97,6 +97,26 @@ export function limitToDigits(raw: string, maxDigits: number): string {
 }
 
 /**
+ * Folds non-ASCII digits to ASCII and changes nothing else.
+ *
+ * Separate from `normalizeTypedNumber` because separators are not always noise:
+ * in an identifier a dash is grouping and should go, but in `٢٠١١-٠٥-١٠` it is
+ * structure, and stripping it would turn a date into an eight-digit number. So
+ * anything with a shape — a date, a year written in a register — folds its digits
+ * here and keeps its punctuation.
+ */
+export function foldDigits(raw: string): string {
+  let folded = ''
+
+  for (const character of raw.normalize('NFKC')) {
+    const codePoint = character.codePointAt(0)
+    folded += (codePoint === undefined ? undefined : toAsciiDigit(codePoint)) ?? character
+  }
+
+  return folded
+}
+
+/**
  * Folds non-ASCII digits to ASCII and removes grouping separators, leaving
  * every other character untouched so the caller can reject it. Never strips
  * leading zeros or otherwise reinterprets the number.
