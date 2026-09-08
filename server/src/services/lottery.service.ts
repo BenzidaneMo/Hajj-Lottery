@@ -1,3 +1,4 @@
+import { LOTTERY_ALGORITHM_VERSION } from '@hajj-lottery/shared'
 import type { EntryType, PrismaClient } from '@prisma/client'
 
 import { hashPool, SNAPSHOT_VERSION } from '../lib/draw-pool-hash.js'
@@ -10,6 +11,15 @@ import {
 import { cryptoRandomIntSource } from '../lib/lottery-random.js'
 import { prisma as defaultPrisma } from '../lib/prisma.js'
 import { drawConfigurationService, type CommuneDrawWithPlace } from './draw-configuration.service.js'
+
+/**
+ * The Prisma surface a draw needs.
+ *
+ * Widened from `PrismaClient` deliberately: a transaction client satisfies it
+ * too, so winner processing can run the selection *inside* the transaction that
+ * records its winners rather than reading the pool from outside it.
+ */
+export type LotteryReader = Pick<PrismaClient, 'drawPool'>
 
 /** What the pool needs to expose for a draw. Identity is deliberately absent. */
 const ENTRY_FIELDS = {
@@ -31,6 +41,14 @@ export interface SelectedEntry {
   weight: number
   /** 1-based position in the order the entries were drawn. */
   selectionOrder: number
+  /**
+   * Who the entry wins for, as internal ids. Winner processing needs them to
+   * apply lifetime exclusion — a paired entry excludes both travellers — and no
+   * response ever carries them: the DTO layer exposes the application reference
+   * and a count of people, nothing more.
+   */
+  primaryParticipantId: string
+  secondaryParticipantId: string | null
 }
 
 /**
@@ -53,7 +71,15 @@ export interface DrawSelection {
   totalWeight: number
   /** The number of places, and therefore the number of entries selected. */
   allocatedSpots: number
+  /** Which implementation produced this selection. Recorded with every result. */
+  algorithmVersion: string
   selected: SelectedEntry[]
+  /**
+   * Every application in the pool, selected or not — the authoritative list of
+   * who actually took part in this draw. Winner processing finalizes exactly
+   * these and records participation for exactly these people.
+   */
+  pooledApplicationIds: string[]
   events: SelectionEvent[]
   selectedAt: string
 }
@@ -99,11 +125,13 @@ export class LotteryService {
   }
 
   /**
-   * Draws this commune draw's allocated number of places from its frozen pool.
+   * Draws this commune draw's allocated number of places from its frozen pool,
+   * and persists nothing.
    *
    * Reads only. Every refusal happens before a single random number is drawn,
    * so a draw either runs against a complete, verified snapshot or does not run
-   * at all.
+   * at all. A selection produced here is not a result: recording one is
+   * `DrawExecutionService`'s job, and it calls `drawFrom` below instead.
    */
   async selectFromPool(communeDrawId: string): Promise<DrawSelection> {
     const communeDraw = await drawConfigurationService.findCommuneDraw(communeDrawId)
@@ -111,7 +139,8 @@ export class LotteryService {
 
     // LOCKED is the only state whose input cannot still change. A DRAFT or
     // READY commune draw is still accepting applications and can still be
-    // reallocated; a CANCELLED one is not holding a lottery at all.
+    // reallocated; a CANCELLED one is not holding a lottery at all, and a
+    // COMPLETED one has already been drawn.
     if (communeDraw.status !== 'LOCKED') {
       throw new ConflictError(
         'DRAW_NOT_LOCKED',
@@ -119,8 +148,26 @@ export class LotteryService {
       )
     }
 
-    const pool = await this.db.drawPool.findUnique({
-      where: { communeDrawId },
+    return this.drawFrom(communeDraw, this.db)
+  }
+
+  /**
+   * Draws from a commune draw whose lifecycle the caller has already settled,
+   * reading through the client it is given.
+   *
+   * Winner processing passes its own transaction client, so the pool is read,
+   * verified and drawn from inside the same transaction that writes the result —
+   * there is no window in which the snapshot could be seen differently by the
+   * verification and by the draw.
+   *
+   * The caller owns the state check, because by the time execution reaches here
+   * it has already claimed the commune draw and moved it out of LOCKED. That
+   * claim is the proof the draw was legitimate; re-reading the status now would
+   * see the claim itself and refuse.
+   */
+  async drawFrom(communeDraw: CommuneDrawWithPlace, db: LotteryReader): Promise<DrawSelection> {
+    const pool = await db.drawPool.findUnique({
+      where: { communeDrawId: communeDraw.id },
       include: {
         entries: {
           select: ENTRY_FIELDS,
@@ -164,6 +211,7 @@ export class LotteryService {
       entryCount: pool.entryCount,
       totalWeight: pool.totalWeight,
       allocatedSpots: pool.allocatedSpots,
+      algorithmVersion: LOTTERY_ALGORITHM_VERSION,
       selected: selection.selected.map((entry, index) => ({
         drawPoolEntryId: entry.id,
         applicationId: entry.applicationId,
@@ -171,7 +219,10 @@ export class LotteryService {
         entryType: entry.entryType,
         weight: entry.weight,
         selectionOrder: index + 1,
+        primaryParticipantId: entry.primaryParticipantId,
+        secondaryParticipantId: entry.secondaryParticipantId,
       })),
+      pooledApplicationIds: pool.entries.map((entry) => entry.applicationId),
       events: selection.events,
       selectedAt: new Date().toISOString(),
     }
