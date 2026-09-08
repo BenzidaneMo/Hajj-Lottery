@@ -15,6 +15,12 @@ import {
   updateCommuneDraw,
   updateDrawYear,
 } from '../controllers/admin-draw.controller.js'
+import {
+  freezePool,
+  getPool,
+  getPoolSummary,
+  validatePool,
+} from '../controllers/admin-draw-pool.controller.js'
 import { getCommune, getWilaya, listCommunes, listWilayas } from '../controllers/admin-geo.controller.js'
 import { getHistoryRecord, getParticipantHistory } from '../controllers/admin-history.controller.js'
 import { asyncHandler } from '../middleware/error-handler.js'
@@ -61,3 +67,16 @@ adminRouter.get('/commune-draws', asyncHandler(listCommuneDraws))
 adminRouter.get('/commune-draws/:id', asyncHandler(getCommuneDraw))
 adminRouter.post('/commune-draws', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(createCommuneDraw))
 adminRouter.patch('/commune-draws/:id', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(updateCommuneDraw))
+
+// The draw pool. Inspecting and dry-running are scoped but unrestricted by
+// role — seeing why your own commune cannot be frozen is not privileged.
+// Freezing is national: it fixes the terms of a lottery permanently, and
+// nobody should be able to close the input to a draw they are subject to.
+adminRouter.post('/commune-draws/:id/validate-pool', asyncHandler(validatePool))
+adminRouter.post(
+  '/commune-draws/:id/freeze-pool',
+  requireRole(AdminRole.SUPER_ADMIN),
+  asyncHandler(freezePool),
+)
+adminRouter.get('/commune-draws/:id/pool', asyncHandler(getPool))
+adminRouter.get('/commune-draws/:id/pool/summary', asyncHandler(getPoolSummary))
