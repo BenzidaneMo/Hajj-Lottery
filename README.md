@@ -86,6 +86,15 @@ transparent results, across Arabic (RTL), French, and English.
 > that a draw has been run. Winner records, publication and `has_won_hajj`
 > remain unimplemented.
 
+> **Status:** Step 14 — winner processing and atomic finalization. A national
+> administrator can execute a locked commune's draw. One transaction claims the
+> draw, selects the winners, records the result, its winners and the randomness
+> behind them, excludes every winning individual for life, finalizes the pooled
+> applications and writes the participation ledger — or leaves the world exactly
+> as it was. A draw cannot be run twice, and a completed result cannot be
+> altered. Publication, notifications and the live visualizer remain
+> unimplemented.
+
 ## Architecture
 
 ```
@@ -353,6 +362,47 @@ from its input would make the outcome a function of who entered.
 Nothing about a pool is public.
 
 See [docs/draw-pool.md](docs/draw-pool.md).
+
+## Winner processing
+
+Executing a draw is one transaction, run once, and irreversible.
+
+| Endpoint                                    | Auth | Role        | Purpose            |
+| ------------------------------------------- | ---- | ----------- | ------------------ |
+| `POST /api/admin/commune-draws/:id/execute` | yes  | SUPER_ADMIN | Run the draw, once |
+| `GET /api/admin/commune-draws/:id/result`   | yes  | any admin   | The result, scoped |
+
+That single transaction claims the commune draw, verifies and draws from the
+frozen pool, records the result with its winners and the random value behind every
+selection, sets `has_won_hajj` for every winning individual, archives each of them,
+finalizes the pooled applications as `SELECTED` or `NOT_SELECTED`, and writes the
+participation ledger. Any failure unwinds all of it, including the claim: the
+commune draw returns to `LOCKED` with nothing left behind.
+
+So none of these can occur — a winner recorded without lifetime exclusion, a
+person excluded without a winner record, a draw marked complete with winners
+missing, or a result that exists alongside a draw that can still be run.
+
+**Concurrency is settled by the database.** The claim is a conditional
+`UPDATE ... WHERE status = 'LOCKED'`, so two simultaneous executions serialize on
+the row and the loser is told the draw is already complete. An in-memory lock
+would work only until a second API instance existed.
+
+There is deliberately no `DRAW_IN_PROGRESS`. The whole draw fits in one
+transaction, so an intermediate state would be invisible to every reader and undone
+by any failure; a crash simply leaves the draw `LOCKED` and retryable.
+
+**Spots count entries, not people.** A paired application is one lottery entry and
+two winners: ten places filled by nine single and one paired application is ten
+winning applications and eleven people excluded for life. Both travellers are
+winners — marking only the primary would be a bug.
+
+A completed result is immutable by database trigger, a completed commune draw
+cannot be reopened or reallocated, and PostgreSQL refuses to commit a `COMPLETED`
+commune draw that has no result. Nothing is published: winner publication and
+notifications carry their own consent questions and do not exist yet.
+
+See [docs/winner-processing.md](docs/winner-processing.md).
 
 ## The lottery engine
 
