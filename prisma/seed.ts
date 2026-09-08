@@ -89,6 +89,50 @@ async function seedDevParticipants(): Promise<void> {
   }
 }
 
+/**
+ * A development draw year with every commune configured.
+ *
+ * Since Step 11 a citizen cannot register unless a year is open *and* their
+ * commune has a draw configured, so without this a freshly seeded database
+ * would have a registration form that refuses everybody. Skipped in
+ * production, where opening a cycle and allocating pilgrimage places is a
+ * deliberate administrative act — not something a seed script decides.
+ */
+const DEV_ALLOCATED_SPOTS = 10
+
+async function seedDevDrawYear(): Promise<void> {
+  if (process.env.NODE_ENV === 'production') {
+    console.log('Skipping development draw year (NODE_ENV=production).')
+    return
+  }
+
+  const year = new Date().getUTCFullYear()
+
+  // Only open this year if nothing else is: at most one year may be open at a
+  // time, and a re-run must not fight an administrator's own configuration.
+  const alreadyOpen = await prisma.drawYear.findFirst({ where: { status: 'REGISTRATION_OPEN' } })
+  const status = !alreadyOpen || alreadyOpen.year === year ? 'REGISTRATION_OPEN' : 'DRAFT'
+
+  const drawYear = await prisma.drawYear.upsert({
+    where: { year },
+    update: {},
+    create: { year, status },
+  })
+
+  const communeIds = await prisma.commune.findMany({ where: { isActive: true }, select: { id: true } })
+
+  console.log(`Configuring ${communeIds.length} commune draws for ${year}...`)
+  for (const commune of communeIds) {
+    await prisma.communeDraw.upsert({
+      where: { drawYearId_communeId: { drawYearId: drawYear.id, communeId: commune.id } },
+      // Left alone on re-run: an allocation someone has adjusted is theirs,
+      // and a locked one must not be touched at all.
+      update: {},
+      create: { drawYearId: drawYear.id, communeId: commune.id, allocatedSpots: DEV_ALLOCATED_SPOTS },
+    })
+  }
+}
+
 async function main(): Promise<void> {
   validate()
 
@@ -121,6 +165,7 @@ async function main(): Promise<void> {
   }
 
   await seedDevParticipants()
+  await seedDevDrawYear()
 
   console.log(`Done: ${wilayaIdByCode.size} wilayas, ${seeded} communes.`)
 }
