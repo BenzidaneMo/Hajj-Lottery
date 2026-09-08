@@ -66,6 +66,13 @@ transparent results, across Arabic (RTL), French, and English.
 > rewrite. The draw itself — selection, sampling, spot allocation — and winner
 > processing remain unimplemented.
 
+> **Status:** Step 11 — annual draw configuration and commune spot allocation.
+> A `DrawYear` decides which cycle is open for registration, and a
+> `CommuneDraw` configures how many pilgrimage places each commune has for it.
+> Registration now requires both. Spot allocation is explicit configuration,
+> never derived from applicant numbers. The draw itself, pool freezing and
+> winner processing remain unimplemented.
+
 ## Architecture
 
 ```
@@ -300,6 +307,41 @@ person may take part in different communes in different years, and an
 administrator is never told about the years outside their territory.
 
 See [docs/participation-history.md](docs/participation-history.md).
+
+## Draw configuration
+
+Which year the lottery is running, and how many pilgrimage places each commune
+has. The lottery is run **per commune**, so there are two independent
+lifecycles: `DrawYear` for the national cycle, `CommuneDraw` for one commune's
+own draw.
+
+| Endpoint                             | Auth | Role        | Purpose                         |
+| ------------------------------------ | ---- | ----------- | ------------------------------- |
+| `GET /api/admin/draw-years`          | yes  | any admin   | The annual cycles               |
+| `GET /api/admin/draw-years/:year`    | yes  | any admin   | One cycle                       |
+| `POST /api/admin/draw-years`         | yes  | SUPER_ADMIN | Create a cycle (always a draft) |
+| `PATCH /api/admin/draw-years/:id`    | yes  | SUPER_ADMIN | Open, close or archive it       |
+| `GET /api/admin/commune-draws`       | yes  | any admin   | Configurations, scoped          |
+| `GET /api/admin/commune-draws/:id`   | yes  | any admin   | One configuration, scoped       |
+| `POST /api/admin/commune-draws`      | yes  | SUPER_ADMIN | Configure a commune             |
+| `PATCH /api/admin/commune-draws/:id` | yes  | SUPER_ADMIN | Re-allocate or change state     |
+
+**`allocated_spots` is configuration, never a calculation.** It is not derived
+from the number of applicants, the population, or past winners. A commune with
+12 places and 843 eligible applications is the ordinary case, and registration
+never refuses an application for being oversubscribed — the draw will later
+choose between them.
+
+At most one draw year may be open for registration at a time, enforced by a
+partial unique index rather than by checking first. Registration takes its year
+from that row and refuses a commune with no configured draw, so nobody can file
+an application into a lottery that will never run. `DRAW_YEAR` and
+`REGISTRATION_OPEN` are no longer environment variables.
+
+Once a commune draw is `LOCKED` its allocation is fixed for everyone, including
+the administrator who set it.
+
+See [docs/draw-configuration.md](docs/draw-configuration.md).
 
 ## Weighting
 
