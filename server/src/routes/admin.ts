@@ -34,9 +34,21 @@ import {
   requestHistoricalCorrection,
 } from '../controllers/admin-governance.controller.js'
 import { getHistoryRecord, getParticipantHistory } from '../controllers/admin-history.controller.js'
+import {
+  approveImport,
+  executeImport,
+  getImport,
+  getImportSummary,
+  listImportConflicts,
+  listImportRows,
+  listImports,
+  rejectImport,
+  uploadImport,
+} from '../controllers/admin-import.controller.js'
 import { asyncHandler } from '../middleware/error-handler.js'
 import { requireAuthenticatedUser } from '../middleware/require-authenticated-user.js'
 import { requireRole } from '../middleware/require-role.js'
+import { acceptImportUpload } from '../middleware/upload.js'
 
 export const adminRouter = Router()
 
@@ -114,6 +126,25 @@ adminRouter.get('/audit-logs', asyncHandler(listAuditLogs))
 // is still audited.
 adminRouter.post('/history/:id/correction-requests', asyncHandler(requestHistoricalCorrection))
 adminRouter.patch('/history/:id', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(correctHistoryRecord))
+
+// The legacy import. Uploading and reviewing are ordinary scoped work — the
+// people who hold a commune's paper registers are the people who can read them —
+// and what a scoped administrator's file may say is limited to their own
+// territory, per row, by validation rather than by this line.
+//
+// Approving, refusing and executing are national and SUPER_ADMIN-only, because
+// an import grants lifetime priority and imposes lifetime exclusion across
+// communes. Nobody reviews the import they uploaded: checked in the service, and
+// again by a CHECK constraint.
+adminRouter.post('/imports', acceptImportUpload, asyncHandler(uploadImport))
+adminRouter.get('/imports', asyncHandler(listImports))
+adminRouter.get('/imports/:id', asyncHandler(getImport))
+adminRouter.get('/imports/:id/summary', asyncHandler(getImportSummary))
+adminRouter.get('/imports/:id/rows', asyncHandler(listImportRows))
+adminRouter.get('/imports/:id/conflicts', asyncHandler(listImportConflicts))
+adminRouter.post('/imports/:id/approve', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(approveImport))
+adminRouter.post('/imports/:id/reject', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(rejectImport))
+adminRouter.post('/imports/:id/execute', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(executeImport))
 
 adminRouter.get('/approvals', asyncHandler(listApprovals))
 adminRouter.get('/approvals/:id', asyncHandler(getApproval))

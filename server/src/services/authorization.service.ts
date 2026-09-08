@@ -1,13 +1,26 @@
 import {
   AUDIT_PAGE_SIZE_DEFAULT,
   AUDIT_PAGE_SIZE_MAX,
+  IMPORT_ROW_PAGE_SIZE_DEFAULT,
+  IMPORT_ROW_PAGE_SIZE_MAX,
   type AdminScopeDto,
   type ApprovalStatus,
   type AuditAction,
   type AuditTargetType,
   type ScopePlaceDto,
 } from '@hajj-lottery/shared'
-import type { Application, AuditLog, Commune, Prisma, PrismaClient, User, Wilaya } from '@prisma/client'
+import type {
+  Application,
+  AuditLog,
+  Commune,
+  ImportBatch,
+  ImportRow,
+  ImportRowStatus,
+  Prisma,
+  PrismaClient,
+  User,
+  Wilaya,
+} from '@prisma/client'
 
 import {
   canAccessCommune,
@@ -22,6 +35,7 @@ import { sortByCode } from '../lib/geo-order.js'
 import { prisma as defaultPrisma } from '../lib/prisma.js'
 import type { ApprovalRequestWithPlace } from './approval.service.js'
 import type { CommuneDrawWithPlace } from './draw-configuration.service.js'
+import type { ImportBatchWithUsers } from './legacy-import.service.js'
 import type { HistoryRecordWithPlace } from './participation-history.service.js'
 
 /** What the audit API may be narrowed by. A filter can only ever remove rows. */
@@ -349,6 +363,104 @@ export class AuthorizationService {
         commune: true,
       },
     })
+  }
+
+  /**
+   * Import batches the caller may see, newest first.
+   *
+   * A batch has no geography of its own — its *rows* do — so visibility is
+   * decided by what it touches: an administrator sees a batch when at least one
+   * of its rows lands in their territory, or when they uploaded it themselves.
+   * That second clause matters for a batch that failed before staging, or whose
+   * rows all named communes that do not exist: it has nothing in anybody's
+   * territory, and its uploader still has to be able to find out why.
+   */
+  async listImportBatches(
+    user: User,
+    requested: { status?: ImportBatch['status'] } = {},
+  ): Promise<ImportBatchWithUsers[]> {
+    return this.db.importBatch.findMany({
+      where: {
+        ...this.batchVisibility(user),
+        ...(requested.status ? { status: requested.status } : {}),
+      },
+      include: {
+        uploadedBy: { select: { id: true, username: true } },
+        approvedBy: { select: { id: true, username: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+  }
+
+  /** One batch, or null when it does not exist *or* touches nothing the caller administers. */
+  async findImportBatch(user: User, batchId: string): Promise<ImportBatchWithUsers | null> {
+    return this.db.importBatch.findFirst({
+      where: { id: batchId, ...this.batchVisibility(user) },
+      include: {
+        uploadedBy: { select: { id: true, username: true } },
+        approvedBy: { select: { id: true, username: true } },
+      },
+    })
+  }
+
+  private batchVisibility(user: User): Prisma.ImportBatchWhereInput {
+    const scope = this.scopeFor(user)
+    if (scope.kind === 'national') return {}
+
+    return {
+      OR: [{ uploadedByUserId: user.id }, { rows: { some: { commune: communeScopeFilter(scope) } } }],
+    }
+  }
+
+  /**
+   * The caller's ceiling on one batch's rows.
+   *
+   * Returned rather than applied, so every query about a batch's contents — the
+   * row list, the conflict list, the counts on the summary — narrows through the
+   * same filter instead of each remembering to. A COMMUNE_ADMIN reviewing a
+   * national register is shown what it does to their commune and is not told how
+   * many rows it holds for anybody else's.
+   *
+   * The uploader is the exception: they supplied every row in the file, so
+   * withholding rows from them would hide the very lines they need to correct
+   * while telling them nothing they did not already have.
+   */
+  importRowScope(user: User, batch: Pick<ImportBatch, 'uploadedByUserId'>): Prisma.ImportRowWhereInput {
+    const scope = this.scopeFor(user)
+    if (scope.kind === 'national' || batch.uploadedByUserId === user.id) return {}
+
+    return { commune: communeScopeFilter(scope) }
+  }
+
+  /** A page of one batch's rows, narrowed to the caller's reach. */
+  async listImportRows(
+    user: User,
+    batch: Pick<ImportBatch, 'id' | 'uploadedByUserId'>,
+    requested: { status?: ImportRowStatus; page?: number; pageSize?: number } = {},
+  ): Promise<{ items: ImportRow[]; total: number; page: number; pageSize: number; totalPages: number }> {
+    const where: Prisma.ImportRowWhereInput = {
+      importBatchId: batch.id,
+      ...this.importRowScope(user, batch),
+      ...(requested.status ? { status: requested.status } : {}),
+    }
+
+    const page = Math.max(1, requested.page ?? 1)
+    const pageSize = Math.min(
+      Math.max(1, requested.pageSize ?? IMPORT_ROW_PAGE_SIZE_DEFAULT),
+      IMPORT_ROW_PAGE_SIZE_MAX,
+    )
+
+    const [items, total] = await Promise.all([
+      this.db.importRow.findMany({
+        where,
+        orderBy: { rowNumber: 'asc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.db.importRow.count({ where }),
+    ])
+
+    return { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) }
   }
 
   /**
