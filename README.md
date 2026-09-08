@@ -100,7 +100,15 @@ transparent results, across Arabic (RTL), French, and English.
 > what, and why, written in the same transaction as the change itself and
 > deletable by nobody. Sensitive corrections to the participation ledger go
 > through an approval workflow that no administrator can decide for themselves.
-> Public winner pages, notifications, legacy import and citizen accounts remain
+
+> **Status:** Step 16 — legacy historical import. Paper registers from the years
+> before this platform existed can be uploaded as CSV or XLSX, staged row by row,
+> checked against themselves and against the database, and — once a national
+> administrator who did not upload them has approved the batch — written in one
+> transaction as verified participation history and permanent legacy wins.
+> Nothing authoritative moves before that transaction, no conflict is ever
+> silently repaired, and no fake draw records are manufactured for a lottery this
+> system never ran. Public winner pages, notifications and citizen accounts remain
 > unimplemented.
 
 ## Architecture
@@ -418,6 +426,50 @@ approval and a rejection are permanent: there is no path from one to the other, 
 a changed mind is a new request.
 
 See [docs/audit-and-governance.md](docs/audit-and-governance.md).
+
+## Legacy historical import
+
+The paper registers from before this platform existed are the only record of who
+has been waiting how long — and that record is what becomes priority in future
+lotteries and lifetime exclusion from them.
+
+| Endpoint                               | Auth | Role        | Purpose                          |
+| -------------------------------------- | ---- | ----------- | -------------------------------- |
+| `POST /api/admin/imports`              | yes  | any admin   | Upload a CSV/XLSX register       |
+| `GET /api/admin/imports`               | yes  | any admin   | Batches touching your territory  |
+| `GET /api/admin/imports/:id/summary`   | yes  | any admin   | Counts over the rows you may see |
+| `GET /api/admin/imports/:id/conflicts` | yes  | any admin   | Only what blocks                 |
+| `POST /api/admin/imports/:id/approve`  | yes  | SUPER_ADMIN | Never your own upload            |
+| `POST /api/admin/imports/:id/execute`  | yes  | SUPER_ADMIN | The one transaction that writes  |
+
+**Nothing authoritative moves until the end.** An upload creates a batch and a
+pile of staged rows and touches no participant, no historical record and nobody's
+winner status. The rows are checked three times — on their own, against the rest
+of the file, and against the database — an administrator reads the conflicts, a
+_different_ national administrator approves, and only then does one transaction
+write all of it or none of it.
+
+**Unknown is not false.** An empty participation cell is a gap in the register,
+not a claim that somebody stayed home. Missing required values are errors, and a
+staged row keeps `NULL` rather than a manufactured `false`.
+
+**Nothing is silently repaired.** A name that disagrees with the identity
+registry, a year that disagrees with the ledger, a win that disagrees with a
+lifetime exclusion, two rows that disagree with each other — each is reported and
+blocks the batch. Existing participants are reused untouched, `has_won_hajj` is
+never cleared, and an authoritative historical record is never overwritten.
+
+**No fake draw records.** A legacy winner is a `LegacyWinner` row naming the
+import batch and the source line, not a manufactured `DrawResult` and
+`DrawWinner` describing a lottery this system never ran. Both models carry the
+same invariant — one win per person, for life.
+
+An approved import writes `verified: true`: the review a national administrator
+gave the batch _is_ the verification the flag records. Uploads are never written
+to disk, formulas are refused rather than evaluated, and re-uploading the same
+bytes reports the batch that already holds them.
+
+See [docs/legacy-import.md](docs/legacy-import.md).
 
 ## Winner processing
 
