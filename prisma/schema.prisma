@@ -28,6 +28,8 @@ model Wilaya {
   updatedAt DateTime  @updatedAt @map("updated_at")
   communes  Commune[]
   admins    User[]
+  auditLogs AuditLog[]
+  approvals ApprovalRequest[]
 
   @@map("wilayas")
 }
@@ -53,6 +55,8 @@ model Commune {
   history       ParticipationHistory[]
   draws         CommuneDraw[]
   winnerArchive WinnerArchive[]
+  auditLogs     AuditLog[]
+  approvals     ApprovalRequest[]
 
   @@unique([wilayaId, code])
   /// Redundant on its own (id is already unique), but it gives User a
@@ -165,7 +169,10 @@ model User {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  sessions Session[]
+  sessions          Session[]
+  auditLogs         AuditLog[]
+  approvalsRequested ApprovalRequest[] @relation("ApprovalRequester")
+  approvalsReviewed  ApprovalRequest[] @relation("ApprovalReviewer")
 
   @@index([wilayaId])
   @@index([communeId])
@@ -678,6 +685,204 @@ model WinnerArchive {
   @@index([drawYear])
   @@index([communeId, drawYear])
   @@map("winner_archive")
+}
+
+/// The privileged actions worth a permanent record.
+///
+/// An enum rather than free strings so the catalogue is closed: an action either
+/// exists here or cannot be logged, which is what makes the trail queryable and
+/// stops a typo becoming a category nobody notices.
+///
+/// Only actions something can actually perform are listed. Import, participant
+/// identity correction and winner correction are absent because the operations
+/// they would describe do not exist — a catalogue of events that never fire
+/// reads like coverage while providing none.
+enum AuditAction {
+  /// Authentication. A failure carries no actor: the account may not exist, and
+  /// saying which is which would answer the question the login route refuses to.
+  AUTH_LOGIN_SUCCESS
+  AUTH_LOGIN_FAILURE
+  AUTH_LOGOUT
+
+  /// Administrator accounts. ADMIN_CREATED covers the bootstrap, where the actor
+  /// is null because nobody was authenticated — the appearance of the first
+  /// SUPER_ADMIN is precisely the event worth recording.
+  ADMIN_CREATED
+  ADMIN_DISABLED
+  ADMIN_SCOPE_CHANGED
+
+  /// Draw configuration. The status transition lives in the before/after
+  /// snapshot rather than in separate OPENED/CLOSED actions, so there is one
+  /// account of what changed instead of two that could disagree.
+  DRAW_YEAR_CREATED
+  DRAW_YEAR_STATUS_CHANGED
+  COMMUNE_DRAW_CREATED
+  COMMUNE_DRAW_UPDATED
+
+  /// The lottery. Freezing locks the commune draw in the same transaction, so
+  /// DRAW_POOL_FROZEN is the record of both.
+  DRAW_POOL_FROZEN
+  COMMUNE_DRAW_EXECUTED
+
+  /// The participation ledger. Only corrections — a concluded draw writes
+  /// hundreds of records at once, and the execution event is their provenance.
+  HISTORICAL_RECORD_CORRECTED
+
+  /// Separation of duties.
+  APPROVAL_CREATED
+  APPROVAL_APPROVED
+  APPROVAL_REJECTED
+  APPROVAL_CANCELLED
+
+  @@map("audit_action")
+}
+
+/// What kind of thing an audit record or approval request is about.
+///
+/// Paired with a `target_id` that is deliberately **not** a foreign key: an
+/// audit record must outlive whatever it describes, and eight nullable
+/// references would make the trail's durability depend on nothing ever being
+/// removed. The type keeps the untyped id interpretable.
+enum AuditTargetType {
+  USER
+  DRAW_YEAR
+  COMMUNE_DRAW
+  DRAW_POOL
+  DRAW_RESULT
+  PARTICIPATION_HISTORY
+  APPROVAL_REQUEST
+
+  @@map("audit_target_type")
+}
+
+/// One privileged action, recorded permanently.
+///
+/// Audit rows are not application data. Application data describes what is true
+/// now and changes when the truth changes; an audit row describes what somebody
+/// did, which never stops being what they did. So nothing updates or deletes
+/// these — triggers refuse both — and there is no endpoint that could.
+model AuditLog {
+  id String @id @default(cuid())
+
+  action AuditAction
+
+  /// Who did it. Null only where no account was authenticated: a failed login,
+  /// or the bootstrap that creates the first administrator. Never taken from a
+  /// request body — always the session's user.
+  actorUserId String? @map("actor_user_id")
+  actor       User?   @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  /// What it was about. See AuditTargetType for why the id is not a foreign key.
+  targetType AuditTargetType @map("target_type")
+  targetId   String?         @map("target_id")
+
+  /// The geography the action concerned, derived from the target and the actor's
+  /// own scope — never from the request. Both null means a national action,
+  /// which scoped administrators deliberately cannot see.
+  wilayaId  String?  @map("wilaya_id")
+  wilaya    Wilaya?  @relation(fields: [wilayaId], references: [id], onDelete: Restrict)
+  communeId String?  @map("commune_id")
+  commune   Commune? @relation(fields: [communeId], references: [id], onDelete: Restrict)
+
+  /// Why, in a human's words. Required for sensitive mutations, refused blank.
+  reason String?
+
+  /// Limited field snapshots, built by the audit service from typed payloads —
+  /// never a raw request body. National IDs, phone numbers, names, dates of
+  /// birth, password hashes and tokens are refused outright, not masked.
+  beforeData Json? @map("before_data")
+  afterData  Json? @map("after_data")
+  metadata   Json?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// Indexed for the queries the audit API actually offers: a timeline, and that
+  /// timeline narrowed by actor, action or territory.
+  @@index([createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
+  @@index([wilayaId, createdAt])
+  @@index([communeId, createdAt])
+  @@index([targetType, targetId])
+  @@map("audit_logs")
+}
+
+/// What a sensitive change can be requested for.
+///
+/// One member, because one such flow exists. Participant identity and winner
+/// corrections belong here when they are built; adding their names now would
+/// mean a request could be raised that nothing could ever apply.
+enum ApprovalType {
+  HISTORICAL_RECORD_CORRECTION
+
+  @@map("approval_type")
+}
+
+/// Where a request stands. Terminal in every case but PENDING.
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  /// Withdrawn by the requester before anybody reviewed it.
+  CANCELLED
+
+  @@map("approval_status")
+}
+
+/// A sensitive change somebody has asked for, and what was decided.
+///
+/// Separation of duties made structural: a scoped administrator who can see a
+/// record they believe is wrong cannot rewrite it, only ask. The decision is
+/// somebody else's, enforced by a CHECK constraint rather than by a rule in the
+/// service that a later refactor could drop.
+///
+/// The request half is immutable from the moment it is made, and the decision
+/// half from the moment it is taken — a trigger refuses to rewrite either. There
+/// is no path from APPROVED to REJECTED or back: a changed mind is a new
+/// request, so the original decision stays legible.
+model ApprovalRequest {
+  id String @id @default(cuid())
+
+  type   ApprovalType
+  status ApprovalStatus @default(PENDING)
+
+  requestedByUserId String @map("requested_by_user_id")
+  requestedBy       User   @relation("ApprovalRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+
+  /// Null while pending, and for a cancellation: only the requester may withdraw
+  /// their own request, so recording them as its reviewer would make every
+  /// cancellation look like a self-approval.
+  reviewedByUserId String? @map("reviewed_by_user_id")
+  reviewedBy       User?   @relation("ApprovalReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+
+  targetType AuditTargetType @map("target_type")
+  targetId   String          @map("target_id")
+
+  /// The target's geography, so a request is visible to exactly the
+  /// administrators the record itself is.
+  wilayaId  String?  @map("wilaya_id")
+  wilaya    Wilaya?  @relation(fields: [wilayaId], references: [id], onDelete: Restrict)
+  communeId String?  @map("commune_id")
+  commune   Commune? @relation(fields: [communeId], references: [id], onDelete: Restrict)
+
+  /// Exactly what would change, as a validated payload — the same shape the
+  /// correction takes when it is applied, so approving cannot mean something
+  /// different from what was asked.
+  requestedChange Json @map("requested_change")
+
+  /// Why it was asked for, and why it was decided. Neither may be blank.
+  reason       String
+  reviewReason String? @map("review_reason")
+
+  reviewedAt DateTime? @map("reviewed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([status, createdAt])
+  @@index([requestedByUserId, createdAt])
+  @@index([wilayaId, createdAt])
+  @@index([communeId, createdAt])
+  @@index([targetType, targetId])
+  @@map("approval_requests")
 }
 
 /// Where a historical fact came from. An enum rather than free text so a
