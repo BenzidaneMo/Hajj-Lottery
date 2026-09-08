@@ -4,6 +4,7 @@ import { Prisma, type DrawPool, type PrismaClient } from '@prisma/client'
 import { ApiError, ConflictError } from '../lib/errors.js'
 import { hashPool, SNAPSHOT_VERSION, type HashableEntry } from '../lib/draw-pool-hash.js'
 import { prisma as defaultPrisma } from '../lib/prisma.js'
+import { auditService, AuditService, scopeOfCommune, type AuditActor } from './audit.service.js'
 import { drawConfigurationService, type CommuneDrawWithPlace } from './draw-configuration.service.js'
 import { eligibilityService, EligibilityService } from './eligibility.service.js'
 import { weightService, WeightService } from './weight.service.js'
@@ -78,15 +79,18 @@ export class DrawPoolService {
   private readonly db: PrismaClient
   private readonly eligibility: EligibilityService
   private readonly weights: WeightService
+  private readonly audit: AuditService
 
   constructor(
     db: PrismaClient = defaultPrisma,
     eligibility: EligibilityService = eligibilityService,
     weights: WeightService = weightService,
+    audit: AuditService = auditService,
   ) {
     this.db = db
     this.eligibility = eligibility
     this.weights = weights
+    this.audit = audit
   }
 
   /**
@@ -222,10 +226,7 @@ export class DrawPoolService {
    * building a second one — the snapshot is the authoritative input, and there
    * can only be one.
    */
-  async freeze(
-    communeDrawId: string,
-    actingAdministratorId: string | null = null,
-  ): Promise<PoolFreezeResult> {
+  async freeze(communeDrawId: string, actor: AuditActor | null = null): Promise<PoolFreezeResult> {
     const validation = await this.validate(communeDrawId)
     const settled = (pool: DrawPool, alreadyFrozen: boolean): PoolFreezeResult => ({
       pool,
@@ -233,7 +234,7 @@ export class DrawPoolService {
       alreadyFrozen,
       event: {
         event: 'draw_pool.frozen',
-        actingAdministratorId,
+        actingAdministratorId: actor?.id ?? null,
         communeDrawId,
         drawPoolId: pool.id,
         entryCount: pool.entryCount,
@@ -318,6 +319,28 @@ export class DrawPoolService {
         ) {
           throw new ApiError(500, 'INTERNAL_ERROR', 'Draw pool totals did not match its entries')
         }
+
+        // Written here rather than after the commit: a pool that exists with no
+        // record of who froze it is exactly the gap the trail exists to close.
+        // Aggregates and the hash only — never the pool's contents.
+        await this.audit.record(
+          {
+            action: 'DRAW_POOL_FROZEN',
+            actor,
+            targetType: 'DRAW_POOL',
+            targetId: created.id,
+            scope: scopeOfCommune(communeDraw.commune),
+            metadata: {
+              communeDrawId: communeDraw.id,
+              drawYear: communeDraw.drawYear.year,
+              entryCount: created.entryCount,
+              totalWeight: created.totalWeight,
+              allocatedSpots: created.allocatedSpots,
+              snapshotHash: created.snapshotHash,
+            },
+          },
+          tx,
+        )
 
         return created
       })

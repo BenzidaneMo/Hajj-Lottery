@@ -2,6 +2,7 @@ import type { Prisma, PrismaClient } from '@prisma/client'
 
 import { ConflictError, NotFoundError } from '../lib/errors.js'
 import { prisma as defaultPrisma } from '../lib/prisma.js'
+import { auditService, AuditService, scopeOfCommune, type AuditActor } from './audit.service.js'
 import type { CommuneDrawWithPlace } from './draw-configuration.service.js'
 import { lotteryService, LotteryService, type DrawSelection } from './lottery.service.js'
 
@@ -86,10 +87,16 @@ export interface DrawExecution {
 export class DrawExecutionService {
   private readonly db: PrismaClient
   private readonly lottery: LotteryService
+  private readonly audit: AuditService
 
-  constructor(db: PrismaClient = defaultPrisma, lottery: LotteryService = lotteryService) {
+  constructor(
+    db: PrismaClient = defaultPrisma,
+    lottery: LotteryService = lotteryService,
+    audit: AuditService = auditService,
+  ) {
     this.db = db
     this.lottery = lottery
+    this.audit = audit
   }
 
   /**
@@ -99,7 +106,7 @@ export class DrawExecutionService {
    * already been drawn, has no pool, has a pool that does not verify, or holds
    * fewer entries than the commune has places.
    */
-  async execute(communeDrawId: string, actingAdministratorId: string | null = null): Promise<DrawExecution> {
+  async execute(communeDrawId: string, actor: AuditActor | null = null): Promise<DrawExecution> {
     const startedAt = new Date()
 
     return this.db.$transaction(async (tx) => {
@@ -246,6 +253,32 @@ export class DrawExecutionService {
         })),
       })
 
+      // The permanent record of who ran the lottery, in the transaction that
+      // ran it. References the authoritative records rather than copying them:
+      // no winner is named, and no random value is repeated here, because the
+      // immutable DrawSelectionEvent rows already hold them.
+      await this.audit.record(
+        {
+          action: 'COMMUNE_DRAW_EXECUTED',
+          actor,
+          targetType: 'DRAW_RESULT',
+          targetId: result.id,
+          scope: scopeOfCommune(communeDraw.commune),
+          metadata: {
+            communeDrawId: communeDraw.id,
+            drawYear: communeDraw.drawYear.year,
+            drawPoolId: selection.drawPoolId,
+            poolHash: selection.snapshotHash,
+            algorithmVersion: selection.algorithmVersion,
+            winnerCount: selection.selected.length,
+            winningParticipantCount: winners.length,
+            totalWeightAtDraw: selection.totalWeight,
+            entryCount: selection.entryCount,
+          },
+        },
+        tx,
+      )
+
       // Checked against the rows actually written, while a rollback is still
       // possible — nothing can repair any of this afterwards, because none of it
       // can be updated at all.
@@ -268,7 +301,7 @@ export class DrawExecutionService {
         completedAt,
         event: {
           event: 'draw.completed' as const,
-          actingAdministratorId,
+          actingAdministratorId: actor?.id ?? null,
           communeDrawId: communeDraw.id,
           drawResultId: result.id,
           drawPoolId: selection.drawPoolId,

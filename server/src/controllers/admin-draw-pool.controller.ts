@@ -4,6 +4,7 @@ import type { RequestHandler } from 'express'
 
 import { NotFoundError } from '../lib/errors.js'
 import { getAuthenticatedUser } from '../middleware/require-authenticated-user.js'
+import { auditActor } from '../services/audit.service.js'
 import { authorizationService } from '../services/authorization.service.js'
 import type { CommuneDrawWithPlace } from '../services/draw-configuration.service.js'
 import { drawPoolService } from '../services/draw-pool.service.js'
@@ -76,7 +77,7 @@ export const validatePool: RequestHandler = async (req, res) => {
  */
 export const freezePool: RequestHandler = async (req, res) => {
   const communeDraw = await scopedCommuneDraw(req)
-  const result = await drawPoolService.freeze(communeDraw.id, getAuthenticatedUser(req).id)
+  const result = await drawPoolService.freeze(communeDraw.id, auditActor(getAuthenticatedUser(req)))
 
   // `result.event` is the structured record a future audit log will persist:
   // who froze what, and the aggregates and hash that identify it. Nothing

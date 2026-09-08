@@ -1,8 +1,10 @@
 import { AdminRole, type PrismaClient, type User } from '@prisma/client'
 
+import { normalizeAuditReason } from '../lib/audit-payload.js'
 import { ApiError, ForbiddenError } from '../lib/errors.js'
 import { prisma as defaultPrisma } from '../lib/prisma.js'
 import { canAccessCommune, canAccessWilaya, resolveScope } from '../lib/scope.js'
+import { auditActor, auditService, AuditService } from './audit.service.js'
 
 /** A requested role/scope assignment, before it has been proven valid. */
 export interface ScopeAssignment {
@@ -45,9 +47,11 @@ function invalid(message: string): ApiError {
  */
 export class AdminAccountService {
   private readonly db: PrismaClient
+  private readonly audit: AuditService
 
-  constructor(db: PrismaClient = defaultPrisma) {
+  constructor(db: PrismaClient = defaultPrisma, audit: AuditService = auditService) {
     this.db = db
+    this.audit = audit
   }
 
   /**
@@ -175,6 +179,92 @@ export class AdminAccountService {
     }
 
     return change
+  }
+
+  /**
+   * Applies a role/scope change, with its audit record, in one transaction.
+   *
+   * A scope change is a privilege change: it decides which territory's data an
+   * administrator can read and alter. Recording it separately from making it
+   * would allow the one state nobody could investigate — somebody's reach
+   * widened, with no account of who widened it.
+   *
+   * National, deliberately. An administrator's authority is not a property of a
+   * territory even when it names one, and filing this under the target's wilaya
+   * would let a scoped administrator watch their own permissions being changed.
+   */
+  async changeScope(
+    actor: User,
+    targetUserId: string,
+    requested: ScopeAssignment,
+    reason: string,
+  ): Promise<ScopeChangeRecord> {
+    const justification = normalizeAuditReason('ADMIN_SCOPE_CHANGED', reason)
+    const change = await this.prepareScopeChange(actor, targetUserId, requested)
+
+    return this.db.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: targetUserId },
+        data: { role: change.next.role, wilayaId: change.next.wilayaId, communeId: change.next.communeId },
+      })
+
+      await this.audit.record(
+        {
+          action: 'ADMIN_SCOPE_CHANGED',
+          actor: auditActor(actor),
+          targetType: 'USER',
+          targetId: targetUserId,
+          reason: justification,
+          before: { ...change.previous },
+          after: { ...change.next },
+        },
+        tx,
+      )
+
+      return change
+    })
+  }
+
+  /**
+   * Deactivates an administrator and revokes their sessions, with its audit
+   * record, in one transaction.
+   *
+   * The sessions go too: leaving a disabled account with live sessions would
+   * mean the account is disabled only in the sense that it cannot sign in again.
+   */
+  async deactivate(actor: User, targetUserId: string, reason: string): Promise<User> {
+    const justification = normalizeAuditReason('ADMIN_DISABLED', reason)
+
+    const target = await this.db.user.findUnique({ where: { id: targetUserId } })
+    if (!target) throw new ApiError(404, 'USER_NOT_FOUND', 'Administrator not found')
+
+    // Locking yourself out is not a privilege escalation, but it is the fastest
+    // way to leave a system unadministered by accident.
+    this.assertNotSelf(actor, targetUserId)
+    await this.assertNotLastSuperAdmin(targetUserId)
+
+    if (!target.isActive) return target
+
+    return this.db.$transaction(async (tx) => {
+      const updated = await tx.user.update({ where: { id: targetUserId }, data: { isActive: false } })
+      await tx.session.deleteMany({ where: { userId: targetUserId } })
+
+      await this.audit.record(
+        {
+          action: 'ADMIN_DISABLED',
+          actor: auditActor(actor),
+          targetType: 'USER',
+          targetId: targetUserId,
+          reason: justification,
+          before: { isActive: true },
+          after: { isActive: false },
+          metadata: { role: updated.role },
+        },
+        tx,
+      )
+
+      return updated
+    })
   }
 
   private async assertWilayaExists(wilayaId: string): Promise<void> {

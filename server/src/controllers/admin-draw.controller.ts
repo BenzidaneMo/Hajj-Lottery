@@ -4,6 +4,7 @@ import type { RequestHandler } from 'express'
 
 import { BadRequestError, NotFoundError } from '../lib/errors.js'
 import { getAuthenticatedUser } from '../middleware/require-authenticated-user.js'
+import { auditActor } from '../services/audit.service.js'
 import { authorizationService } from '../services/authorization.service.js'
 import {
   drawConfigurationService,
@@ -63,7 +64,10 @@ export const createDrawYear: RequestHandler = async (req, res) => {
     )
   }
 
-  const created = await drawConfigurationService.createDrawYear(parsed.data.year)
+  const created = await drawConfigurationService.createDrawYear(
+    parsed.data.year,
+    auditActor(getAuthenticatedUser(req)),
+  )
 
   res.status(201).json(toDrawYearDto({ ...created, _count: { communeDraws: 0 } }))
 }
@@ -88,6 +92,7 @@ export const updateDrawYear: RequestHandler = async (req, res) => {
   const updated = await drawConfigurationService.updateDrawYearStatus(
     req.params.id ?? '',
     parsed.data.status as DrawYearStatus,
+    auditActor(getAuthenticatedUser(req)),
   )
   const withCount = await drawConfigurationService.findDrawYear(updated.year)
 
@@ -132,7 +137,10 @@ export const createCommuneDraw: RequestHandler = async (req, res) => {
     )
   }
 
-  const created = await drawConfigurationService.createCommuneDraw(parsed.data)
+  const created = await drawConfigurationService.createCommuneDraw(
+    parsed.data,
+    auditActor(getAuthenticatedUser(req)),
+  )
 
   res.status(201).json(toCommuneDrawDto(created))
 }
@@ -153,10 +161,14 @@ export const updateCommuneDraw: RequestHandler = async (req, res) => {
     )
   }
 
-  const updated = await drawConfigurationService.updateCommuneDraw(req.params.id ?? '', {
-    ...(parsed.data.allocatedSpots === undefined ? {} : { allocatedSpots: parsed.data.allocatedSpots }),
-    ...(parsed.data.status === undefined ? {} : { status: parsed.data.status as CommuneDrawStatus }),
-  })
+  const updated = await drawConfigurationService.updateCommuneDraw(
+    req.params.id ?? '',
+    {
+      ...(parsed.data.allocatedSpots === undefined ? {} : { allocatedSpots: parsed.data.allocatedSpots }),
+      ...(parsed.data.status === undefined ? {} : { status: parsed.data.status as CommuneDrawStatus }),
+    },
+    auditActor(getAuthenticatedUser(req)),
+  )
 
   res.json(toCommuneDrawDto(updated))
 }

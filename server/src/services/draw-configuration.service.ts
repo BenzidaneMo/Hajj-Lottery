@@ -8,6 +8,7 @@ import {
   type Wilaya,
 } from '@prisma/client'
 
+import { diffSnapshots } from '../lib/audit-payload.js'
 import {
   allowsSpotChanges,
   canTransitionCommuneDraw,
@@ -17,6 +18,7 @@ import {
 import { ConflictError, NotFoundError } from '../lib/errors.js'
 import { sortByCode } from '../lib/geo-order.js'
 import { prisma as defaultPrisma } from '../lib/prisma.js'
+import { auditService, AuditService, scopeOfCommune, type AuditActor } from './audit.service.js'
 
 /** A commune draw with the geography needed to present or authorize it. */
 export type CommuneDrawWithPlace = CommuneDraw & {
@@ -51,9 +53,11 @@ export interface UpdateCommuneDrawInput {
  */
 export class DrawConfigurationService {
   private readonly db: PrismaClient
+  private readonly audit: AuditService
 
-  constructor(db: PrismaClient = defaultPrisma) {
+  constructor(db: PrismaClient = defaultPrisma, audit: AuditService = auditService) {
     this.db = db
+    this.audit = audit
   }
 
   // --- The national cycle -------------------------------------------------
@@ -101,9 +105,26 @@ export class DrawConfigurationService {
    * Creates a cycle for a calendar year. Always DRAFT: opening registration is
    * a separate, deliberate act.
    */
-  async createDrawYear(year: number): Promise<DrawYear> {
+  async createDrawYear(year: number, actor: AuditActor | null = null): Promise<DrawYear> {
     try {
-      return await this.db.drawYear.create({ data: { year } })
+      return await this.db.$transaction(async (tx) => {
+        const created = await tx.drawYear.create({ data: { year } })
+
+        // National: a draw year names no territory, so scoped administrators
+        // deliberately never see this event.
+        await this.audit.record(
+          {
+            action: 'DRAW_YEAR_CREATED',
+            actor,
+            targetType: 'DRAW_YEAR',
+            targetId: created.id,
+            after: { year: created.year, status: created.status },
+          },
+          tx,
+        )
+
+        return created
+      })
     } catch (error) {
       // The unique index decides, not a prior read, so two simultaneous
       // creations of the same year resolve to one row.
@@ -121,7 +142,11 @@ export class DrawConfigurationService {
    * checking first: opening a second year violates the partial unique index,
    * which is what makes it hold under concurrent requests too.
    */
-  async updateDrawYearStatus(id: string, status: DrawYearStatus): Promise<DrawYear> {
+  async updateDrawYearStatus(
+    id: string,
+    status: DrawYearStatus,
+    actor: AuditActor | null = null,
+  ): Promise<DrawYear> {
     const existing = await this.db.drawYear.findUnique({ where: { id } })
     if (!existing) throw new NotFoundError('DRAW_YEAR_NOT_FOUND', 'Draw year not found')
 
@@ -135,7 +160,28 @@ export class DrawConfigurationService {
     }
 
     try {
-      return await this.db.drawYear.update({ where: { id }, data: { status } })
+      return await this.db.$transaction(async (tx) => {
+        const updated = await tx.drawYear.update({ where: { id }, data: { status } })
+
+        // Opening and closing registration are the transitions that matter most,
+        // and both are legible from the snapshot — one action with a before and
+        // after rather than separate OPENED/CLOSED events that could disagree
+        // with it.
+        await this.audit.record(
+          {
+            action: 'DRAW_YEAR_STATUS_CHANGED',
+            actor,
+            targetType: 'DRAW_YEAR',
+            targetId: updated.id,
+            before: { status: existing.status },
+            after: { status: updated.status },
+            metadata: { year: updated.year },
+          },
+          tx,
+        )
+
+        return updated
+      })
     } catch (error) {
       if (isUniqueViolation(error)) {
         throw new ConflictError(
@@ -173,7 +219,10 @@ export class DrawConfigurationService {
    * configuration, not geography. The commune determines its own wilaya, so
    * there is no wilaya to validate against and none is stored.
    */
-  async createCommuneDraw(input: CreateCommuneDrawInput): Promise<CommuneDrawWithPlace> {
+  async createCommuneDraw(
+    input: CreateCommuneDrawInput,
+    actor: AuditActor | null = null,
+  ): Promise<CommuneDrawWithPlace> {
     const [drawYear, commune] = await Promise.all([
       this.db.drawYear.findUnique({ where: { id: input.drawYearId }, select: { id: true } }),
       this.db.commune.findUnique({ where: { id: input.communeId }, select: { id: true } }),
@@ -183,13 +232,33 @@ export class DrawConfigurationService {
     if (!commune) throw new NotFoundError('COMMUNE_NOT_FOUND', 'Commune not found')
 
     try {
-      return await this.db.communeDraw.create({
-        data: {
-          drawYearId: input.drawYearId,
-          communeId: input.communeId,
-          allocatedSpots: input.allocatedSpots,
-        },
-        include: { drawYear: true, commune: { include: { wilaya: true } } },
+      return await this.db.$transaction(async (tx) => {
+        const created = await tx.communeDraw.create({
+          data: {
+            drawYearId: input.drawYearId,
+            communeId: input.communeId,
+            allocatedSpots: input.allocatedSpots,
+          },
+          include: { drawYear: true, commune: { include: { wilaya: true } } },
+        })
+
+        await this.audit.record(
+          {
+            action: 'COMMUNE_DRAW_CREATED',
+            actor,
+            targetType: 'COMMUNE_DRAW',
+            targetId: created.id,
+            scope: scopeOfCommune(created.commune),
+            after: {
+              allocatedSpots: created.allocatedSpots,
+              status: created.status,
+              drawYear: created.drawYear.year,
+            },
+          },
+          tx,
+        )
+
+        return created
       })
     } catch (error) {
       if (isUniqueViolation(error)) {
@@ -210,7 +279,11 @@ export class DrawConfigurationService {
    * afterwards would alter a draw people have already been told about, so it
    * is refused for everyone, including whoever set it.
    */
-  async updateCommuneDraw(id: string, changes: UpdateCommuneDrawInput): Promise<CommuneDrawWithPlace> {
+  async updateCommuneDraw(
+    id: string,
+    changes: UpdateCommuneDrawInput,
+    actor: AuditActor | null = null,
+  ): Promise<CommuneDrawWithPlace> {
     const existing = await this.db.communeDraw.findUnique({ where: { id } })
     if (!existing) throw new NotFoundError('COMMUNE_DRAW_NOT_FOUND', 'Commune draw not found')
 
@@ -243,13 +316,41 @@ export class DrawConfigurationService {
       )
     }
 
-    return this.db.communeDraw.update({
-      where: { id },
-      data: {
-        ...(changes.allocatedSpots === undefined ? {} : { allocatedSpots: changes.allocatedSpots }),
-        ...(changes.status === undefined ? {} : { status: changes.status }),
-      },
-      include: { drawYear: true, commune: { include: { wilaya: true } } },
+    return this.db.$transaction(async (tx) => {
+      const updated = await tx.communeDraw.update({
+        where: { id },
+        data: {
+          ...(changes.allocatedSpots === undefined ? {} : { allocatedSpots: changes.allocatedSpots }),
+          ...(changes.status === undefined ? {} : { status: changes.status }),
+        },
+        include: { drawYear: true, commune: { include: { wilaya: true } } },
+      })
+
+      // Only what moved. How many pilgrimage places a commune has is the single
+      // most consequential number in its configuration, so a change to it must be
+      // legible afterwards without reading the whole record.
+      const { before, after } = diffSnapshots(
+        { allocatedSpots: existing.allocatedSpots, status: existing.status },
+        { allocatedSpots: updated.allocatedSpots, status: updated.status },
+      )
+
+      if (after) {
+        await this.audit.record(
+          {
+            action: 'COMMUNE_DRAW_UPDATED',
+            actor,
+            targetType: 'COMMUNE_DRAW',
+            targetId: updated.id,
+            scope: scopeOfCommune(updated.commune),
+            before,
+            after,
+            metadata: { drawYear: updated.drawYear.year },
+          },
+          tx,
+        )
+      }
+
+      return updated
     })
   }
 

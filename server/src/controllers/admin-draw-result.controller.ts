@@ -9,6 +9,7 @@ import type { RequestHandler } from 'express'
 
 import { NotFoundError } from '../lib/errors.js'
 import { getAuthenticatedUser } from '../middleware/require-authenticated-user.js'
+import { auditActor } from '../services/audit.service.js'
 import { authorizationService } from '../services/authorization.service.js'
 import type { CommuneDrawWithPlace } from '../services/draw-configuration.service.js'
 import { drawExecutionService } from '../services/draw-execution.service.js'
@@ -51,7 +52,7 @@ async function scopedCommuneDraw(req: Parameters<RequestHandler>[0]): Promise<Co
  */
 export const executeDraw: RequestHandler = async (req, res) => {
   const communeDraw = await scopedCommuneDraw(req)
-  const execution = await drawExecutionService.execute(communeDraw.id, getAuthenticatedUser(req).id)
+  const execution = await drawExecutionService.execute(communeDraw.id, auditActor(getAuthenticatedUser(req)))
 
   // `execution.event` is the structured record a future audit log will persist:
   // who ran what, against which pool, and how many won. Nothing writes it yet,

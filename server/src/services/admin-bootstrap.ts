@@ -3,6 +3,7 @@ import { AdminRole, type PrismaClient } from '@prisma/client'
 import { env, isProduction } from '../config/env.js'
 import { hashPassword, MIN_PASSWORD_LENGTH } from '../lib/password.js'
 import { prisma as defaultPrisma } from '../lib/prisma.js'
+import { auditService } from './audit.service.js'
 import { normalizeUsername } from './auth.service.js'
 
 export type BootstrapOutcome =
@@ -71,16 +72,36 @@ export async function createInitialAdmin(options: BootstrapOptions): Promise<Boo
     return { status: 'password-updated', username }
   }
 
-  await db.user.create({
-    data: {
-      username,
-      passwordHash: await hashPassword(options.password),
-      role: AdminRole.SUPER_ADMIN,
-      // A SUPER_ADMIN is national; the role/scope CHECK constraint rejects
-      // any geographic assignment here.
-      wilayaId: null,
-      communeId: null,
-    },
+  const passwordHash = await hashPassword(options.password)
+
+  await db.$transaction(async (tx) => {
+    const created = await tx.user.create({
+      data: {
+        username,
+        passwordHash,
+        role: AdminRole.SUPER_ADMIN,
+        // A SUPER_ADMIN is national; the role/scope CHECK constraint rejects
+        // any geographic assignment here.
+        wilayaId: null,
+        communeId: null,
+      },
+    })
+
+    // No actor: nobody was authenticated, which is the point of a bootstrap and
+    // exactly why the first national administrator appearing is worth a
+    // permanent record. The username is the account's public handle, not a
+    // credential, so it is safe to name.
+    await auditService.record(
+      {
+        action: 'ADMIN_CREATED',
+        actor: null,
+        targetType: 'USER',
+        targetId: created.id,
+        after: { username: created.username, role: created.role, isActive: created.isActive },
+        metadata: { bootstrap: true },
+      },
+      tx,
+    )
   })
 
   return { status: 'created', username }
