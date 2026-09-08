@@ -8,9 +8,11 @@ import {
   type Wilaya,
 } from '@prisma/client'
 
+import { normalizeAuditReason } from '../lib/audit-payload.js'
 import { BadRequestError, ConflictError, NotFoundError } from '../lib/errors.js'
 import { calculateStreak } from '../lib/participation-streak.js'
 import { prisma as defaultPrisma } from '../lib/prisma.js'
+import { auditService, AuditService, scopeOfCommune, type AuditActor } from './audit.service.js'
 import { drawConfigurationService, DrawConfigurationService } from './draw-configuration.service.js'
 
 /** A historical record with the geography needed to present or authorize it. */
@@ -60,13 +62,16 @@ export interface CorrectHistoryInput {
 export class ParticipationHistoryService {
   private readonly db: PrismaClient
   private readonly configuration: DrawConfigurationService
+  private readonly audit: AuditService
 
   constructor(
     db: PrismaClient = defaultPrisma,
     configuration: DrawConfigurationService = drawConfigurationService,
+    audit: AuditService = auditService,
   ) {
     this.db = db
     this.configuration = configuration
+    this.audit = audit
   }
 
   /**
@@ -188,13 +193,22 @@ export class ParticipationHistoryService {
    *
    * Participant identity is never touched here. Correcting a name is a
    * different operation on a different record, and still does not exist.
+   *
+   * There is no route to this. A correction reaches it either through an
+   * approved request or through a SUPER_ADMIN's direct, audited correction —
+   * see docs/audit-and-governance.md. `db` takes a transaction client so the
+   * correction and its audit record commit together.
    */
-  async correct(id: string, changes: CorrectHistoryInput): Promise<HistoryRecordWithPlace> {
+  async correct(
+    id: string,
+    changes: CorrectHistoryInput,
+    db: Pick<PrismaClient, 'participationHistory' | 'commune'> = this.db,
+  ): Promise<HistoryRecordWithPlace> {
     const existing = await this.findById(id)
     if (!existing) throw new NotFoundError('HISTORY_NOT_FOUND', 'Historical record not found')
 
     if (changes.communeId) {
-      const commune = await this.db.commune.findUnique({
+      const commune = await db.commune.findUnique({
         where: { id: changes.communeId },
         select: { id: true },
       })
@@ -213,7 +227,7 @@ export class ParticipationHistoryService {
       )
     }
 
-    return this.db.participationHistory.update({
+    return db.participationHistory.update({
       where: { id },
       data: {
         participated,
@@ -224,6 +238,57 @@ export class ParticipationHistoryService {
         notes: changes.notes,
       },
       include: { commune: { include: { wilaya: true } } },
+    })
+  }
+
+  /**
+   * A national administrator's direct correction, with its audit record, in one
+   * transaction.
+   *
+   * The alternative to the approval workflow, and available only to a
+   * SUPER_ADMIN — see docs/audit-and-governance.md for why a scoped
+   * administrator must ask instead. The reason is mandatory and becomes both the
+   * record's note and the audit record's justification: one sentence, in one
+   * place, so the two cannot drift apart.
+   *
+   * The correction and its record commit together. A ledger edit with no account
+   * of who made it is the thing the trail exists to make impossible.
+   */
+  async correctWithAudit(
+    actor: AuditActor,
+    record: HistoryRecordWithPlace,
+    change: { participated?: boolean; won?: boolean; verified?: boolean },
+    reason: string,
+  ): Promise<HistoryRecordWithPlace> {
+    const justification = normalizeAuditReason('HISTORICAL_RECORD_CORRECTED', reason)
+
+    return this.db.$transaction(async (tx) => {
+      const corrected = await this.correct(record.id, { ...change, notes: reason }, tx)
+
+      await this.audit.record(
+        {
+          action: 'HISTORICAL_RECORD_CORRECTED',
+          actor,
+          targetType: 'PARTICIPATION_HISTORY',
+          targetId: corrected.id,
+          scope: scopeOfCommune(corrected.commune),
+          reason: justification,
+          before: {
+            participated: record.participated,
+            won: record.won,
+            verified: record.verified,
+          },
+          after: {
+            participated: corrected.participated,
+            won: corrected.won,
+            verified: corrected.verified,
+          },
+          metadata: { drawYear: corrected.drawYear, direct: true },
+        },
+        tx,
+      )
+
+      return corrected
     })
   }
 
