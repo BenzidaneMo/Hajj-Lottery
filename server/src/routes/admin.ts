@@ -21,6 +21,7 @@ import {
   getPoolSummary,
   validatePool,
 } from '../controllers/admin-draw-pool.controller.js'
+import { executeDraw, getDrawResult } from '../controllers/admin-draw-result.controller.js'
 import { getCommune, getWilaya, listCommunes, listWilayas } from '../controllers/admin-geo.controller.js'
 import { getHistoryRecord, getParticipantHistory } from '../controllers/admin-history.controller.js'
 import { asyncHandler } from '../middleware/error-handler.js'
@@ -80,3 +81,10 @@ adminRouter.post(
 )
 adminRouter.get('/commune-draws/:id/pool', asyncHandler(getPool))
 adminRouter.get('/commune-draws/:id/pool/summary', asyncHandler(getPoolSummary))
+
+// Running the lottery. National, because it is irreversible and it excludes the
+// people it selects from every future draw — nobody should be able to run a draw
+// they are themselves subject to. Reading the result afterwards is ordinary
+// scoped administrative work, so it carries no role gate.
+adminRouter.post('/commune-draws/:id/execute', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(executeDraw))
+adminRouter.get('/commune-draws/:id/result', asyncHandler(getDrawResult))
