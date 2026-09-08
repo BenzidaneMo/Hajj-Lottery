@@ -48,10 +48,11 @@ model Commune {
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
   wilaya       Wilaya                 @relation(fields: [wilayaId], references: [id])
-  admins       User[]
-  applications Application[]
-  history      ParticipationHistory[]
-  draws        CommuneDraw[]
+  admins        User[]
+  applications  Application[]
+  history       ParticipationHistory[]
+  draws         CommuneDraw[]
+  winnerArchive WinnerArchive[]
 
   @@unique([wilayaId, code])
   /// Redundant on its own (id is already unique), but it gives User a
@@ -104,6 +105,10 @@ model Participant {
   history               ParticipationHistory[]
   poolEntriesAsPrimary   DrawPoolEntry[]         @relation("PoolPrimary")
   poolEntriesAsSecondary DrawPoolEntry[]         @relation("PoolSecondary")
+  winsAsPrimary          DrawWinner[]            @relation("WinnerPrimary")
+  winsAsSecondary        DrawWinner[]            @relation("WinnerSecondary")
+  /// At most one, ever — a person wins the Hajj lottery once in their life.
+  winnerArchive          WinnerArchive?
 
   @@map("participants")
 }
@@ -200,9 +205,9 @@ enum EntryType {
 
 /// Lifecycle of an annual application.
 ///
-/// Only the server writes this: it is the conclusion of EligibilityService,
-/// never a field a client can set. Draw outcomes (selected, waitlisted, won)
-/// are a separate concern and are deliberately not here yet.
+/// Only the server writes this: it is the conclusion of EligibilityService for
+/// the first three, and of a concluded draw for the last two. Never a field a
+/// client can set.
 enum ApplicationStatus {
   /// Received, not yet evaluated.
   PENDING
@@ -211,6 +216,12 @@ enum ApplicationStatus {
   /// Evaluated and refused. The reasons are not stored — they are derived on
   /// demand, so a stale copy can never contradict the current facts.
   INELIGIBLE
+  /// Drawn from its commune's frozen pool. Written only by winner processing,
+  /// in the same transaction as the winner records.
+  SELECTED
+  /// Entered the frozen pool and was not drawn. A final outcome, not a refusal:
+  /// this application was a full participant in the lottery.
+  NOT_SELECTED
 
   @@map("application_status")
 }
@@ -262,6 +273,7 @@ model Application {
   secondaryParticipant Participant?             @relation("SecondaryApplicant", fields: [secondaryParticipantId], references: [id], onDelete: Restrict)
   participants         ApplicationParticipant[]
   poolEntries          DrawPoolEntry[]
+  drawWins             DrawWinner[]
 
   /// Catch same-role duplicates directly. The cross-role case (someone
   /// primary on one application and secondary on another in the same year)
@@ -331,6 +343,16 @@ enum CommuneDrawStatus {
   /// Allocation is fixed. Nothing may change the spots after this, and no
   /// further applications join this commune's pool.
   LOCKED
+  /// The draw has been executed and its winners are recorded. Terminal, and
+  /// reachable only through winner processing: a deferred constraint trigger
+  /// refuses to commit this status without a matching draw result, so it cannot
+  /// be set administratively to fake a concluded draw.
+  ///
+  /// There is deliberately no DRAW_IN_PROGRESS. Execution claims this state and
+  /// writes every winner in one transaction, so an intermediate state would be
+  /// invisible to every reader and rolled back by any failure — a lifecycle
+  /// value nothing could ever observe. See docs/winner-processing.md.
+  COMPLETED
   /// Called off for this year. Terminal.
   CANCELLED
 
@@ -375,6 +397,11 @@ model CommuneDraw {
 
   /// The frozen draw input, once this commune locks. At most one, ever.
   pool DrawPool?
+
+  /// The executed draw, once it has been run. At most one, ever — and a
+  /// deferred constraint trigger refuses to let this commune draw commit as
+  /// COMPLETED without it.
+  result DrawResult?
 
   /// One configuration per commune per year.
   @@unique([drawYearId, communeId])
@@ -426,6 +453,8 @@ model DrawPool {
   createdAt DateTime @default(now()) @map("created_at")
 
   entries DrawPoolEntry[]
+  /// The draw run against this pool. At most one.
+  result  DrawResult?
 
   @@map("draw_pools")
 }
@@ -463,11 +492,192 @@ model DrawPoolEntry {
 
   createdAt DateTime @default(now()) @map("created_at")
 
+  /// Whether this entry was drawn lives here, in the result — never as a flag on
+  /// the entry itself. The pool is the input to a lottery and stays exactly as
+  /// it was frozen; marking entries selected would edit the evidence.
+  win             DrawWinner?
+  selectionEvents DrawSelectionEvent[]
+  winnerArchive   WinnerArchive[]
+
   /// An application appears at most once in a pool. Belt and braces alongside
   /// the one-application-per-person-per-year guarantee upstream.
   @@unique([drawPoolId, applicationId])
   @@index([drawPoolId])
   @@map("draw_pool_entries")
+}
+
+/// One commune's executed lottery.
+///
+/// The authoritative record that a draw happened, under which terms, against
+/// which frozen input, and by which algorithm. `UNIQUE(commune_draw_id)` is what
+/// makes "who won this commune's draw?" have exactly one answer: there is no
+/// second result set to disagree with, ever.
+///
+/// Written once, inside the transaction that claims the commune draw and records
+/// every winner. Immutable afterwards, by trigger.
+model DrawResult {
+  id String @id @default(cuid())
+
+  /// One result per commune draw, ever — the constraint that makes a second
+  /// independent execution impossible rather than merely discouraged.
+  communeDrawId String      @unique @map("commune_draw_id")
+  communeDraw   CommuneDraw @relation(fields: [communeDrawId], references: [id], onDelete: Restrict)
+
+  /// The pool actually drawn from. Also unique: a frozen pool produces at most
+  /// one result.
+  drawPoolId String   @unique @map("draw_pool_id")
+  drawPool   DrawPool @relation(fields: [drawPoolId], references: [id], onDelete: Restrict)
+
+  /// How many entries were selected. Entries, not people: a paired application
+  /// is one winning entry and two winning individuals. Equal to the commune's
+  /// allocated spots for a completed draw.
+  winnerCount Int @map("winner_count")
+
+  /// The pool's total weight as the draw saw it. Stored so the selection events
+  /// can be replayed without reading the pool back.
+  totalWeightAtDraw Int @map("total_weight_at_draw")
+
+  /// The pool's snapshot hash, verified immediately before selection and copied
+  /// here. Identifies the exact input this result came from — and is emphatically
+  /// not a seed.
+  poolHash String @map("pool_hash")
+
+  /// Which implementation selected these winners, e.g. `weighted-csprng-v1`.
+  /// Never a moving value like "latest": a completed draw must forever identify
+  /// the algorithm it ran under, because that is what makes it reproducible.
+  algorithmVersion String @map("algorithm_version")
+
+  /// When execution began and when the result was written. Both, so how long a
+  /// draw took is part of its record.
+  startedAt   DateTime @map("started_at")
+  completedAt DateTime @map("completed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// No status column. A result row exists only when a draw completed, so a
+  /// status could only ever read COMPLETED — the lifecycle lives on the commune
+  /// draw, and a second copy of it here could disagree.
+  winners         DrawWinner[]
+  events          DrawSelectionEvent[]
+  archivedWinners WinnerArchive[]
+
+  @@map("draw_results")
+}
+
+/// One selected pool entry.
+///
+/// A winning *entry*, not a winning person: a paired application produces one of
+/// these and two `WinnerArchive` rows. Carries internal ids only — no names,
+/// national IDs, dates of birth or phone numbers. A test pins those columns out.
+model DrawWinner {
+  id String @id @default(cuid())
+
+  drawResultId String     @map("draw_result_id")
+  drawResult   DrawResult @relation(fields: [drawResultId], references: [id], onDelete: Restrict)
+
+  /// The frozen entry that was drawn. Unique on its own: an entry can win once,
+  /// ever, in any result.
+  drawPoolEntryId String        @unique @map("draw_pool_entry_id")
+  drawPoolEntry   DrawPoolEntry @relation(fields: [drawPoolEntryId], references: [id], onDelete: Restrict)
+
+  applicationId String      @map("application_id")
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+
+  primaryParticipantId   String       @map("primary_participant_id")
+  primaryParticipant     Participant  @relation("WinnerPrimary", fields: [primaryParticipantId], references: [id], onDelete: Restrict)
+  secondaryParticipantId String?      @map("secondary_participant_id")
+  secondaryParticipant   Participant? @relation("WinnerSecondary", fields: [secondaryParticipantId], references: [id], onDelete: Restrict)
+
+  /// Position in the order the entries were drawn, 1-based and contiguous. The
+  /// order of selection, deliberately not a rank: nothing in the domain ranks
+  /// winners against each other.
+  selectionOrder Int @map("selection_order")
+
+  /// The weight this entry carried in the pool, copied so a result reads without
+  /// touching the pool.
+  selectedWeight Int @map("selected_weight")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([drawResultId, drawPoolEntryId])
+  /// No two winners share a position in the order.
+  @@unique([drawResultId, selectionOrder])
+  @@index([drawResultId])
+  @@map("draw_winners")
+}
+
+/// The random draw behind one selection.
+///
+/// `random_value` was drawn from `[0, active_total_weight)` — a CHECK constraint
+/// holds that half-open range — and picked the entry whose cumulative slice
+/// contains it. Together with the pool, these events let anyone replay the
+/// arithmetic and confirm each winner without trusting the software.
+///
+/// Normalized rather than a JSON blob so the events can be queried, counted and
+/// constrained. They are a record of randomness already spent; nothing may use
+/// them as a source of randomness.
+model DrawSelectionEvent {
+  id String @id @default(cuid())
+
+  drawResultId String     @map("draw_result_id")
+  drawResult   DrawResult @relation(fields: [drawResultId], references: [id], onDelete: Restrict)
+
+  selectionOrder    Int @map("selection_order")
+  /// The entries still in play, summed, before this selection.
+  activeTotalWeight Int @map("active_total_weight")
+  randomValue       Int @map("random_value")
+
+  selectedPoolEntryId String        @map("selected_pool_entry_id")
+  selectedPoolEntry   DrawPoolEntry @relation(fields: [selectedPoolEntryId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([drawResultId, selectionOrder])
+  @@index([drawResultId])
+  @@map("draw_selection_events")
+}
+
+/// One person's lifetime Hajj win.
+///
+/// The participant-centric index of winners, distinct from `DrawWinner`, which is
+/// entry-centric. A paired winning application produces one `DrawWinner` and
+/// **two** rows here, because lifetime exclusion applies to people.
+///
+/// `UNIQUE(participant_id)` is the strongest invariant in the model: a person can
+/// be archived as a winner exactly once, in one draw, forever. A malformed pool
+/// naming the same participant twice cannot be half-processed — the constraint
+/// aborts the whole transaction rather than letting anything be deduplicated
+/// quietly.
+model WinnerArchive {
+  id String @id @default(cuid())
+
+  /// One win per person, ever.
+  participantId String      @unique @map("participant_id")
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Restrict)
+
+  /// The year and commune of the win, stored as the participation ledger stores
+  /// them: a person belongs to no commune permanently, so the commune is a
+  /// property of the draw they won, not of them.
+  drawYear  Int     @map("draw_year")
+  communeId String  @map("commune_id")
+  commune   Commune @relation(fields: [communeId], references: [id], onDelete: Restrict)
+
+  drawResultId String     @map("draw_result_id")
+  drawResult   DrawResult @relation(fields: [drawResultId], references: [id], onDelete: Restrict)
+
+  /// The winning entry, which determines the application. Not copied separately.
+  drawPoolEntryId String        @map("draw_pool_entry_id")
+  drawPoolEntry   DrawPoolEntry @relation(fields: [drawPoolEntryId], references: [id], onDelete: Restrict)
+
+  /// When the draw that selected this person completed.
+  drawnAt DateTime @map("drawn_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([drawResultId, participantId])
+  @@index([drawYear])
+  @@index([communeId, drawYear])
+  @@map("winner_archive")
 }
 
 /// Where a historical fact came from. An enum rather than free text so a
