@@ -102,6 +102,8 @@ model Participant {
   secondaryApplications Application[]            @relation("SecondaryApplicant")
   participations        ApplicationParticipant[]
   history               ParticipationHistory[]
+  poolEntriesAsPrimary   DrawPoolEntry[]         @relation("PoolPrimary")
+  poolEntriesAsSecondary DrawPoolEntry[]         @relation("PoolSecondary")
 
   @@map("participants")
 }
@@ -259,6 +261,7 @@ model Application {
   primaryParticipant   Participant              @relation("PrimaryApplicant", fields: [primaryParticipantId], references: [id], onDelete: Restrict)
   secondaryParticipant Participant?             @relation("SecondaryApplicant", fields: [secondaryParticipantId], references: [id], onDelete: Restrict)
   participants         ApplicationParticipant[]
+  poolEntries          DrawPoolEntry[]
 
   /// Catch same-role duplicates directly. The cross-role case (someone
   /// primary on one application and secondary on another in the same year)
@@ -370,10 +373,101 @@ model CommuneDraw {
   /// it, and geographic authorization reads it through this relation.
   commune  Commune  @relation(fields: [communeId], references: [id], onDelete: Restrict)
 
+  /// The frozen draw input, once this commune locks. At most one, ever.
+  pool DrawPool?
+
   /// One configuration per commune per year.
   @@unique([drawYearId, communeId])
   @@index([communeId])
   @@map("commune_draws")
+}
+
+/// The frozen input to one commune's lottery.
+///
+/// The draw must never read live application rows. Eligibility, weights and
+/// history all keep moving — a legacy record verified next week changes what a
+/// streak would be — and a lottery run against data shifting underneath it
+/// could not be reproduced or defended afterwards. So the moment a commune
+/// locks, exactly what will be drawn from is copied here and never touched
+/// again.
+///
+/// Immutability is enforced by database triggers, not only by the absence of
+/// an update endpoint: UPDATE and DELETE on this table and its entries raise
+/// an exception. The pool is evidence, and evidence that can be edited is not
+/// evidence.
+model DrawPool {
+  id String @id @default(cuid())
+
+  /// One pool per commune draw, ever. This unique constraint is also what
+  /// makes two administrators freezing simultaneously resolve to one pool.
+  communeDrawId String      @unique @map("commune_draw_id")
+  communeDraw   CommuneDraw @relation(fields: [communeDrawId], references: [id], onDelete: Restrict)
+
+  /// How many applications the draw will choose from, and their weights
+  /// summed. Both are validated against the entries as they are written, and
+  /// can never drift afterwards because nothing can rewrite either.
+  entryCount  Int @map("entry_count")
+  totalWeight Int @map("total_weight")
+
+  /// The commune's allocation as it stood at the moment of freezing, so the
+  /// terms of the draw are legible from the snapshot alone.
+  allocatedSpots Int @map("allocated_spots")
+
+  /// SHA-256 over a deterministic serialization of the pool — see
+  /// lib/draw-pool-hash.ts. An integrity and identification mechanism only:
+  /// it is emphatically *not* a random seed, and the draw must not use it as
+  /// one.
+  snapshotHash String @map("snapshot_hash")
+
+  /// The canonical format this hash was computed under, so a future change to
+  /// the serialization can be told apart from tampering.
+  snapshotVersion Int @default(1) @map("snapshot_version")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  entries DrawPoolEntry[]
+
+  @@map("draw_pools")
+}
+
+/// One application's frozen place in a commune's draw.
+///
+/// Carries what the lottery needs and nothing else: which application, which
+/// participants, what weight, what kind of entry. No names, national IDs,
+/// dates of birth or phone numbers — the draw does not need to know who
+/// anybody is to choose between them, and a snapshot that outlives everything
+/// else is the worst possible place to keep identity.
+model DrawPoolEntry {
+  id String @id @default(cuid())
+
+  drawPoolId String   @map("draw_pool_id")
+  drawPool   DrawPool @relation(fields: [drawPoolId], references: [id], onDelete: Restrict)
+
+  applicationId String      @map("application_id")
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+
+  /// Copied rather than joined, so the pool reads without touching live rows.
+  applicationReference String    @map("application_reference")
+  entryType            EntryType @map("entry_type")
+
+  /// Internal ids only. Restrict on both: a participant cannot be deleted out
+  /// from under a draw that has already been run.
+  primaryParticipantId   String       @map("primary_participant_id")
+  primaryParticipant     Participant  @relation("PoolPrimary", fields: [primaryParticipantId], references: [id], onDelete: Restrict)
+  secondaryParticipantId String?      @map("secondary_participant_id")
+  secondaryParticipant   Participant? @relation("PoolSecondary", fields: [secondaryParticipantId], references: [id], onDelete: Restrict)
+
+  /// The application's frozen calculated_weight, copied at freeze time. A
+  /// CHECK keeps it positive: an entry that can never be drawn is not an entry.
+  weight Int
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// An application appears at most once in a pool. Belt and braces alongside
+  /// the one-application-per-person-per-year guarantee upstream.
+  @@unique([drawPoolId, applicationId])
+  @@index([drawPoolId])
+  @@map("draw_pool_entries")
 }
 
 /// Where a historical fact came from. An enum rather than free text so a
