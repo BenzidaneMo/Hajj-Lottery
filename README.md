@@ -79,6 +79,13 @@ transparent results, across Arabic (RTL), French, and English.
 > atomically, once. The draw engine will read only from that pool. Selection,
 > randomness and winner processing remain unimplemented.
 
+> **Status:** Step 13 — the weighted lottery engine. Selection exists: weighted
+> sampling without replacement over a frozen pool, drawn with a cryptographically
+> secure generator through an injectable random source, in integer arithmetic
+> only. It writes nothing and has no HTTP route, because nothing can yet record
+> that a draw has been run. Winner records, publication and `has_won_hajj`
+> remain unimplemented.
+
 ## Architecture
 
 ```
@@ -346,6 +353,53 @@ from its input would make the outcome a function of who entered.
 Nothing about a pool is public.
 
 See [docs/draw-pool.md](docs/draw-pool.md).
+
+## The lottery engine
+
+Given a frozen pool and a number of places, which entries are selected — and
+nothing else. The engine is a consumer of the draw pool: it never reads a live
+application weight, never re-evaluates eligibility, and never touches
+participation history.
+
+Each round maps the entries still in play onto one contiguous integer range and
+draws a single value inside it:
+
+```
+  A weight 2   B weight 5   C weight 3        total 10
+  [0 1]        [2 3 4 5 6]  [7 8 9]
+
+  r drawn from [0, 10)   →   the first entry whose cumulative weight exceeds r
+```
+
+The winner is then removed and the total recomputed, so nobody can be selected
+twice and every remaining entry's share of the next round rises. All arithmetic
+is integer; no floating point touches a weight or a random value.
+
+Randomness comes from `crypto.randomInt`, Node's cryptographically secure uniform
+integer generator. **`Math.random` is forbidden**, and a test scans every server
+source file to enforce it rather than relying on review. So are timestamps,
+UUIDs, database ids and — emphatically — the pool's own hash: randomness derived
+from the input would make the outcome a function of who entered, and anybody
+holding the pool could compute the winners in advance. The engine verifies that
+hash before drawing and then never uses it again.
+
+The random source is a one-method interface injected as a dependency, so a test
+can supply a fixed sequence and assert an exact outcome. A seeded PRNG never
+becomes the production source to make testing easier.
+
+A selection **writes nothing**: no winners, no `has_won_hajj`, no lifecycle
+change, no audit row, not even a log line. It also has **no HTTP endpoint** —
+because nothing yet records that a draw has been run, two calls would produce two
+equally authoritative sets of winners, and a route would let an administrator
+re-roll until they liked the outcome. The guard against that belongs with winner
+processing, so until then this is a service without a route.
+
+A pool smaller than its allocation is **refused** (`INSUFFICIENT_DRAW_ENTRIES`),
+never truncated. Freezing permits that situation on purpose, so whether an
+undersubscribed commune awards every applicant a place is a policy decision — one
+that will not be made by a `Math.min` inside a sampling function.
+
+See [docs/lottery-engine.md](docs/lottery-engine.md).
 
 ## Draw configuration
 
