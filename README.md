@@ -73,6 +73,12 @@ transparent results, across Arabic (RTL), French, and English.
 > never derived from applicant numbers. The draw itself, pool freezing and
 > winner processing remain unimplemented.
 
+> **Status:** Step 12 — draw pool validation and freeze. Before a commune's
+> lottery can run, its input is validated against the current facts and then
+> snapshotted into an immutable, hashed pool while the commune draw locks —
+> atomically, once. The draw engine will read only from that pool. Selection,
+> randomness and winner processing remain unimplemented.
+
 ## Architecture
 
 ```
@@ -307,6 +313,39 @@ person may take part in different communes in different years, and an
 administrator is never told about the years outside their territory.
 
 See [docs/participation-history.md](docs/participation-history.md).
+
+## The draw pool
+
+The lottery must never draw from live application rows. Eligibility, weights
+and participation history all keep moving, and a draw run against shifting data
+could not be reproduced or defended afterwards. So when a commune's draw is
+ready, its input is frozen.
+
+| Endpoint                                          | Auth | Role        | Purpose                     |
+| ------------------------------------------------- | ---- | ----------- | --------------------------- |
+| `POST /api/admin/commune-draws/:id/validate-pool` | yes  | any admin   | Dry run; changes nothing    |
+| `POST /api/admin/commune-draws/:id/freeze-pool`   | yes  | SUPER_ADMIN | Snapshot and lock, once     |
+| `GET /api/admin/commune-draws/:id/pool`           | yes  | any admin   | The frozen entries, scoped  |
+| `GET /api/admin/commune-draws/:id/pool/summary`   | yes  | any admin   | Aggregates and hash, scoped |
+
+Validation recomputes every weight and re-evaluates every application against
+the current facts, and **repairs nothing**. A weight that has gone stale, an
+application that no longer evaluates as eligible, a participant since recorded
+as a winner — each blocks the freeze and is reported with a typed code.
+
+Freezing and locking happen in one transaction, so there is never a locked
+commune draw without a pool nor a pool whose terms can still change. Concurrent
+freezes resolve to exactly one authoritative pool. The snapshot is immutable —
+enforced by database triggers, not merely by the absence of an endpoint — and
+carries no names, national IDs, dates of birth or phone numbers.
+
+Every pool has a SHA-256 hash over a deterministic canonical form, for
+integrity only. It is **not** a random seed: deriving the draw's randomness
+from its input would make the outcome a function of who entered.
+
+Nothing about a pool is public.
+
+See [docs/draw-pool.md](docs/draw-pool.md).
 
 ## Draw configuration
 
