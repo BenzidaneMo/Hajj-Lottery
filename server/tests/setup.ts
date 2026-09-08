@@ -15,9 +15,14 @@ const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } })
 beforeEach(async () => {
   // Only the tables these tests write to. The geographic tables are left
   // alone so an accidental misconfiguration cannot quietly wipe seeded
-  // reference data. Truncating "users" cascades to "sessions".
+  // reference data. Truncating "users" cascades to "sessions", "participants"
+  // to applications and history, and "draw_years" to commune draws.
+  //
+  // Draw years matter here beyond tidiness: at most one may be open for
+  // registration at a time, so a year left open by one file would make every
+  // later file's fixture unopenable.
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "participants", "sessions", "users" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "participants", "sessions", "users", "draw_years" RESTART IDENTITY CASCADE',
   )
 })
 

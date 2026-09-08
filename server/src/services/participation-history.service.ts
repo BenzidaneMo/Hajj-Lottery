@@ -8,10 +8,10 @@ import {
   type Wilaya,
 } from '@prisma/client'
 
-import { currentRegistrationWindow } from '../config/registration.js'
 import { BadRequestError, ConflictError, NotFoundError } from '../lib/errors.js'
 import { calculateStreak } from '../lib/participation-streak.js'
 import { prisma as defaultPrisma } from '../lib/prisma.js'
+import { drawConfigurationService, DrawConfigurationService } from './draw-configuration.service.js'
 
 /** A historical record with the geography needed to present or authorize it. */
 export type HistoryRecordWithPlace = ParticipationHistory & {
@@ -59,9 +59,14 @@ export interface CorrectHistoryInput {
  */
 export class ParticipationHistoryService {
   private readonly db: PrismaClient
+  private readonly configuration: DrawConfigurationService
 
-  constructor(db: PrismaClient = defaultPrisma) {
+  constructor(
+    db: PrismaClient = defaultPrisma,
+    configuration: DrawConfigurationService = drawConfigurationService,
+  ) {
     this.db = db
+    this.configuration = configuration
   }
 
   /**
@@ -73,7 +78,7 @@ export class ParticipationHistoryService {
    * record.
    */
   async create(input: CreateHistoryInput): Promise<HistoryRecordWithPlace> {
-    this.assertNotFutureYear(input.drawYear)
+    await this.assertNotFutureYear(input.drawYear)
 
     const [participant, commune] = await Promise.all([
       this.db.participant.findUnique({ where: { id: input.participantId }, select: { id: true } }),
@@ -230,8 +235,8 @@ export class ParticipationHistoryService {
    * arrived. Automatic population from real draws is deferred until draw
    * processing exists.
    */
-  private assertNotFutureYear(drawYear: number): void {
-    const { drawYear: currentDrawYear } = currentRegistrationWindow()
+  private async assertNotFutureYear(drawYear: number): Promise<void> {
+    const currentDrawYear = await this.configuration.referenceDrawYear()
 
     if (drawYear > currentDrawYear) {
       throw new BadRequestError('INVALID_DRAW_YEAR', 'A draw year in the future has no history to record')

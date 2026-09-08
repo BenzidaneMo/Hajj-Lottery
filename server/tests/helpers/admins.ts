@@ -61,6 +61,37 @@ export async function ensureTestGeography(prisma: PrismaClient): Promise<TestGeo
   }
 }
 
+/**
+ * An open draw year with every fixture commune configured to accept
+ * applications — the configuration registration now requires.
+ *
+ * Idempotent, and reused by every suite that registers: since Step 11 a
+ * citizen cannot apply into a year that is not open, nor into a commune with
+ * no draw configured, so this is the setup that makes registration possible at
+ * all rather than a convenience.
+ */
+export async function ensureOpenDrawYear(
+  prisma: PrismaClient,
+  geo: TestGeography,
+  year: number = new Date().getUTCFullYear(),
+): Promise<{ drawYear: { id: string; year: number } }> {
+  const drawYear = await prisma.drawYear.upsert({
+    where: { year },
+    update: { status: 'REGISTRATION_OPEN' },
+    create: { year, status: 'REGISTRATION_OPEN' },
+  })
+
+  for (const commune of [geo.communeA1, geo.communeA2, geo.communeB1]) {
+    await prisma.communeDraw.upsert({
+      where: { drawYearId_communeId: { drawYearId: drawYear.id, communeId: commune.id } },
+      update: { status: 'DRAFT' },
+      create: { drawYearId: drawYear.id, communeId: commune.id, allocatedSpots: 10 },
+    })
+  }
+
+  return { drawYear }
+}
+
 export interface CreateAdminOptions {
   role: AdminRole
   username?: string

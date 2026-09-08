@@ -224,6 +224,8 @@ function messageFor(error: unknown, t: (key: string) => string): string {
       return t('register.errors.invalidCommune')
     case 'REGISTRATION_CLOSED':
       return t('register.errors.closed')
+    case 'COMMUNE_DRAW_NOT_CONFIGURED':
+      return t('register.errors.communeNotDrawing')
     case 'TOO_MANY_ATTEMPTS':
       return t('register.errors.tooMany')
     case 'VALIDATION_FAILED':

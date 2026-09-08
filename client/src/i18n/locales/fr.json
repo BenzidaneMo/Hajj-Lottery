@@ -190,6 +190,7 @@
       "notEligible": "Cette demande ne peut pas être acceptée car un demandeur n'est pas éligible.",
       "invalidCommune": "Sélectionnez une commune de la wilaya choisie.",
       "closed": "Les inscriptions ne sont pas ouvertes actuellement.",
+      "communeNotDrawing": "La commune sélectionnée n'accepte pas de demandes pour cette année. Veuillez contacter votre commune.",
       "tooMany": "Trop de tentatives depuis cette connexion. Réessayez plus tard.",
       "validation": "Veuillez vérifier les informations saisies.",
       "unknown": "Une erreur est survenue. Veuillez réessayer."

@@ -5,10 +5,10 @@ import type {
 } from '@hajj-lottery/shared'
 import type { RequestHandler } from 'express'
 
-import { currentRegistrationWindow } from '../config/registration.js'
 import { NotFoundError } from '../lib/errors.js'
 import { getAuthenticatedUser } from '../middleware/require-authenticated-user.js'
 import { authorizationService } from '../services/authorization.service.js'
+import { drawConfigurationService } from '../services/draw-configuration.service.js'
 import {
   participationHistoryService,
   type HistoryRecordWithPlace,
@@ -71,7 +71,7 @@ export const getHistoryRecord: RequestHandler = async (req, res) => {
 async function streakFor(role: string, participantId: string) {
   if (role !== 'SUPER_ADMIN') return null
 
-  const { drawYear } = currentRegistrationWindow()
+  const drawYear = await drawConfigurationService.referenceDrawYear()
   return participationHistoryService.calculateConsecutiveNonWinningYears(participantId, drawYear)
 }
 

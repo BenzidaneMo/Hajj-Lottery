@@ -5,7 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { createApp } from '../src/app.js'
 import { communeToken, generateApplicationReference } from '../src/lib/application-reference.js'
 import { isValidPhoneNumber, normalizePhoneNumber } from '../src/lib/phone.js'
-import { ensureTestGeography, type TestGeography } from './helpers/admins.js'
+import { ensureOpenDrawYear, ensureTestGeography, type TestGeography } from './helpers/admins.js'
 
 const prisma = new PrismaClient()
 
@@ -67,6 +67,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   app = createApp()
   geo = await ensureTestGeography(prisma)
+  await ensureOpenDrawYear(prisma, geo)
   await prisma.applicationParticipant.deleteMany()
   await prisma.application.deleteMany()
 })

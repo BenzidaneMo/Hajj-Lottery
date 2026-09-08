@@ -1,8 +1,8 @@
 import type { RegistrationWindowDto } from '@hajj-lottery/shared'
 import type { RequestHandler } from 'express'
 
-import { currentRegistrationWindow } from '../config/registration.js'
 import { BadRequestError } from '../lib/errors.js'
+import { drawConfigurationService } from '../services/draw-configuration.service.js'
 import { registrationService } from '../services/registration.service.js'
 import { createApplicationSchema } from '../validation/application.js'
 
@@ -35,8 +35,15 @@ export const createApplication: RequestHandler = async (req, res) => {
  * is applying for, and close itself when intake is not running. The server
  * re-checks both on submission regardless.
  */
-export const getRegistrationWindow: RequestHandler = (_req, res) => {
-  const window = currentRegistrationWindow()
-  const body: RegistrationWindowDto = { drawYear: window.drawYear, isOpen: window.isOpen }
+export const getRegistrationWindow: RequestHandler = async (_req, res) => {
+  const drawYear = await drawConfigurationService.activeDrawYear()
+
+  // Null rather than a guessed year when nothing is open: the form has
+  // nothing to apply for, and inventing a plausible year would let it render
+  // an intake page for a cycle that does not exist.
+  const body: RegistrationWindowDto = {
+    drawYear: drawYear?.year ?? null,
+    isOpen: drawYear !== null,
+  }
   res.json(body)
 }

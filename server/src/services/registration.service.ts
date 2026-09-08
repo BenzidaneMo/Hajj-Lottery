@@ -5,16 +5,18 @@ import {
   Prisma,
   type Application,
   type Commune,
+  type DrawYear,
   type Participant,
   type PrismaClient,
   type Wilaya,
 } from '@prisma/client'
 
-import { currentRegistrationWindow } from '../config/registration.js'
+import { acceptsRegistrations } from '../lib/draw-lifecycle.js'
 import { generateApplicationReference } from '../lib/application-reference.js'
 import { registrationErrorFor } from '../lib/eligibility-errors.js'
 import { ApiError, BadRequestError, ConflictError } from '../lib/errors.js'
 import { prisma as defaultPrisma } from '../lib/prisma.js'
+import { drawConfigurationService, DrawConfigurationService } from './draw-configuration.service.js'
 import { eligibilityService, EligibilityService } from './eligibility.service.js'
 import type { CreateApplicationInput } from '../validation/application.js'
 
@@ -36,24 +38,34 @@ const REFERENCE_ATTEMPTS = 3
 export class RegistrationService {
   private readonly db: PrismaClient
   private readonly eligibility: EligibilityService
+  private readonly configuration: DrawConfigurationService
 
-  constructor(db: PrismaClient = defaultPrisma, eligibility: EligibilityService = eligibilityService) {
+  constructor(
+    db: PrismaClient = defaultPrisma,
+    eligibility: EligibilityService = eligibilityService,
+    configuration: DrawConfigurationService = drawConfigurationService,
+  ) {
     this.db = db
     this.eligibility = eligibility
+    this.configuration = configuration
   }
 
   /**
    * Registers one application for the server's current draw year.
    *
-   * Registration decides two things and delegates the rest: whether intake is
-   * running at all, and what the year is. Whether this particular application
-   * may take part is EligibilityService's question — the rules live there, in
-   * one place, so re-evaluating a stored application later cannot reach a
-   * different conclusion than registration did.
+   * Registration decides what is *running* — which year is open, and whether
+   * the chosen commune is holding a draw at all — and delegates the rest.
+   * Whether this particular application may take part is EligibilityService's
+   * question; the rules live there, in one place, so re-evaluating a stored
+   * application later cannot reach a different conclusion than registration
+   * did.
    */
   async register(input: CreateApplicationInput): Promise<ApplicationReceiptDto> {
-    const window = currentRegistrationWindow()
-    if (!window.isOpen) {
+    // The one authoritative answer to "which year is this for?". Nothing in
+    // the request contributes to it — the body has no drawYear field at all,
+    // and `.strict()` rejects one that tries.
+    const drawYear = await this.configuration.activeDrawYear()
+    if (!drawYear) {
       throw new ApiError(503, 'REGISTRATION_CLOSED', 'Registration is not currently open')
     }
 
@@ -63,7 +75,7 @@ export class RegistrationService {
     const secondary: ApplicantData | undefined = input.secondary && { ...input.secondary }
 
     const { application, commune: confirmed } = await this.createApplication(
-      window.drawYear,
+      drawYear,
       input.wilayaId,
       commune,
       primary,
@@ -71,6 +83,31 @@ export class RegistrationService {
     )
 
     return toReceipt(application, confirmed, confirmed.wilaya)
+  }
+
+  /**
+   * Whether this commune is holding a draw citizens may still enter.
+   *
+   * Asked only once the commune itself has been found valid, so that a commune
+   * in the wrong wilaya and a commune that does not exist keep answering
+   * identically — otherwise "no draw configured" would become a way to
+   * discover which commune ids are real.
+   *
+   * This is a fact about the configuration, not about the applicants, which is
+   * why it lives here rather than in the eligibility rules: a stored
+   * application must not turn ineligible later merely because its commune
+   * locked its allocation.
+   */
+  private async assertCommuneIsDrawing(drawYearId: string, communeId: string): Promise<void> {
+    const communeDraw = await this.configuration.findCommuneDrawFor(drawYearId, communeId)
+
+    if (!communeDraw || !acceptsRegistrations(communeDraw.status)) {
+      throw new ApiError(
+        503,
+        'COMMUNE_DRAW_NOT_CONFIGURED',
+        'The selected commune is not accepting applications for this draw year',
+      )
+    }
   }
 
   /**
@@ -98,7 +135,7 @@ export class RegistrationService {
    * that already existed is reused untouched.
    */
   private async createApplication(
-    drawYear: number,
+    drawYear: DrawYear,
     claimedWilayaId: string,
     commune: (Commune & { wilaya: Wilaya }) | null,
     primary: ApplicantData,
@@ -111,8 +148,8 @@ export class RegistrationService {
           const secondaryParticipant = secondary ? await findOrCreateParticipant(tx, secondary) : undefined
 
           const verdict = await this.eligibility.evaluateProposedApplication(tx, {
-            drawYear,
-            expectedDrawYear: drawYear,
+            drawYear: drawYear.year,
+            expectedDrawYear: drawYear.year,
             entryType: secondaryParticipant ? EntryType.PAIRED : EntryType.SINGLE,
             commune,
             claimedWilayaId,
@@ -128,12 +165,16 @@ export class RegistrationService {
           if (!commune)
             throw new BadRequestError('INVALID_COMMUNE', 'Select a commune from the chosen wilaya')
 
-          const reference = generateApplicationReference(drawYear, commune.nameFr)
+          // Only now that the commune is known to be real and in the claimed
+          // wilaya — so this answer cannot be used to tell those cases apart.
+          await this.assertCommuneIsDrawing(drawYear.id, commune.id)
+
+          const reference = generateApplicationReference(drawYear.year, commune.nameFr)
 
           const application = await tx.application.create({
             data: {
               applicationReference: reference,
-              drawYear,
+              drawYear: drawYear.year,
               communeId: commune.id,
               entryType: secondaryParticipant ? EntryType.PAIRED : EntryType.SINGLE,
               // The verdict this application was admitted on, written in the

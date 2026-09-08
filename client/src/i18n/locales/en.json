@@ -190,6 +190,7 @@
       "notEligible": "This application cannot be accepted because an applicant is not eligible to take part.",
       "invalidCommune": "Select a commune from the chosen wilaya.",
       "closed": "Registration is not currently open.",
+      "communeNotDrawing": "The selected commune is not accepting applications for this year. Please contact your commune.",
       "tooMany": "Too many attempts from this connection. Please try again later.",
       "validation": "Please check the details you entered.",
       "unknown": "Something went wrong. Please try again."
