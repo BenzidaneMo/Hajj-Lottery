@@ -1,5 +1,13 @@
-import type { AdminScopeDto, ScopePlaceDto } from '@hajj-lottery/shared'
-import type { Application, Commune, PrismaClient, User, Wilaya } from '@prisma/client'
+import {
+  AUDIT_PAGE_SIZE_DEFAULT,
+  AUDIT_PAGE_SIZE_MAX,
+  type AdminScopeDto,
+  type ApprovalStatus,
+  type AuditAction,
+  type AuditTargetType,
+  type ScopePlaceDto,
+} from '@hajj-lottery/shared'
+import type { Application, AuditLog, Commune, Prisma, PrismaClient, User, Wilaya } from '@prisma/client'
 
 import {
   canAccessCommune,
@@ -12,8 +20,36 @@ import {
 } from '../lib/scope.js'
 import { sortByCode } from '../lib/geo-order.js'
 import { prisma as defaultPrisma } from '../lib/prisma.js'
+import type { ApprovalRequestWithPlace } from './approval.service.js'
 import type { CommuneDrawWithPlace } from './draw-configuration.service.js'
 import type { HistoryRecordWithPlace } from './participation-history.service.js'
+
+/** What the audit API may be narrowed by. A filter can only ever remove rows. */
+export interface AuditLogFilters {
+  action?: AuditAction
+  actorUserId?: string
+  targetType?: AuditTargetType
+  targetId?: string
+  wilayaId?: string
+  communeId?: string
+  from?: Date
+  to?: Date
+  page?: number
+  pageSize?: number
+}
+
+/** One page of the trail, with the actor and geography needed to present it. */
+export interface AuditLogPage {
+  items: (AuditLog & {
+    actor: Pick<User, 'id' | 'username'> | null
+    wilaya: Wilaya | null
+    commune: Commune | null
+  })[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
 
 /**
  * Geographic authorization.
@@ -189,6 +225,129 @@ export class AuthorizationService {
     return this.db.communeDraw.findFirst({
       where: { id: communeDrawId, commune: ceiling },
       include: { drawYear: true, commune: { include: { wilaya: true } } },
+    })
+  }
+
+  /**
+   * A page of the audit trail the caller may see, newest first.
+   *
+   * The scope rule here is stricter than everywhere else, and deliberately so.
+   * Elsewhere an unscoped row is national reference data; in the trail an
+   * unscoped row is a *national action* — an administrator's privileges being
+   * changed, a draw year being opened, the system being configured. A
+   * COMMUNE_ADMIN has no business watching those, so a scoped caller sees only
+   * rows filed under their own territory and never the ones filed under none.
+   *
+   * That is why this cannot reuse `communeScopeFilter`: for a SUPER_ADMIN it
+   * must match everything including the null-scoped rows, and for everybody else
+   * it must match neither another territory's nor the nation's.
+   */
+  async listAuditLogs(user: User, filters: AuditLogFilters = {}): Promise<AuditLogPage> {
+    const where = this.auditVisibility(user, filters)
+    const page = Math.max(1, filters.page ?? 1)
+    const pageSize = Math.min(Math.max(1, filters.pageSize ?? AUDIT_PAGE_SIZE_DEFAULT), AUDIT_PAGE_SIZE_MAX)
+
+    const [items, total] = await Promise.all([
+      this.db.auditLog.findMany({
+        where,
+        include: { actor: { select: { id: true, username: true } }, wilaya: true, commune: true },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.db.auditLog.count({ where }),
+    ])
+
+    return { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) }
+  }
+
+  /**
+   * The caller's ceiling on the trail, intersected with what they asked for.
+   *
+   * A requested filter can only narrow: a COMMUNE_ADMIN asking for another
+   * commune's events gets nothing back rather than another territory's trail.
+   */
+  private auditVisibility(user: User, filters: AuditLogFilters): Prisma.AuditLogWhereInput {
+    const scope = this.scopeFor(user)
+
+    const ceiling: Prisma.AuditLogWhereInput =
+      scope.kind === 'national'
+        ? {}
+        : scope.kind === 'wilaya'
+          ? { wilayaId: scope.wilayaId }
+          : { communeId: scope.communeId }
+
+    const requested: Prisma.AuditLogWhereInput = {
+      ...(filters.action ? { action: filters.action } : {}),
+      ...(filters.actorUserId ? { actorUserId: filters.actorUserId } : {}),
+      ...(filters.targetType ? { targetType: filters.targetType } : {}),
+      ...(filters.targetId ? { targetId: filters.targetId } : {}),
+      ...(filters.wilayaId ? { wilayaId: filters.wilayaId } : {}),
+      ...(filters.communeId ? { communeId: filters.communeId } : {}),
+      ...(filters.from || filters.to
+        ? {
+            createdAt: {
+              ...(filters.from ? { gte: filters.from } : {}),
+              ...(filters.to ? { lte: filters.to } : {}),
+            },
+          }
+        : {}),
+    }
+
+    return { AND: [ceiling, requested] }
+  }
+
+  /**
+   * Approval requests the caller may see, newest first.
+   *
+   * Scoped like the records they concern: a request to correct a commune's
+   * historical record is visible to that commune's administrators, its wilaya's,
+   * and nationally. A SUPER_ADMIN reviewing the queue sees every one.
+   */
+  async listApprovalRequests(
+    user: User,
+    requested: { status?: ApprovalStatus } = {},
+  ): Promise<ApprovalRequestWithPlace[]> {
+    const scope = this.scopeFor(user)
+
+    const ceiling =
+      scope.kind === 'national'
+        ? {}
+        : scope.kind === 'wilaya'
+          ? { wilayaId: scope.wilayaId }
+          : { communeId: scope.communeId }
+
+    return this.db.approvalRequest.findMany({
+      where: { ...ceiling, ...(requested.status ? { status: requested.status } : {}) },
+      include: {
+        requestedBy: { select: { id: true, username: true } },
+        reviewedBy: { select: { id: true, username: true } },
+        wilaya: true,
+        commune: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+  }
+
+  /** One request, or null when it does not exist *or* is out of scope. */
+  async findApprovalRequest(user: User, requestId: string): Promise<ApprovalRequestWithPlace | null> {
+    const scope = this.scopeFor(user)
+
+    const ceiling =
+      scope.kind === 'national'
+        ? {}
+        : scope.kind === 'wilaya'
+          ? { wilayaId: scope.wilayaId }
+          : { communeId: scope.communeId }
+
+    return this.db.approvalRequest.findFirst({
+      where: { id: requestId, ...ceiling },
+      include: {
+        requestedBy: { select: { id: true, username: true } },
+        reviewedBy: { select: { id: true, username: true } },
+        wilaya: true,
+        commune: true,
+      },
     })
   }
 

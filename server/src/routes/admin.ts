@@ -23,6 +23,16 @@ import {
 } from '../controllers/admin-draw-pool.controller.js'
 import { executeDraw, getDrawResult } from '../controllers/admin-draw-result.controller.js'
 import { getCommune, getWilaya, listCommunes, listWilayas } from '../controllers/admin-geo.controller.js'
+import {
+  approveRequest,
+  cancelRequest,
+  correctHistoryRecord,
+  getApproval,
+  listApprovals,
+  listAuditLogs,
+  rejectRequest,
+  requestHistoricalCorrection,
+} from '../controllers/admin-governance.controller.js'
 import { getHistoryRecord, getParticipantHistory } from '../controllers/admin-history.controller.js'
 import { asyncHandler } from '../middleware/error-handler.js'
 import { requireAuthenticatedUser } from '../middleware/require-authenticated-user.js'
@@ -88,3 +98,27 @@ adminRouter.get('/commune-draws/:id/pool/summary', asyncHandler(getPoolSummary))
 // scoped administrative work, so it carries no role gate.
 adminRouter.post('/commune-draws/:id/execute', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(executeDraw))
 adminRouter.get('/commune-draws/:id/result', asyncHandler(getDrawResult))
+
+// The audit trail. No role gate: what an administrator sees is narrowed to
+// their own territory by the query, and — unlike everywhere else — national
+// events with no territory are withheld from scoped administrators rather than
+// shown to everyone. There is no route that writes, edits or deletes a record
+// here, and there must never be one.
+adminRouter.get('/audit-logs', asyncHandler(listAuditLogs))
+
+// Governance. A scoped administrator who believes a historical record is wrong
+// may ask for it to be changed; deciding is somebody else's job, and the
+// database refuses to let it be their own. A SUPER_ADMIN corrects directly,
+// because requiring a second approver when there may be only one of them would
+// mean nothing could ever be fixed — their correction still carries a reason and
+// is still audited.
+adminRouter.post('/history/:id/correction-requests', asyncHandler(requestHistoricalCorrection))
+adminRouter.patch('/history/:id', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(correctHistoryRecord))
+
+adminRouter.get('/approvals', asyncHandler(listApprovals))
+adminRouter.get('/approvals/:id', asyncHandler(getApproval))
+adminRouter.post('/approvals/:id/approve', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(approveRequest))
+adminRouter.post('/approvals/:id/reject', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(rejectRequest))
+// Withdrawing is not a decision, so it needs no elevated role — only authorship,
+// which the service checks.
+adminRouter.post('/approvals/:id/cancel', asyncHandler(cancelRequest))
