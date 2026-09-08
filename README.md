@@ -95,6 +95,14 @@ transparent results, across Arabic (RTL), French, and English.
 > altered. Publication, notifications and the live visualizer remain
 > unimplemented.
 
+> **Status:** Step 15 — audit trail and administrative governance. Every
+> privileged change now leaves an append-only record of who made it, when, to
+> what, and why, written in the same transaction as the change itself and
+> deletable by nobody. Sensitive corrections to the participation ledger go
+> through an approval workflow that no administrator can decide for themselves.
+> Public winner pages, notifications, legacy import and citizen accounts remain
+> unimplemented.
+
 ## Architecture
 
 ```
@@ -362,6 +370,54 @@ from its input would make the outcome a function of who entered.
 Nothing about a pool is public.
 
 See [docs/draw-pool.md](docs/draw-pool.md).
+
+## Audit and governance
+
+Who did what, when, to which record, and why — and who allowed it.
+
+| Endpoint                                          | Auth | Role        | Purpose                   |
+| ------------------------------------------------- | ---- | ----------- | ------------------------- |
+| `GET /api/admin/audit-logs`                       | yes  | any admin   | The trail, scoped, paged  |
+| `POST /api/admin/history/:id/correction-requests` | yes  | any admin   | Ask for a correction      |
+| `PATCH /api/admin/history/:id`                    | yes  | SUPER_ADMIN | Correct directly, audited |
+| `GET /api/admin/approvals`                        | yes  | any admin   | The queue, scoped         |
+| `POST /api/admin/approvals/:id/approve`           | yes  | SUPER_ADMIN | Decide, and apply         |
+| `POST /api/admin/approvals/:id/reject`            | yes  | SUPER_ADMIN | Decide                    |
+| `POST /api/admin/approvals/:id/cancel`            | yes  | requester   | Withdraw your own         |
+
+**An audit record is not application data.** Application data says what is true
+now and changes when the truth changes; an audit record says what somebody did,
+which never stops being what they did. So nothing updates or deletes one — a
+database trigger refuses both, whoever issues it, including a `SUPER_ADMIN`. The
+administrators are exactly the people the trail exists to hold to account, so a
+trail they can edit is not a trail. There is no "clear audit log" and no retention
+job.
+
+Records are written **in the same transaction as the mutation they describe**, so a
+change exists if and only if its record does. There is deliberately no queue: an
+audit insert that failed silently would leave a mutation with nobody's name on it.
+
+The actor is always the session's user. A body containing `actorUserId` is refused
+with a 400 rather than accepted with the field ignored.
+
+**Nothing personal goes in.** National IDs, phone numbers, names, dates of birth,
+passwords and tokens are refused outright rather than masked — a silently stripped
+field leaves a record that looks complete while describing something else. A failed
+login records nothing about the attempt at all: naming the username tried would
+turn the trail into a list of guessed accounts, and recording whether it existed
+would answer through the audit log the question the generic 401 refuses to answer.
+
+Visibility is scoped, and stricter than elsewhere: an unscoped row is a _national
+action_ — an administrator's privileges changing, the system being configured — so
+scoped administrators see their own territory and never the nation's.
+
+**Separation of duties is structural.** An administrator who can see a record they
+believe is wrong cannot rewrite it; they raise a request and somebody else decides.
+Nobody reviews their own — checked in the service and by a CHECK constraint. An
+approval and a rejection are permanent: there is no path from one to the other, so
+a changed mind is a new request.
+
+See [docs/audit-and-governance.md](docs/audit-and-governance.md).
 
 ## Winner processing
 
