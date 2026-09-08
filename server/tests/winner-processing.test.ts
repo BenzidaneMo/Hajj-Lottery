@@ -136,7 +136,7 @@ describe('executing a draw', () => {
   it('records the result, its winners and their randomness', async () => {
     const { communeDraw, poolId } = await lockedPool(singles(5), 2)
 
-    const execution = await drawExecutionService.execute(communeDraw.id, 'admin-1')
+    const execution = await drawExecutionService.execute(communeDraw.id)
 
     const result = await prisma.drawResult.findUniqueOrThrow({ where: { communeDrawId: communeDraw.id } })
     const pool = await prisma.drawPool.findUniqueOrThrow({ where: { id: poolId } })

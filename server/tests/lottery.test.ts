@@ -765,12 +765,9 @@ describe('a draw has no side effects at all', () => {
     expect(await prisma.drawSelectionEvent.count()).toBe(0)
     expect(await prisma.winnerArchive.count()).toBe(0)
 
-    // The audit table still does not exist: a fabricated audit row would be
-    // worse than none.
-    const tables = await prisma.$queryRaw<Array<{ name: string | null }>>`
-      SELECT to_regclass('audit_logs')::text AS name
-    `
-    expect(tables[0]?.name).toBeNull()
+    // Nor does it enter the audit trail. A draw nobody ran is not an event: the
+    // trail records executions, and this was a calculation.
+    expect(await prisma.auditLog.count({ where: { action: 'COMMUNE_DRAW_EXECUTED' } })).toBe(0)
   })
 
   it('gives the same pool a different outcome each time, since nothing is recorded', async () => {

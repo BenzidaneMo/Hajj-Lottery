@@ -462,28 +462,35 @@ describe('freezing a pool', () => {
     expect(await prisma.drawPoolEntry.count()).toBe(2)
   })
 
-  it('records a structured event for a future audit log', async () => {
+  it('records who froze the pool, in the same transaction', async () => {
     const communeDraw = await communeDrawFor(geo.communeA1.id)
     await registerAndWeigh(geo.communeA1.id, geo.wilayaA.id)
     await readyToFreeze(communeDraw)
+    const { user } = await createAdminAndSignIn(app, prisma, { role: AdminRole.SUPER_ADMIN })
 
-    const { event } = await drawPoolService.freeze(communeDraw.id, 'admin-123')
+    const { event, pool } = await drawPoolService.freeze(communeDraw.id, {
+      id: user.id,
+      role: user.role,
+      wilayaId: user.wilayaId,
+      communeId: user.communeId,
+    })
 
     expect(event).toMatchObject({
       event: 'draw_pool.frozen',
-      actingAdministratorId: 'admin-123',
+      actingAdministratorId: user.id,
       communeDrawId: communeDraw.id,
       entryCount: 1,
       alreadyFrozen: false,
     })
     expect(event.snapshotHash).toMatch(/^[0-9a-f]{64}$/)
 
-    // Nothing is persisted: a fabricated audit row would be worse than none,
-    // so the table it will eventually go to does not exist yet.
-    const tables = await prisma.$queryRaw<Array<{ name: string | null }>>`
-      SELECT to_regclass('audit_logs')::text AS name
-    `
-    expect(tables[0]?.name).toBeNull()
+    // Persisted now, alongside the pool it describes — aggregates and the hash,
+    // never the pool's contents.
+    const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: 'DRAW_POOL_FROZEN' } })
+    expect(audit.actorUserId).toBe(user.id)
+    expect(audit.targetId).toBe(pool.id)
+    expect(audit.communeId).toBe(geo.communeA1.id)
+    expect(audit.metadata).toMatchObject({ entryCount: 1, snapshotHash: pool.snapshotHash })
   })
 
   it('never touches participants or their history', async () => {
