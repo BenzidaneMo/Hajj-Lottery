@@ -7,6 +7,7 @@ import { LanguageSwitcher } from '../LanguageSwitcher'
 import { Logo } from '../Logo'
 import { IconButton } from '../ui'
 import { Container } from './Container'
+import { MobileNavSheet } from './MobileNavSheet'
 
 const NAV_ITEMS = [
   { to: '/', key: 'nav.home' },
@@ -57,27 +58,26 @@ export function Header() {
             variant="ghost"
             aria-expanded={isMenuOpen}
             aria-controls="mobile-nav"
-            className="md:hidden"
+            // Sheet's overlay paints above the header (both sit in the root
+            // stacking layer, and it comes later), and Radix locks
+            // `pointer-events` on the rest of the page while it's open — so
+            // without these, a second click on this same button to close the
+            // panel would be visually and functionally blocked once it's open.
+            // The inline style (matching how Radix itself re-enables its own
+            // content the same way) is load-bearing, not decorative — a
+            // Tailwind utility class only exists once a build compiles it.
+            className="relative z-60 md:hidden"
+            style={{ pointerEvents: 'auto' }}
             onClick={() => setIsMenuOpen((open) => !open)}
           />
         </div>
       </Container>
-      {isMenuOpen && (
-        <div id="mobile-nav" className="border-t border-stone-200 bg-white md:hidden">
-          <Container>
-            <nav aria-label={t('nav.ariaLabel')} className="flex flex-col gap-1 py-3 text-sm">
-              {NAV_ITEMS.map((item) => (
-                <NavLink key={item.to} to={item.to} end={item.to === '/'} className={navLinkClassName}>
-                  {t(item.key)}
-                </NavLink>
-              ))}
-            </nav>
-            <div className="border-t border-stone-100 py-3">
-              <LanguageSwitcher />
-            </div>
-          </Container>
-        </div>
-      )}
+      <MobileNavSheet
+        open={isMenuOpen}
+        onOpenChange={setIsMenuOpen}
+        items={NAV_ITEMS}
+        linkClassName={navLinkClassName}
+      />
     </header>
   )
 }
