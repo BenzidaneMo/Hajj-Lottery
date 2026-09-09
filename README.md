@@ -111,6 +111,14 @@ transparent results, across Arabic (RTL), French, and English.
 > system never ran. Public winner pages, notifications and citizen accounts remain
 > unimplemented.
 
+> **Status:** Step 17 — public application status and official results. Citizens
+> can check their own application without an account, by proving they hold its
+> receipt, and read the official results of any commune that has published them.
+> A concluded draw is not a public one: releasing it is a separate, audited act by
+> a national administrator, gated on the result reconciling with every record
+> behind it, and there is no way back. Winner names, notifications, citizen
+> accounts and the live draw visualizer remain unimplemented.
+
 ## Architecture
 
 ```
@@ -470,6 +478,65 @@ to disk, formulas are refused rather than evaluated, and re-uploading the same
 bytes reports the batch that already holds them.
 
 See [docs/legacy-import.md](docs/legacy-import.md).
+
+## Public access
+
+The first part of the system that faces citizens rather than administrators.
+
+| Endpoint                                                     | Auth | Purpose                          |
+| ------------------------------------------------------------ | ---- | -------------------------------- |
+| `POST /api/public/application-status`                        | no   | Check your own application       |
+| `GET /api/public/results`                                    | no   | Published results, paginated     |
+| `GET /api/public/results/:drawYear/:wilayaCode/:communeCode` | no   | One commune's official result    |
+| `GET /api/public/draw-status`                                | no   | Where each commune's draw stands |
+| `POST /api/admin/commune-draws/:id/publish-result`           | yes  | SUPER_ADMIN releases a result    |
+
+There are no citizen accounts, no passwords and no OTP. A citizen checks an
+application by proving they hold its receipt: the reference printed on it, plus the
+mobile number given on the application. Both are normalized by the same functions
+the rest of the system uses, so writing a number `0555 12 34 56` or `+213555123456`
+is the same number and a formatting difference never tells somebody their own
+application does not exist.
+
+**The lookup must not become an oracle.** An endpoint that says "wrong number" for
+a real reference and "no such reference" otherwise is a map of who applied. So an
+unknown reference, a wrong number, a malformed reference and an applicant who gave
+no number all produce byte-identical responses; the verification runs in constant
+time and always runs, even when there was nothing to compare against; and nothing
+else is loaded until it passes.
+
+**A `DrawResult` existing is not a public result.** Execution writes the result the
+instant the draw concludes, and treating that as publication would put every
+commune's outcome online before anybody had checked it. Publication is a separate
+`ResultPublication` record — its existence _is_ the state, so there is nothing to
+disagree with it — written by a SUPER_ADMIN in one audited transaction. Scoped
+administrators may read their own territory's result and cannot publish it.
+
+Publishing verifies first and **repairs nothing**: winners against the result's own
+count, the archive against the winners, lifetime exclusion against the archive, the
+frozen pool's fingerprint against what the draw recorded, and the participation
+ledger against the pool. Every failure is reported and blocks. It is idempotent —
+publishing twice writes no second record and no second audit event — and one-way,
+enforced by trigger.
+
+Until a commune publishes, an applicant whose draw has concluded is told
+`AWAITING_RESULTS`, and so is every other applicant in that commune, so polling a
+reference cannot front-run the announcement.
+
+What is published: the year, the place, the allocation, how many applications the
+draw chose from, the winning entries by their own application reference, and the
+pool's SHA-256 fingerprint. What is not: names, national IDs, phone numbers, dates
+of birth, internal ids, weights, participation history, or the pool itself. Winner
+_names_ are deliberately withheld pending an explicit policy decision rather than
+exposed by default.
+
+Public results are strongly cacheable and served with `ETag`s; an application
+status is `no-store`, and so is every failure on every route — a cached 404 for a
+commune that publishes an hour later would be the worst caching bug here. Listings
+are paginated with a server-enforced cap, and `?pageSize=10000000` is clamped
+rather than honoured.
+
+See [docs/public-access.md](docs/public-access.md).
 
 ## Winner processing
 
