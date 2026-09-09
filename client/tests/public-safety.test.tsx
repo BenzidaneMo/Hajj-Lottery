@@ -29,6 +29,7 @@ const PUBLIC_MODULES = [
   'components/public/filters.ts',
   'components/public/PublicStatusBadge.tsx',
   'components/public/WinnerList.tsx',
+  'components/public/ReserveList.tsx',
   'components/public/publicError.ts',
   'components/geo/PlaceCodeFilters.tsx',
   'lib/public.ts',

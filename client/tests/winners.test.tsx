@@ -209,26 +209,30 @@ describe('one commune’s official result', () => {
 
     expect(await screen.findByRole('heading', { name: 'Hassi Mameche — 2027 draw' })).toBeInTheDocument()
 
-    const table = screen.getByRole('table')
+    // Named, because the page carries two: a reader moving between them should
+    // not have to read a row to work out which list they are in.
+    const table = screen.getByRole('table', { name: 'Original winners' })
     expect(within(table).getByText('HZ-2027-MES-8F42K1')).toBeInTheDocument()
     expect(within(table).getByText('HZ-2027-MES-QQ19ZP')).toBeInTheDocument()
     // A pair is one winning application covering two pilgrims.
     expect(within(table).getByText('Pair')).toBeInTheDocument()
   })
 
-  it('publishes exactly four columns, and no winner name among them', async () => {
+  it('publishes exactly five columns, and no winner name among them', async () => {
     await switchLocale('en')
     stubApi({ [RESULT_PATH]: { body: fullResult() } })
     renderResult()
 
-    const table = await screen.findByRole('table')
-    const headers = within(table)
+    const winners = await screen.findByRole('table', { name: 'Original winners' })
+    const headers = within(winners)
       .getAllByRole('columnheader')
       .map((cell) => cell.textContent)
 
-    // The whole published record of a winner. Adding a fifth column — a name
-    // above all — is a policy decision and has to fail here first.
-    expect(headers).toEqual(['Order drawn', 'Application reference', 'Type', 'Pilgrims'])
+    // The whole published record of a winner. Adding a sixth column — a name
+    // above all — is a policy decision and has to fail here first. "Status"
+    // says whether the place is still held and nothing about why it might not
+    // be: the reason is administrative and is not in the public DTO at all.
+    expect(headers).toEqual(['Order drawn', 'Application reference', 'Type', 'Pilgrims', 'Status'])
   })
 
   it('renders nothing identifying, whatever the API sends', async () => {
@@ -260,7 +264,7 @@ describe('one commune’s official result', () => {
     })
     renderResult()
 
-    await screen.findByRole('table')
+    await screen.findByRole('table', { name: 'Original winners' })
     expectNoPrivateData(document.body)
     expect(document.body.textContent).not.toContain(FORBIDDEN_VALUES.randomValue)
     expect(document.body.textContent).not.toContain('4211')
@@ -283,7 +287,7 @@ describe('one commune’s official result', () => {
     await switchLocale('en')
     stubApi({ [RESULT_PATH]: { body: fullResult() } })
     renderResult()
-    await screen.findByRole('table')
+    await screen.findByRole('table', { name: 'Original winners' })
 
     expect(requestedPaths()).toEqual(['/api/public/results/2027/27/2703'])
   })

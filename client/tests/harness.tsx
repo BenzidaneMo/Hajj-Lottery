@@ -203,9 +203,9 @@ export function fullResult(overrides: Partial<PublicResultDto> = {}): PublicResu
         outcome: 'ACTIVE',
       },
     ],
-    // The second half of the same draw. The public pages do not render these
-    // yet — see docs/reserves-and-replacements.md — so the fixture carries them
-    // to prove the winner list stays exactly what it was when they arrive.
+    // The second half of the same draw — selections 4 and 5 here, straight after
+    // the three winners. Two of them, so a test can assert the rendered order is
+    // the API's rather than something a single row would satisfy by accident.
     reserves: [
       {
         reservePosition: 1,
@@ -213,6 +213,14 @@ export function fullResult(overrides: Partial<PublicResultDto> = {}): PublicResu
         applicationReference: 'HZ-2027-MES-R51TTA',
         entryType: 'SINGLE',
         participantCount: 1,
+        outcome: 'WAITING',
+      },
+      {
+        reservePosition: 2,
+        selectionOrder: 5,
+        applicationReference: 'HZ-2027-MES-B90WQ4',
+        entryType: 'PAIRED',
+        participantCount: 2,
         outcome: 'WAITING',
       },
     ],

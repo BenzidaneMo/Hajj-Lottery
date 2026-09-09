@@ -195,6 +195,73 @@ describe('application status page', () => {
     expect(screen.queryByText('Results not yet published')).not.toBeInTheDocument()
   })
 
+  it('withholds a reserve position exactly as it withholds the other outcomes', async () => {
+    await switchLocale('en')
+    // The server collapses SELECTED, RESERVE and NOT_SELECTED onto
+    // AWAITING_RESULTS before publication, so this is what a reserve's own
+    // lookup returns. The page must not reconstruct anything from it: three
+    // outcomes told apart early are three outcomes somebody can learn by
+    // polling their own reference.
+    stubApi({
+      [LOOKUP]: {
+        body: applicationStatus({ status: 'AWAITING_RESULTS', drawPhase: 'DRAWN', resultsPublished: false }),
+      },
+    })
+    renderPage(<ApplicationStatus />)
+
+    await submit('HZ-2027-MES-8F42K1', '0555123456')
+
+    expect(await screen.findByText('Results not yet published')).toBeInTheDocument()
+    expect(screen.queryByText('On the reserve list')).not.toBeInTheDocument()
+    expect(screen.queryByText(/reserve list for your commune/i)).not.toBeInTheDocument()
+  })
+
+  it('shows a published reserve position', async () => {
+    await switchLocale('en')
+    stubApi({
+      [LOOKUP]: {
+        body: applicationStatus({ status: 'RESERVE', drawPhase: 'DRAWN', resultsPublished: true }),
+      },
+    })
+    renderPage(<ApplicationStatus />)
+
+    await submit('HZ-2027-MES-8F42K1', '0555123456')
+
+    expect(await screen.findByText('Your application is on the reserve list')).toBeInTheDocument()
+    expect(screen.getByText('On the reserve list')).toBeInTheDocument()
+    // A reserve is neither of the other two, and the page says so in words
+    // rather than leaving the badge's colour to carry it.
+    expect(screen.queryByText('Your application was selected')).not.toBeInTheDocument()
+    expect(screen.queryByText('Your application was not selected')).not.toBeInTheDocument()
+    // Where in the list they stand is an administrative fact about other
+    // households, and the DTO carries no reserve position for the page to show.
+    expect(document.body.textContent).not.toMatch(/reserve\s*#\s*\d|position\s*\d/i)
+    // Nor does the lifecycle vocabulary reach this page. The reserve-status
+    // labels belong to the published result's reserve list, where they describe
+    // the draw; here they would describe one identifiable applicant's standing.
+    for (const label of ['Waiting', 'Called', 'Promoted to winner', 'Declined']) {
+      expect(screen.queryByText(label)).not.toBeInTheDocument()
+    }
+  })
+
+  it('shows a promoted reserve as a selection, since that is what the API says', async () => {
+    await switchLocale('en')
+    // A promoted reserve's application becomes SELECTED server-side. The client
+    // renders the status it is given and derives nothing: there is no branch
+    // here that turns a reserve into a winner.
+    stubApi({
+      [LOOKUP]: {
+        body: applicationStatus({ status: 'SELECTED', drawPhase: 'DRAWN', resultsPublished: true }),
+      },
+    })
+    renderPage(<ApplicationStatus />)
+
+    await submit('HZ-2027-MES-8F42K1', '0555123456')
+
+    expect(await screen.findByText('Your application was selected')).toBeInTheDocument()
+    expect(screen.queryByText('On the reserve list')).not.toBeInTheDocument()
+  })
+
   it('shows a published non-selection', async () => {
     await switchLocale('en')
     stubApi({
