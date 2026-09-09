@@ -240,6 +240,16 @@
       "SINGLE": "Individual",
       "PAIRED": "Pair"
     },
+    "winnerOutcome": {
+      "ACTIVE": "Holds the place",
+      "WITHDRAWN": "Gave up the place"
+    },
+    "reserveOutcome": {
+      "WAITING": "Waiting",
+      "CALLED": "Called",
+      "PROMOTED": "Promoted to winner",
+      "DECLINED": "Declined"
+    },
     "errors": {
       "validation": "Check the details you entered and try again.",
       "notFound": "There is nothing to show here.",
@@ -317,6 +327,16 @@
       "participantCount": "Pilgrims",
       "noWinnersYet": "No winning applications to show.",
       "pairNote": "Applications are listed by the reference printed on each receipt, in the order they were drawn. The order is not a ranking. A pair is one winning application covering two pilgrims.",
+      "originalWinners": "Original winners",
+      "winnerOutcome": "Status",
+      "withdrawnNote": "An application shown as having given up the place was still an original winner of this draw. Its position in the order drawn is unchanged.",
+      "reserveList": "Reserve list",
+      "reserveListHint": "The same draw selected a reserve for every place, in this order. A reserve is not a winner: they are called, in turn, only if an original winner gives up their place.",
+      "reserveCount": "Reserve positions",
+      "reservePosition": "Reserve",
+      "reserveStatus": "Status",
+      "noReserves": "No reserve positions to show.",
+      "reserveNote": "Reserve positions are numbered in the order the draw produced them, and are called in that order. A promoted reserve keeps its reserve number: the original draw is not rewritten.",
       "notPublishedTitle": "No result announced",
       "notPublishedBody": "There is no officially announced result for this commune and draw year. Check the draw status page for where this commune stands."
     },

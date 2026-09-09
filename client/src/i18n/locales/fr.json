@@ -240,6 +240,16 @@
       "SINGLE": "Individuelle",
       "PAIRED": "En binôme"
     },
+    "winnerOutcome": {
+      "ACTIVE": "Conserve la place",
+      "WITHDRAWN": "A renoncé à la place"
+    },
+    "reserveOutcome": {
+      "WAITING": "En attente",
+      "CALLED": "Appelé",
+      "PROMOTED": "Devenu lauréat",
+      "DECLINED": "A décliné"
+    },
     "errors": {
       "validation": "Vérifiez les informations saisies et réessayez.",
       "notFound": "Il n’y a rien à afficher ici.",
@@ -317,6 +327,16 @@
       "participantCount": "Pèlerins",
       "noWinnersYet": "Aucune demande retenue à afficher.",
       "pairNote": "Les demandes sont listées par la référence figurant sur chaque reçu, dans l’ordre du tirage. Cet ordre n’est pas un classement. Un binôme correspond à une demande retenue couvrant deux pèlerins.",
+      "originalWinners": "Lauréats initiaux",
+      "winnerOutcome": "Statut",
+      "withdrawnNote": "Une demande indiquée comme ayant renoncé à la place reste un lauréat initial de ce tirage. Sa position dans l’ordre du tirage est inchangée.",
+      "reserveList": "Liste d’attente",
+      "reserveListHint": "Le même tirage a désigné un suppléant pour chaque place, dans cet ordre. Un suppléant n’est pas un lauréat : il n’est appelé, à son tour, que si un lauréat initial renonce à sa place.",
+      "reserveCount": "Places de suppléance",
+      "reservePosition": "Suppléant",
+      "reserveStatus": "Statut",
+      "noReserves": "Aucune place de suppléance à afficher.",
+      "reserveNote": "Les places de suppléance sont numérotées dans l’ordre produit par le tirage et sont appelées dans cet ordre. Un suppléant devenu lauréat conserve son numéro de suppléant : le tirage initial n’est pas réécrit.",
       "notPublishedTitle": "Aucun résultat annoncé",
       "notPublishedBody": "Aucun résultat officiel n’a été annoncé pour cette commune et cette année. Consultez la page d’état des tirages pour connaître la situation de cette commune."
     },
