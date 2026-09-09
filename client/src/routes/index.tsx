@@ -19,7 +19,9 @@ import { AdminSettings } from '../pages/admin/AdminSettings'
 import { AdminWinners } from '../pages/admin/AdminWinners'
 import { ApplicationStatus } from '../pages/ApplicationStatus'
 import { Draw } from '../pages/Draw'
+import { DrawWatch } from '../pages/DrawWatch'
 import { Home } from '../pages/Home'
+import { PublicResult } from '../pages/PublicResult'
 import { Register } from '../pages/Register'
 import { Winners } from '../pages/Winners'
 
@@ -32,7 +34,15 @@ export const router = createBrowserRouter([
       { path: 'register', element: <Register /> },
       { path: 'application-status', element: <ApplicationStatus /> },
       { path: 'winners', element: <Winners /> },
+      // Official results, addressed by draw year and official geographic codes.
+      // Shareable and cacheable by design — no database id, and nothing in the
+      // address identifies a person. The commune code needs its wilaya because
+      // commune codes are unique only within one.
+      { path: 'results/:drawYear/:wilayaCode/:communeCode', element: <PublicResult /> },
       { path: 'draw', element: <Draw /> },
+      // The visualiser for one commune. Read-only: it watches public draw
+      // state, and there is no request it can make that runs a draw.
+      { path: 'draw/:drawYear/:wilayaCode/:communeCode', element: <DrawWatch /> },
       { path: 'about', element: <About /> },
     ],
   },
