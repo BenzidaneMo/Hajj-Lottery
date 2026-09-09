@@ -210,9 +210,80 @@
       "entryType": "Type de demande",
       "submittedAt": "Envoyée le",
       "keepReference": "Conservez cette référence. Elle vous sera demandée pour suivre votre demande.",
+      "commune": "Commune",
+      "wilaya": "Wilaya",
+      "checkStatus": "Suivre votre demande plus tard",
+      "checkStatusHint": "Rendez-vous sur « Suivi de la demande » et saisissez cette référence ainsi que le numéro de mobile indiqué ci-dessus. Aucun compte ni mot de passe n'est nécessaire.",
+      "noPhoneWarning": "Vous n'avez pas indiqué de numéro de mobile : le suivi en ligne ne sera donc pas possible. Conservez cette référence et contactez votre commune si besoin.",
       "copy": "Copier la référence",
       "copied": "Copié",
       "print": "Imprimer"
+    }
+  },
+  "public": {
+    "status": {
+      "SUBMITTED": "Reçue",
+      "IN_DRAW": "Inscrite au tirage",
+      "NOT_ELIGIBLE": "Non éligible au tirage",
+      "AWAITING_RESULTS": "Le tirage a eu lieu — résultats non encore annoncés",
+      "SELECTED": "Retenue",
+      "NOT_SELECTED": "Non retenue"
+    },
+    "phase": {
+      "ACCEPTING": "Demandes ouvertes",
+      "ENTRIES_CLOSED": "Demandes closes",
+      "DRAWN": "Tirage effectué",
+      "CANCELLED": "Annulé pour cette année"
+    },
+    "entryType": {
+      "SINGLE": "Individuelle",
+      "PAIRED": "En binôme"
+    },
+    "lookup": {
+      "title": "Suivre votre demande",
+      "intro": "Saisissez la référence figurant sur votre reçu ainsi que le numéro de mobile indiqué sur la demande.",
+      "reference": "Référence de la demande",
+      "referenceHint": "Par exemple HZ-2027-MES-8F42K1",
+      "phoneNumber": "Numéro de mobile",
+      "phoneHint": "Le numéro saisi par le premier demandeur.",
+      "submit": "Vérifier le statut",
+      "submitting": "Vérification…",
+      "resultsPending": "Le résultat officiel de votre commune n'a pas encore été annoncé.",
+      "errors": {
+        "notFound": "Aucune demande ne correspond à cette référence et à ce numéro. Vérifiez les deux et réessayez.",
+        "tooMany": "Trop de tentatives. Veuillez patienter avant de réessayer.",
+        "validation": "Veuillez vérifier la référence et le numéro saisis.",
+        "unknown": "Une erreur est survenue. Veuillez réessayer."
+      }
+    },
+    "results": {
+      "title": "Résultats officiels",
+      "empty": "Aucun résultat n'a encore été annoncé.",
+      "drawYear": "Année du tirage",
+      "wilaya": "Wilaya",
+      "commune": "Commune",
+      "allocatedSpots": "Places",
+      "winnerCount": "Demandes retenues",
+      "winningParticipantCount": "Pèlerins retenus",
+      "entryCount": "Demandes participant au tirage",
+      "publishedAt": "Annoncé le",
+      "drawnAt": "Tirage effectué le",
+      "verification": "Vérification",
+      "poolHash": "Empreinte de l'instantané",
+      "algorithmVersion": "Méthode du tirage",
+      "winners": "Demandes retenues",
+      "selectionOrder": "Ordre de tirage",
+      "reference": "Référence de la demande",
+      "entryType": "Type",
+      "pairNote": "Un binôme correspond à une demande retenue couvrant deux pèlerins."
+    },
+    "drawStatus": {
+      "title": "État des tirages",
+      "empty": "Aucun tirage n'est encore configuré.",
+      "registrationOpen": "Inscriptions ouvertes",
+      "registrationClosed": "Inscriptions closes",
+      "resultsPublished": "Résultats annoncés",
+      "resultsPending": "Résultats non encore annoncés"
     }
   }
 }

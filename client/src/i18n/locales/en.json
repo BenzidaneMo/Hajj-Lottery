@@ -210,9 +210,80 @@
       "entryType": "Application type",
       "submittedAt": "Submitted",
       "keepReference": "Keep this reference. You will need it to check your application later.",
+      "commune": "Commune",
+      "wilaya": "Wilaya",
+      "checkStatus": "Checking your application later",
+      "checkStatusHint": "Go to “Application Status” and enter this reference together with the mobile number you gave above. You do not need an account or a password.",
+      "noPhoneWarning": "You did not give a mobile number, so you will not be able to check this application online. Keep this reference and contact your commune office if you need an update.",
       "copy": "Copy reference",
       "copied": "Copied",
       "print": "Print"
+    }
+  },
+  "public": {
+    "status": {
+      "SUBMITTED": "Received",
+      "IN_DRAW": "Entered in the draw",
+      "NOT_ELIGIBLE": "Not eligible for the draw",
+      "AWAITING_RESULTS": "The draw has been held — results not yet announced",
+      "SELECTED": "Selected",
+      "NOT_SELECTED": "Not selected"
+    },
+    "phase": {
+      "ACCEPTING": "Accepting applications",
+      "ENTRIES_CLOSED": "Applications closed",
+      "DRAWN": "Draw held",
+      "CANCELLED": "Cancelled for this year"
+    },
+    "entryType": {
+      "SINGLE": "Individual",
+      "PAIRED": "Pair"
+    },
+    "lookup": {
+      "title": "Check your application",
+      "intro": "Enter the reference from your receipt and the mobile number given on the application.",
+      "reference": "Application reference",
+      "referenceHint": "For example HZ-2027-MES-8F42K1",
+      "phoneNumber": "Mobile number",
+      "phoneHint": "The number entered by the first applicant.",
+      "submit": "Check status",
+      "submitting": "Checking…",
+      "resultsPending": "The official result for your commune has not been announced yet.",
+      "errors": {
+        "notFound": "We could not find an application matching that reference and mobile number. Check both and try again.",
+        "tooMany": "Too many attempts. Please wait a while and try again.",
+        "validation": "Check the reference and mobile number you entered.",
+        "unknown": "Something went wrong. Please try again."
+      }
+    },
+    "results": {
+      "title": "Official results",
+      "empty": "No results have been announced yet.",
+      "drawYear": "Draw year",
+      "wilaya": "Wilaya",
+      "commune": "Commune",
+      "allocatedSpots": "Places",
+      "winnerCount": "Winning applications",
+      "winningParticipantCount": "Pilgrims selected",
+      "entryCount": "Applications in the draw",
+      "publishedAt": "Announced",
+      "drawnAt": "Draw held",
+      "verification": "Verification",
+      "poolHash": "Snapshot fingerprint",
+      "algorithmVersion": "Draw method",
+      "winners": "Winning applications",
+      "selectionOrder": "Order drawn",
+      "reference": "Application reference",
+      "entryType": "Type",
+      "pairNote": "A pair is one winning application covering two pilgrims."
+    },
+    "drawStatus": {
+      "title": "Draw status",
+      "empty": "No draws are configured yet.",
+      "registrationOpen": "Registration open",
+      "registrationClosed": "Registration closed",
+      "resultsPublished": "Results announced",
+      "resultsPending": "Results not yet announced"
     }
   }
 }

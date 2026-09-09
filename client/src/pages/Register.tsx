@@ -123,7 +123,10 @@ export function Register() {
     return (
       <div>
         <PageHeader title={t('register.receipt.pageTitle')} />
-        <ApplicationReceipt receipt={receipt} />
+        {/* The status lookup verifies a reference against the primary
+            applicant's number, so an application submitted without one can
+            never be checked online. Said here rather than discovered later. */}
+        <ApplicationReceipt receipt={receipt} canCheckOnline={primary.phoneNumber.trim().length > 0} />
       </div>
     )
   }

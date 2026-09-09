@@ -6,6 +6,16 @@ import { Alert, Button, Card } from '../ui'
 
 export interface ApplicationReceiptProps {
   receipt: ApplicationReceiptDto
+  /**
+   * Whether a mobile number was submitted, and therefore whether the status
+   * lookup can ever work for this application.
+   *
+   * A prop rather than a field on the receipt: the server deliberately does not
+   * echo anything about the phone number back, and the form already knows
+   * whether one was typed. Telling somebody at the counter that they will not be
+   * able to check online is worth far more than discovering it in three months.
+   */
+  canCheckOnline: boolean
 }
 
 /**
@@ -14,8 +24,13 @@ export interface ApplicationReceiptProps {
  * Shows only what the server returned — a reference, a place, a year and a
  * status. No names, no national IDs, nothing that would be sensitive if the
  * page were photographed, printed at a shared counter or left on screen.
+ *
+ * It also has to carry the one instruction the whole receipt exists for: what to
+ * do with the reference later. Without an account to log into, this page is the
+ * only moment anybody explains how to check an application, so the two values
+ * the lookup needs are named here explicitly.
  */
-export function ApplicationReceipt({ receipt }: ApplicationReceiptProps) {
+export function ApplicationReceipt({ receipt, canCheckOnline }: ApplicationReceiptProps) {
   const { t, i18n } = useTranslation()
   const locale = i18n.language as SupportedLocale
   const [copied, setCopied] = useState(false)
@@ -59,6 +74,17 @@ export function ApplicationReceipt({ receipt }: ApplicationReceiptProps) {
       </dl>
 
       <p className="mt-6 text-sm text-stone-600">{t('register.receipt.keepReference')}</p>
+
+      <section className="mt-6 rounded-md bg-stone-50 p-4 text-sm text-stone-700">
+        <h2 className="font-medium text-stone-900">{t('register.receipt.checkStatus')}</h2>
+        <p className="mt-1">{t('register.receipt.checkStatusHint')}</p>
+      </section>
+
+      {!canCheckOnline && (
+        <div className="mt-4">
+          <Alert variant="warning">{t('register.receipt.noPhoneWarning')}</Alert>
+        </div>
+      )}
 
       <div className="mt-6 flex flex-wrap gap-3 print:hidden">
         <Button onClick={copyReference}>
