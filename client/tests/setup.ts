@@ -29,6 +29,33 @@ beforeEach(() => {
   vi.stubGlobal('matchMedia', undefined)
 })
 
+/**
+ * Browser APIs Radix needs that jsdom does not implement.
+ *
+ * The admin console is built on Radix primitives (through shadcn/ui), and they
+ * measure and capture during open/close. jsdom has no layout engine, so these
+ * are inert stand-ins that let a dialog or a listbox mount — they are not
+ * asserted on, and nothing about the behaviour under test depends on the
+ * numbers they return.
+ */
+if (!globalThis.ResizeObserver) {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+}
+
+if (!Element.prototype.hasPointerCapture) {
+  Element.prototype.hasPointerCapture = () => false
+  Element.prototype.setPointerCapture = () => {}
+  Element.prototype.releasePointerCapture = () => {}
+}
+
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {}
+}
+
 afterEach(async () => {
   cleanup()
   vi.unstubAllGlobals()

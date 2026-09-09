@@ -1,6 +1,11 @@
+import { fileURLToPath, URL } from 'node:url'
+
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  // Matches `vite.config.ts` and `tsconfig.app.json`: shadcn/ui components
+  // import each other through `@/`, so a test run must resolve it too.
+  resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   // Deliberately without `@vitejs/plugin-react`. Its only jobs are Fast Refresh
   // and the automatic JSX runtime; the first is meaningless in a test run and
   // the second is set below. Vitest bundles its own Vite, so passing the app's
