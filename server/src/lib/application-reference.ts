@@ -66,7 +66,25 @@ export function generateApplicationReference(drawYear: number, communeNameFr: st
 
 const REFERENCE_PATTERN = new RegExp(`^${PREFIX}-\\d{4}-[A-Z]{3}-[${ALPHABET}]{${RANDOM_LENGTH}}$`)
 
+/**
+ * A reference as typed back in, reduced to the form it was stored in.
+ *
+ * References are printed on receipts, photographed and read aloud, so they come
+ * back lowercased, spaced, or with the separators the citizen remembers rather
+ * than the ones that were printed. None of that changes which application is
+ * meant, and treating it as a different reference would tell somebody their own
+ * application does not exist.
+ *
+ * Only case, whitespace and separator style are normalized. Characters are never
+ * substituted — mapping O to 0 or I to 1 would be guessing at what somebody
+ * meant, and the alphabet excludes those characters precisely so that guess is
+ * never needed.
+ */
+export function normalizeApplicationReference(raw: string): string {
+  return raw.trim().toUpperCase().replace(/\s+/g, '').replace(/[–—_]/g, '-')
+}
+
 /** Shape check for a reference a citizen types back in. */
 export function isValidApplicationReference(value: string): boolean {
-  return REFERENCE_PATTERN.test(value.trim().toUpperCase())
+  return REFERENCE_PATTERN.test(normalizeApplicationReference(value))
 }

@@ -21,7 +21,7 @@ import {
   getPoolSummary,
   validatePool,
 } from '../controllers/admin-draw-pool.controller.js'
-import { executeDraw, getDrawResult } from '../controllers/admin-draw-result.controller.js'
+import { executeDraw, getDrawResult, publishResult } from '../controllers/admin-draw-result.controller.js'
 import { getCommune, getWilaya, listCommunes, listWilayas } from '../controllers/admin-geo.controller.js'
 import {
   approveRequest,
@@ -110,6 +110,17 @@ adminRouter.get('/commune-draws/:id/pool/summary', asyncHandler(getPoolSummary))
 // scoped administrative work, so it carries no role gate.
 adminRouter.post('/commune-draws/:id/execute', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(executeDraw))
 adminRouter.get('/commune-draws/:id/result', asyncHandler(getDrawResult))
+
+// Releasing a result to the public. National, and separate from executing the
+// draw: a result exists the moment the lottery concludes, and turning that into
+// an announcement is a decision somebody has to make and be recorded making.
+// Scoped administrators read their own results and cannot publish them — nobody
+// should be able to announce the draw they are themselves subject to.
+adminRouter.post(
+  '/commune-draws/:id/publish-result',
+  requireRole(AdminRole.SUPER_ADMIN),
+  asyncHandler(publishResult),
+)
 
 // The audit trail. No role gate: what an administrator sees is narrowed to
 // their own territory by the query, and — unlike everywhere else — national

@@ -3,6 +3,7 @@ import type {
   DrawResultDto,
   DrawSelectionEventDto,
   DrawWinnerDto,
+  ResultPublicationDto,
 } from '@hajj-lottery/shared'
 import type { EntryType } from '@prisma/client'
 import type { RequestHandler } from 'express'
@@ -13,6 +14,7 @@ import { auditActor } from '../services/audit.service.js'
 import { authorizationService } from '../services/authorization.service.js'
 import type { CommuneDrawWithPlace } from '../services/draw-configuration.service.js'
 import { drawExecutionService } from '../services/draw-execution.service.js'
+import { resultPublicationService } from '../services/result-publication.service.js'
 
 /**
  * Executing a draw, and reading what it produced.
@@ -71,6 +73,9 @@ export const executeDraw: RequestHandler = async (req, res) => {
       algorithmVersion: execution.selection.algorithmVersion,
       startedAt: execution.startedAt.toISOString(),
       completedAt: execution.completedAt.toISOString(),
+      // Always null: a draw that has just been run has not been published, and
+      // execution has no path that could publish one.
+      publishedAt: null,
       winners: execution.selection.selected.map((entry) => ({
         selectionOrder: entry.selectionOrder,
         applicationReference: entry.applicationReference,
@@ -102,7 +107,10 @@ export const getDrawResult: RequestHandler = async (req, res) => {
   const result = await drawExecutionService.findResult(communeDraw.id)
   if (!result) throw new NotFoundError('DRAW_RESULT_NOT_FOUND', 'This commune draw has not been drawn')
 
+  const publication = await resultPublicationService.findPublication(communeDraw.id)
+
   const body: DrawResultDto = toResultDto(communeDraw, {
+    publishedAt: publication?.publishedAt.toISOString() ?? null,
     id: result.id,
     winnerCount: result.winnerCount,
     winningParticipantCount: result._count.archivedWinners,
@@ -147,6 +155,7 @@ function toResultDto(
     algorithmVersion: string
     startedAt: string
     completedAt: string
+    publishedAt: string | null
     winners: (Omit<DrawWinnerDto, 'entryType'> & { entryType: EntryType })[]
     events: DrawSelectionEventDto[]
   },
@@ -164,7 +173,42 @@ function toResultDto(
     algorithmVersion: result.algorithmVersion,
     startedAt: result.startedAt,
     completedAt: result.completedAt,
+    publishedAt: result.publishedAt,
     winners: result.winners,
     events: result.events,
   }
+}
+
+/**
+ * POST /api/admin/commune-draws/:id/publish-result — SUPER_ADMIN only.
+ *
+ * Publishing is national work for the same reason running the draw is. A
+ * WILAYA_ADMIN or COMMUNE_ADMIN may read their own territory's result — they
+ * have to be able to check it — but announcing one is an act with national
+ * consequences taken by somebody who is not subject to the draw they are
+ * releasing. Both get a 403 here, which is the role failure they can act on,
+ * rather than the 404 an out-of-scope commune gets.
+ *
+ * The body is ignored entirely. There is nothing a caller could usefully say:
+ * the winners, the counts and the moment of the draw all come from records
+ * written when the lottery ran, and the publisher comes from the session.
+ *
+ * Idempotent. A repeated request returns 200 with `alreadyPublished`, writes no
+ * second publication and produces no second audit event — see the service.
+ */
+export const publishResult: RequestHandler = async (req, res) => {
+  const communeDraw = await scopedCommuneDraw(req)
+  const outcome = await resultPublicationService.publish(communeDraw, auditActor(getAuthenticatedUser(req)))
+
+  const body: ResultPublicationDto = {
+    drawYear: communeDraw.drawYear.year,
+    communeCode: communeDraw.commune.code,
+    wilayaCode: communeDraw.commune.wilaya.code,
+    publishedAt: outcome.publication.publishedAt.toISOString(),
+    winnerCount: outcome.publication.winnerCount,
+    winningParticipantCount: outcome.publication.winningParticipantCount,
+    alreadyPublished: outcome.alreadyPublished,
+  }
+
+  res.status(outcome.alreadyPublished ? 200 : 201).json(body)
 }

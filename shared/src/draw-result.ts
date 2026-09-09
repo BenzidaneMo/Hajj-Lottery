@@ -6,8 +6,9 @@
  * here is that record — never a live recalculation, and never anything a caller
  * could influence.
  *
- * Nothing here is public. Winner publication is a separate decision with its own
- * consent and notification questions, and none of them have been answered yet.
+ * Nothing here is public. What citizens may see is a separate, much narrower set
+ * of types in public.ts, released only once an administrator has published the
+ * result — `publishedAt` below says whether that has happened.
  */
 
 import type { EntryType } from './application.js'
@@ -76,6 +77,12 @@ export interface DrawResultDto {
   algorithmVersion: string
   startedAt: string
   completedAt: string
+  /**
+   * When this result was released to the public, or null while it is still
+   * internal. A result exists from the moment the draw concludes; publication is
+   * a separate, audited act — see docs/public-access.md.
+   */
+  publishedAt: string | null
   winners: DrawWinnerDto[]
   events: DrawSelectionEventDto[]
 }

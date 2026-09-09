@@ -44,6 +44,12 @@ export const AUDIT_ACTIONS = [
   'DRAW_POOL_FROZEN',
   'COMMUNE_DRAW_EXECUTED',
 
+  /** Publication, which is a separate act from running the draw: the result
+   *  exists from the moment the lottery concludes, and becomes public only when
+   *  a national administrator says so. Recorded once — re-publishing an already
+   *  published result writes no second event. */
+  'DRAW_RESULT_PUBLISHED',
+
   /** Only corrections: a concluded draw writes hundreds of historical records at
    *  once, and the execution event is their provenance. */
   'HISTORICAL_RECORD_CORRECTED',

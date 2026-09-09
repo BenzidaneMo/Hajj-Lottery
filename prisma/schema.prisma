@@ -59,6 +59,7 @@ model Commune {
   importRows    ImportRow[]
   auditLogs     AuditLog[]
   approvals     ApprovalRequest[]
+  resultPublications ResultPublication[]
 
   @@unique([wilayaId, code])
   /// Redundant on its own (id is already unique), but it gives User a
@@ -180,6 +181,7 @@ model User {
   approvalsReviewed  ApprovalRequest[] @relation("ApprovalReviewer")
   importsUploaded    ImportBatch[]     @relation("ImportUploader")
   importsApproved    ImportBatch[]     @relation("ImportApprover")
+  resultsPublished   ResultPublication[] @relation("ResultPublisher")
 
   @@index([wilayaId])
   @@index([communeId])
@@ -575,7 +577,68 @@ model DrawResult {
   events          DrawSelectionEvent[]
   archivedWinners WinnerArchive[]
 
+  /// The decision to make this result public, if it has been taken. At most one,
+  /// ever — see ResultPublication.
+  publication ResultPublication?
+
   @@map("draw_results")
+}
+
+/// The act of releasing one commune's result to the public.
+///
+/// A separate record rather than a column, for two reasons.
+///
+/// `draw_results` is immutable by trigger — it is the evidence a lottery
+/// produced — so it has no column anything could set afterwards. Adding one
+/// would mean relaxing that trigger, which is the wrong trade for a flag.
+///
+/// And publication is an *event*, not a property: it has an actor, a moment and
+/// an audit record, none of which belong on a row describing what a random
+/// number generator did. Keeping them apart is what lets "was this drawn?" and
+/// "may the public see it?" stay two questions with two answers, which is the
+/// whole point of the release gate.
+///
+/// The existence of this row is the publication state. There is no boolean to
+/// disagree with it, no UNPUBLISHED row, and — because UPDATE and DELETE raise —
+/// no way back. A published result does not casually disappear; retracting one
+/// would be a governance workflow that does not exist.
+model ResultPublication {
+  id String @id @default(cuid())
+
+  /// One publication per result, ever. Also what makes publishing idempotent:
+  /// a second request finds this row instead of writing another, so it produces
+  /// no second audit event.
+  drawResultId String     @unique @map("draw_result_id")
+  drawResult   DrawResult @relation(fields: [drawResultId], references: [id], onDelete: Restrict)
+
+  /// The axes the public listing is queried on, copied from the commune draw at
+  /// publication time. The same copy-at-freeze pattern DrawPool.allocatedSpots
+  /// and DrawWinner.selectedWeight already follow, and for the same reason: the
+  /// public index is the highest-traffic query in the system and must be one
+  /// indexed scan rather than a walk up through draw_results, commune_draws and
+  /// communes. They cannot drift — every row involved is immutable.
+  drawYear  Int     @map("draw_year")
+  communeId String  @map("commune_id")
+  commune   Commune @relation(fields: [communeId], references: [id], onDelete: Restrict)
+
+  /// The published totals, verified against the authoritative rows inside the
+  /// publication transaction. Copied for the same reason as the keys above.
+  winnerCount             Int @map("winner_count")
+  winningParticipantCount Int @map("winning_participant_count")
+  entryCount              Int @map("entry_count")
+  allocatedSpots          Int @map("allocated_spots")
+
+  /// Who released it. Always the session's administrator, never a request field.
+  publishedByUserId String @map("published_by_user_id")
+  publishedBy       User   @relation("ResultPublisher", fields: [publishedByUserId], references: [id], onDelete: Restrict)
+
+  publishedAt DateTime @default(now()) @map("published_at")
+
+  /// The one index the public listing needs: newest year first, narrowed by
+  /// commune. Wilaya filtering nests through the commune relation, which is
+  /// already indexed on communes(wilaya_id).
+  @@index([drawYear, communeId])
+  @@map("result_publications")
 }
 
 /// One selected pool entry.
@@ -730,6 +793,11 @@ enum AuditAction {
   /// DRAW_POOL_FROZEN is the record of both.
   DRAW_POOL_FROZEN
   COMMUNE_DRAW_EXECUTED
+
+  /// Publication, deliberately distinct from execution. A result exists from the
+  /// moment the lottery concludes; it becomes public only when a national
+  /// administrator releases it, and that release is its own accountable act.
+  DRAW_RESULT_PUBLISHED
 
   /// The participation ledger. Only corrections — a concluded draw writes
   /// hundreds of records at once, and the execution event is their provenance.
