@@ -15,17 +15,17 @@ datasource db {
 
 /// One of Algeria's 69 wilayas (provinces).
 model Wilaya {
-  id        String    @id @default(cuid())
+  id        String            @id @default(cuid())
   /// Official numeric wilaya code (e.g. "16" for Algiers).
-  code      String    @unique
-  nameAr    String    @map("name_ar")
-  nameFr    String    @map("name_fr")
+  code      String            @unique
+  nameAr    String            @map("name_ar")
+  nameFr    String            @map("name_fr")
   /// No official English name exists; this holds the established Latin/French
   /// transliteration (nameFr) rather than an invented translation.
-  nameEn    String    @map("name_en")
-  isActive  Boolean   @default(true) @map("is_active")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
+  nameEn    String            @map("name_en")
+  isActive  Boolean           @default(true) @map("is_active")
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
   communes  Commune[]
   admins    User[]
   auditLogs AuditLog[]
@@ -37,28 +37,28 @@ model Wilaya {
 /// One of Algeria's 1541 communes, each belonging to exactly one wilaya.
 /// Each commune later runs its own independent lottery draw.
 model Commune {
-  id           String        @id @default(cuid())
-  wilayaId     String        @map("wilaya_id")
+  id                 String                 @id @default(cuid())
+  wilayaId           String                 @map("wilaya_id")
   /// Official numeric commune code, unique within its wilaya.
-  code         String
-  nameAr       String        @map("name_ar")
-  nameFr       String        @map("name_fr")
+  code               String
+  nameAr             String                 @map("name_ar")
+  nameFr             String                 @map("name_fr")
   /// No official English name exists; this holds the established Latin/French
   /// transliteration (nameFr) rather than an invented translation.
-  nameEn       String        @map("name_en")
-  isActive     Boolean       @default(true) @map("is_active")
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
-  wilaya       Wilaya                 @relation(fields: [wilayaId], references: [id])
-  admins        User[]
-  applications  Application[]
-  history       ParticipationHistory[]
-  draws         CommuneDraw[]
-  winnerArchive WinnerArchive[]
-  legacyWinners LegacyWinner[]
-  importRows    ImportRow[]
-  auditLogs     AuditLog[]
-  approvals     ApprovalRequest[]
+  nameEn             String                 @map("name_en")
+  isActive           Boolean                @default(true) @map("is_active")
+  createdAt          DateTime               @default(now()) @map("created_at")
+  updatedAt          DateTime               @updatedAt @map("updated_at")
+  wilaya             Wilaya                 @relation(fields: [wilayaId], references: [id])
+  admins             User[]
+  applications       Application[]
+  history            ParticipationHistory[]
+  draws              CommuneDraw[]
+  winnerArchive      WinnerArchive[]
+  legacyWinners      LegacyWinner[]
+  importRows         ImportRow[]
+  auditLogs          AuditLog[]
+  approvals          ApprovalRequest[]
   resultPublications ResultPublication[]
 
   @@unique([wilayaId, code])
@@ -106,14 +106,16 @@ model Participant {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  primaryApplications   Application[]            @relation("PrimaryApplicant")
-  secondaryApplications Application[]            @relation("SecondaryApplicant")
-  participations        ApplicationParticipant[]
-  history               ParticipationHistory[]
-  poolEntriesAsPrimary   DrawPoolEntry[]         @relation("PoolPrimary")
-  poolEntriesAsSecondary DrawPoolEntry[]         @relation("PoolSecondary")
-  winsAsPrimary          DrawWinner[]            @relation("WinnerPrimary")
-  winsAsSecondary        DrawWinner[]            @relation("WinnerSecondary")
+  primaryApplications    Application[]            @relation("PrimaryApplicant")
+  secondaryApplications  Application[]            @relation("SecondaryApplicant")
+  participations         ApplicationParticipant[]
+  history                ParticipationHistory[]
+  poolEntriesAsPrimary   DrawPoolEntry[]          @relation("PoolPrimary")
+  poolEntriesAsSecondary DrawPoolEntry[]          @relation("PoolSecondary")
+  winsAsPrimary          DrawWinner[]             @relation("WinnerPrimary")
+  winsAsSecondary        DrawWinner[]             @relation("WinnerSecondary")
+  reservesAsPrimary      DrawReserve[]            @relation("ReservePrimary")
+  reservesAsSecondary    DrawReserve[]            @relation("ReserveSecondary")
   /// At most one, ever — a person wins the Hajj lottery once in their life.
   winnerArchive          WinnerArchive?
   /// The pre-platform counterpart, and equally at most one.
@@ -175,13 +177,14 @@ model User {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  sessions          Session[]
-  auditLogs         AuditLog[]
-  approvalsRequested ApprovalRequest[] @relation("ApprovalRequester")
-  approvalsReviewed  ApprovalRequest[] @relation("ApprovalReviewer")
-  importsUploaded    ImportBatch[]     @relation("ImportUploader")
-  importsApproved    ImportBatch[]     @relation("ImportApprover")
-  resultsPublished   ResultPublication[] @relation("ResultPublisher")
+  sessions             Session[]
+  auditLogs            AuditLog[]
+  approvalsRequested   ApprovalRequest[]   @relation("ApprovalRequester")
+  approvalsReviewed    ApprovalRequest[]   @relation("ApprovalReviewer")
+  importsUploaded      ImportBatch[]       @relation("ImportUploader")
+  importsApproved      ImportBatch[]       @relation("ImportApprover")
+  resultsPublished     ResultPublication[] @relation("ResultPublisher")
+  abandonmentsRecorded WinnerAbandonment[] @relation("AbandonmentRecorder")
 
   @@index([wilayaId])
   @@index([communeId])
@@ -233,10 +236,19 @@ enum ApplicationStatus {
   /// demand, so a stale copy can never contradict the current facts.
   INELIGIBLE
   /// Drawn from its commune's frozen pool. Written only by winner processing,
-  /// in the same transaction as the winner records.
+  /// in the same transaction as the winner records — and again, later, when a
+  /// called reserve accepts a place an original winner gave up.
   SELECTED
-  /// Entered the frozen pool and was not drawn. A final outcome, not a refusal:
-  /// this application was a full participant in the lottery.
+  /// Drawn into the second half of the same continuous sample: an ordered
+  /// contingency position, not a place. Written only by winner processing.
+  ///
+  /// A reserve who is called and accepts becomes SELECTED. One who declines
+  /// stays RESERVE, because declining changes what happened afterwards, not
+  /// what the lottery decided.
+  RESERVE
+  /// Entered the frozen pool and was drawn neither as a winner nor as a
+  /// reserve. A final outcome, not a refusal: this application was a full
+  /// participant in the lottery.
   NOT_SELECTED
 
   @@map("application_status")
@@ -290,6 +302,7 @@ model Application {
   participants         ApplicationParticipant[]
   poolEntries          DrawPoolEntry[]
   drawWins             DrawWinner[]
+  drawReserves         DrawReserve[]
 
   /// Catch same-role duplicates directly. The cross-role case (someone
   /// primary on one application and secondary on another in the same year)
@@ -512,6 +525,10 @@ model DrawPoolEntry {
   /// the entry itself. The pool is the input to a lottery and stays exactly as
   /// it was frozen; marking entries selected would edit the evidence.
   win             DrawWinner?
+  /// And whether it was drawn into the reserve half of the same sample. An
+  /// entry is at most one of the two, which a trigger enforces across both
+  /// tables — being a winner and a reserve of the same draw is not a state.
+  reserve         DrawReserve?
   selectionEvents DrawSelectionEvent[]
   winnerArchive   WinnerArchive[]
 
@@ -574,6 +591,9 @@ model DrawResult {
   /// status could only ever read COMPLETED — the lifecycle lives on the commune
   /// draw, and a second copy of it here could disagree.
   winners         DrawWinner[]
+  /// The second half of the same continuous sample: N ordered contingency
+  /// positions, selected by the original lottery and never regenerated.
+  reserves        DrawReserve[]
   events          DrawSelectionEvent[]
   archivedWinners WinnerArchive[]
 
@@ -676,11 +696,171 @@ model DrawWinner {
 
   createdAt DateTime @default(now()) @map("created_at")
 
+  /// The current administrative outcome, as the *absence or presence of a
+  /// record* rather than as a column here. This row is immutable evidence of
+  /// what a lottery did; whether the person still holds the place is a later
+  /// fact about their circumstances, decided by somebody who has to be named.
+  /// At most one, ever — a place is given up once.
+  abandonment WinnerAbandonment?
+
+  /// The reserve called to take this place, if one has been. At most one
+  /// undeclined reserve may point at a given winner, which a partial unique
+  /// index enforces: a place vacated once cannot be filled twice.
+  replacements DrawReserve[]
+
   @@unique([drawResultId, drawPoolEntryId])
   /// No two winners share a position in the order.
   @@unique([drawResultId, selectionOrder])
   @@index([drawResultId])
   @@map("draw_winners")
+}
+
+/// Where one reserve stands.
+///
+/// Short on purpose. SKIPPED and EXPIRED are absent because nothing skips a
+/// reserve and nothing expires one: the call order is enforced rather than
+/// chosen, and silence is never read as an answer — an administrator records
+/// what the citizen actually said.
+enum ReserveStatus {
+  /// Selected as a reserve and not yet needed. Not a winner in any sense, and
+  /// specifically not excluded from future draws.
+  WAITING
+  /// Offered the place left by one specific abandoned winner.
+  CALLED
+  /// Took it. This is the moment they become a winner.
+  ACCEPTED
+  /// Refused it. The next reserve may then be called for the same place.
+  DECLINED
+
+  @@map("reserve_status")
+}
+
+/// Why an original winner gave up their place.
+///
+/// A small controlled vocabulary plus a required explanation, rather than a
+/// taxonomy nobody agrees on. The software never concludes any of these — an
+/// official records the reason that was officially established elsewhere.
+enum AbandonmentReason {
+  VOLUNTARY_WITHDRAWAL
+  DEATH
+  MEDICAL
+  OTHER
+
+  @@map("abandonment_reason")
+}
+
+/// How a person came to be a winner. Provenance on their lifetime archive row.
+enum WinnerSource {
+  /// Drawn as one of the original N winners.
+  ORIGINAL_DRAW
+  /// Drawn as a reserve, called after an abandonment, and accepted.
+  RESERVE_REPLACEMENT
+
+  @@map("winner_source")
+}
+
+/// One reserve position: an original lottery selection, plus what has happened
+/// to it since.
+///
+/// The draw selects 2N entries in one continuous weighted sample. The first N
+/// are winners; these are the rest, in the order they came out. Their order is
+/// therefore the lottery's, not a ranking by weight, not a second draw and not
+/// something regenerated later — which is the whole reason reserves are drawn up
+/// front rather than when somebody drops out.
+///
+/// This is the one table in a concluded draw that may be updated at all, and the
+/// update is narrow: a trigger refuses any change to the selection facts
+/// (`selection_order`, `reserve_position`, the entry, the participants, the
+/// weight) and refuses deletion outright. Only the lifecycle columns move, and
+/// only along the transitions in `lib/reserve-lifecycle.ts`.
+model DrawReserve {
+  id String @id @default(cuid())
+
+  drawResultId String     @map("draw_result_id")
+  drawResult   DrawResult @relation(fields: [drawResultId], references: [id], onDelete: Restrict)
+
+  /// The frozen entry that was drawn. Unique on its own, exactly as a winner's
+  /// is: an entry is drawn once, into one half of one draw.
+  drawPoolEntryId String        @unique @map("draw_pool_entry_id")
+  drawPoolEntry   DrawPoolEntry @relation(fields: [drawPoolEntryId], references: [id], onDelete: Restrict)
+
+  applicationId String      @map("application_id")
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+
+  primaryParticipantId   String       @map("primary_participant_id")
+  primaryParticipant     Participant  @relation("ReservePrimary", fields: [primaryParticipantId], references: [id], onDelete: Restrict)
+  secondaryParticipantId String?      @map("secondary_participant_id")
+  secondaryParticipant   Participant? @relation("ReserveSecondary", fields: [secondaryParticipantId], references: [id], onDelete: Restrict)
+
+  /// Position in the whole draw: N+1..2N. Always greater than every winner's,
+  /// which a trigger checks against the result's own winner count.
+  selectionOrder Int @map("selection_order")
+
+  /// Position in the call order: 1..N. `selection_order` minus the allocation,
+  /// stored rather than derived because it is the number an official reads out
+  /// and the number the ordering rule is enforced on.
+  reservePosition Int @map("reserve_position")
+
+  /// The weight this entry carried in the pool, copied like a winner's.
+  selectedWeight Int @map("selected_weight")
+
+  /// The mutable part, and the only mutable part of a concluded draw.
+  status ReserveStatus @default(WAITING)
+
+  /// The abandoned winner this reserve was called to replace. Null while
+  /// WAITING. Kept when a reserve declines, so the record shows who was asked.
+  replacesDrawWinnerId String?     @map("replaces_draw_winner_id")
+  replacesDrawWinner   DrawWinner? @relation(fields: [replacesDrawWinnerId], references: [id], onDelete: Restrict)
+
+  calledAt  DateTime? @map("called_at")
+  /// When the citizen's answer was recorded — acceptance or refusal.
+  decidedAt DateTime? @map("decided_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// No two reserves share a position, and none shares a place in the draw.
+  @@unique([drawResultId, reservePosition])
+  @@unique([drawResultId, selectionOrder])
+  @@index([drawResultId, status])
+  @@map("draw_reserves")
+}
+
+/// One original winner giving up their place.
+///
+/// The existence of this row is the outcome — there is no ACTIVE row and no
+/// boolean anywhere to disagree with it, the same shape `ResultPublication`
+/// takes for publication. It is written once, by a named administrator, with a
+/// reason and an explanation, and UPDATE and DELETE raise.
+///
+/// It does **not** undo the win. The person remains an original winner of this
+/// draw, keeps their archive row and keeps `has_won_hajj` — a place given up is
+/// still a place that was awarded, and reopening lifetime eligibility on the
+/// strength of an administrative note is not something this system does.
+model WinnerAbandonment {
+  id String @id @default(cuid())
+
+  /// One abandonment per winning entry, ever. A paired winning application is
+  /// one entry and is abandoned as a whole: there is no half-abandonment, and
+  /// no way to record one.
+  drawWinnerId String     @unique @map("draw_winner_id")
+  drawWinner   DrawWinner @relation(fields: [drawWinnerId], references: [id], onDelete: Restrict)
+
+  reason AbandonmentReason
+
+  /// The human account of what happened, required and non-blank. Administrative
+  /// and scoped: it may describe a death or an illness, so it never appears in
+  /// any public payload — the public result says only that a place was given up.
+  explanation String
+
+  /// Who recorded it. Always the session's administrator, never a request field.
+  recordedByUserId String @map("recorded_by_user_id")
+  recordedBy       User   @relation("AbandonmentRecorder", fields: [recordedByUserId], references: [id], onDelete: Restrict)
+
+  recordedAt DateTime @default(now()) @map("recorded_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("winner_abandonments")
 }
 
 /// The random draw behind one selection.
@@ -746,8 +926,17 @@ model WinnerArchive {
   drawPoolEntryId String        @map("draw_pool_entry_id")
   drawPoolEntry   DrawPoolEntry @relation(fields: [drawPoolEntryId], references: [id], onDelete: Restrict)
 
-  /// When the draw that selected this person completed.
+  /// When the draw that selected this person completed. The same value for a
+  /// promoted reserve as for an original winner: they were both selected by
+  /// that draw, and a reserve's promotion is not a second lottery. When the
+  /// promotion itself happened is on the `DrawReserve` row.
   drawnAt DateTime @map("drawn_at")
+
+  /// How they came to be a winner — drawn as one, or promoted from the reserve
+  /// list after somebody gave up a place. Provenance, so a win can always be
+  /// traced to the act that produced it; `created_at` alone could not
+  /// distinguish the two.
+  source WinnerSource @default(ORIGINAL_DRAW)
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -799,6 +988,17 @@ enum AuditAction {
   /// administrator releases it, and that release is its own accountable act.
   DRAW_RESULT_PUBLISHED
 
+  /// The reserve lifecycle — the only mutable part of a concluded draw. Four
+  /// events for the four decisions a person actually takes: an official records
+  /// that a winner gave up their place, the next reserve is called for it, and
+  /// the citizen either refuses or accepts. There is no RESERVE_ACCEPTED:
+  /// accepting *is* being promoted, in one transaction, so a second event would
+  /// describe the same act twice.
+  WINNER_ABANDONED
+  RESERVE_CALLED
+  RESERVE_DECLINED
+  RESERVE_PROMOTED
+
   /// The participation ledger. Only corrections — a concluded draw writes
   /// hundreds of records at once, and the execution event is their provenance.
   HISTORICAL_RECORD_CORRECTED
@@ -832,6 +1032,8 @@ enum AuditTargetType {
   COMMUNE_DRAW
   DRAW_POOL
   DRAW_RESULT
+  DRAW_WINNER
+  DRAW_RESERVE
   PARTICIPATION_HISTORY
   APPROVAL_REQUEST
   IMPORT_BATCH
@@ -1168,13 +1370,13 @@ model ImportBatch {
   /// Who uploaded it, and who accepted it. A CHECK constraint keeps them
   /// different people: separation of duties, in the database rather than only in
   /// a service a later refactor could simplify away.
-  uploadedByUserId String @map("uploaded_by_user_id")
-  uploadedBy       User   @relation("ImportUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  uploadedByUserId String  @map("uploaded_by_user_id")
+  uploadedBy       User    @relation("ImportUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
   approvedByUserId String? @map("approved_by_user_id")
   approvedBy       User?   @relation("ImportApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
 
   /// Why it was accepted or refused. Mandatory for both, refused blank.
-  reviewReason String? @map("review_reason")
+  reviewReason  String? @map("review_reason")
   /// Why staging failed, where it did. Never the file's contents.
   failureReason String? @map("failure_reason")
 
@@ -1219,16 +1421,16 @@ model ImportRow {
   /// second identity for somebody already known.
   nationalId String? @map("national_id")
 
-  fullName    String? @map("full_name")
+  fullName    String?   @map("full_name")
   dob         DateTime? @db.Date
   /// Canonical +213XXXXXXXXX, or null. Optional throughout: a paper register
   /// from 2009 has no phone number, and nothing here depends on one.
-  phoneNumber String? @map("phone_number")
+  phoneNumber String?   @map("phone_number")
 
   /// The commune code as written, kept alongside the commune it resolved to so a
   /// reviewer can see what the register actually said.
-  communeCode String  @map("commune_code")
-  communeId   String? @map("commune_id")
+  communeCode String   @map("commune_code")
+  communeId   String?  @map("commune_id")
   commune     Commune? @relation(fields: [communeId], references: [id], onDelete: Restrict)
 
   drawYear Int? @map("draw_year")
