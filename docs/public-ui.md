@@ -75,10 +75,19 @@ eligibility reason code, or anything administrative.
 ### The result gate
 
 `resultsPublished` is read from the server, never inferred. Before publication the server collapses
-`SELECTED` and `NOT_SELECTED` onto `AWAITING_RESULTS`, the panel shows "Results not yet published",
-and there is no branch anywhere in the client that turns a draw phase plus a flag into an outcome.
-The whole point of the release gate is that polling one's own reference cannot front-run the
-announcement.
+`SELECTED`, `RESERVE` and `NOT_SELECTED` onto `AWAITING_RESULTS`, the panel shows "Results not yet
+published", and there is no branch anywhere in the client that turns a draw phase plus a flag into an
+outcome. The whole point of the release gate is that polling one's own reference cannot front-run the
+announcement — and three outcomes told apart early are three outcomes somebody can learn by polling,
+so the reserve collapses onto the same holding value as the other two rather than a similar one.
+
+After publication a reserve reads **`RESERVE`**, with its own badge colour and its own explanation of
+what a reserve position is. What the panel deliberately does _not_ say is where in the list they
+stand or whether anybody has been called: the DTO carries no reserve position, and the reserve
+lifecycle vocabulary — waiting, called, promoted, declined — belongs to the published result's
+reserve list, where it describes the draw, rather than to a page describing one identifiable
+applicant. A **promoted** reserve reads `SELECTED`, because the server says so; nothing on the client
+derives that.
 
 ### Nothing is stored
 
@@ -107,7 +116,7 @@ page shows the same "nothing announced" state for all three).
 
 ### Winner display policy
 
-Four columns, and they are the entire published record of a winner:
+Five columns, and they are the entire published record of a winner:
 
 | Column                | Why it is publishable                                                                                        |
 | --------------------- | ------------------------------------------------------------------------------------------------------------ |
@@ -115,11 +124,86 @@ Four columns, and they are the entire published record of a winner:
 | Application reference | Already printed on that applicant's own receipt. Somebody can find themselves; nobody can find anybody else. |
 | Type                  | Single or paired.                                                                                            |
 | Pilgrims              | 1 or 2, derived from the entry type.                                                                         |
+| Status                | Whether the place is still held — `outcome` from the DTO, as one of two words. Never _why_.                  |
 
 **Winner names are not published.** That is an open policy decision for the governing authority to
 take explicitly, not something to arrive at because a column happens to be available. The API does
 not send names and `WinnerList` has no column for them; a test asserts the exact column set, so
-adding a fifth fails there before it reaches the public.
+adding a sixth fails there before it reaches the public.
+
+### Withdrawn winners
+
+A winner who later gave up their place shows as **"Gave up the place"**, and everything else about
+their row is unchanged: same position, same reference, same table.
+
+That is the whole point. The winner list is the **original draw**, and the original draw does not
+move. A withdrawn winner is not removed from it, not renumbered, not shifted down, and — the failure
+that would matter most — not shown as not-selected or as a reserve. They were selected by this
+lottery and remain an original winner of it; what changed afterwards is an administrative fact
+recorded beside the selection rather than instead of it. When at least one row carries the status, the
+table adds a sentence saying so, rather than leaving a reader to infer that a withdrawn winner was
+never a winner.
+
+Nobody takes their place _in this list_ either. A promoted reserve appears in the reserve list, as a
+reserve — see below.
+
+The badge is deliberately **neutral rather than red**. Giving up a place is not a failure and not a
+disqualification, and an error colour beside somebody's reference would read as a judgement on
+circumstances the page says nothing about — and could not, since the reason is never published.
+
+**Why is never shown.** The abandonment's reason (`VOLUNTARY_WITHDRAWAL`, `DEATH`, `MEDICAL`,
+`OTHER`), its explanation, the administrator who recorded it and when are administrative. The public
+query does not select those columns at all — it reads only whether an abandonment row exists — so
+there is nothing in the response for the page to render, by accident or otherwise. This is not a
+field hidden with CSS; it never leaves the database.
+
+### Reserves
+
+`/results/:drawYear/:wilayaCode/:communeCode` carries a second table, under its own heading, for
+`PublicResultDto.reserves`.
+
+Five columns, mirroring the winner list: reserve position, application reference, type, pilgrims,
+status.
+
+**Separate lists, because they are separate things.** A commune with N places drew 2N entries in one
+continuous sample; the first N won a place and the rest hold an ordered contingency position. A
+reserve **is not a winner**. Appending them to the winner table, or merging the two under one
+heading, would say something about their standing that is not true, so the page keeps two headings,
+two tables and a sentence explaining the difference.
+
+**The order is the server's, and the client never touches it.** No sort by weight, by status, by
+reference or by anything else; no client-side derivation of a position; no filtering. `ReserveList`
+passes the array through to `Table` unmodified, and a test feeds it a deliberately hostile ordering —
+positions descending, statuses mixed — and asserts the rendered rows come out in exactly that order.
+A page that re-ordered this list would be showing a different lottery than the one that ran.
+
+**A promoted reserve keeps its reserve number.** `PROMOTED` says they became a winner; it does not
+move them into the winner table and does not renumber them. The original draw said "reserve #1" and
+still says it. Both facts stay readable side by side:
+
+```
+Original draw     Reserve #1
+Current outcome   Promoted to winner
+```
+
+Nothing in the client can move a row between the two tables — there is no code path that could, which
+is stronger than a rule saying it should not.
+
+| Status     | Shown as           |
+| ---------- | ------------------ |
+| `WAITING`  | Waiting            |
+| `CALLED`   | Called             |
+| `PROMOTED` | Promoted to winner |
+| `DECLINED` | Declined           |
+
+**Which winner a reserve replaced is not shown.** That relationship exists server-side but is not part
+of the public contract, and publishing "reserve #1 replaced winner #4" would publish a link between
+two identifiable households. The page shows the two facts independently: an original winner who gave
+up a place, and a reserve who was promoted.
+
+The summary reports reserve positions as a **figure of their own**, never added to the winner count: a
+reserve does not occupy a place, so summing them would misstate how many pilgrims the commune is
+sending.
 
 Weights are likewise absent. A weight is one household's accumulated priority — how many years they
 have been waiting — and publishing it beside a reference would publish that. The random value and the
@@ -308,12 +392,13 @@ to absorb it.
 root `npm test`). `fetch` is stubbed globally and an unstubbed request throws, because several of
 the assertions are about requests _not_ being made.
 
-| File                          | Covers                                                                                                                                                                                         |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `application-status.test.tsx` | Form states, identical failures, no private data, no echo, the result gate, rate limiting, network and 5xx handling, all three languages, `noindex`, storage.                                  |
-| `winners.test.tsx`            | Listing, empty state, code-based filters, pagination, bounded page size, no refetch on locale change, the exact winner column set, the safe 404.                                               |
-| `draw.test.tsx`               | Draw status rendering and privacy, the four visualiser states, polling intervals and termination, reduced motion, read-only requests, and the static `Math.random` guard over the client tree. |
-| `public-safety.test.tsx`      | Static scans: no admin/participant/application endpoint in any public module, no browser storage, one POST in the whole public client, and route integrity.                                    |
+| File                          | Covers                                                                                                                                                                                                                                                                            |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `application-status.test.tsx` | Form states, identical failures, no private data, no echo, the result gate, rate limiting, network and 5xx handling, all three languages, `noindex`, storage.                                                                                                                     |
+| `winners.test.tsx`            | Listing, empty state, code-based filters, pagination, bounded page size, no refetch on locale change, the exact winner column set, the safe 404.                                                                                                                                  |
+| `reserves.test.tsx`           | Withdrawn winners staying put in the winner list, the reserve section, API order preserved against a hostile ordering, all four reserve statuses, promoted reserves not relabelled, the exact reserve column set, no abandonment reason or replacement link, all three languages. |
+| `draw.test.tsx`               | Draw status rendering and privacy, the four visualiser states, polling intervals and termination, reduced motion, read-only requests, and the static `Math.random` guard over the client tree.                                                                                    |
+| `public-safety.test.tsx`      | Static scans: no admin/participant/application endpoint in any public module, no browser storage, one POST in the whole public client, and route integrity.                                                                                                                       |
 
 ## Not in this step
 
@@ -324,5 +409,12 @@ the assertions are about requests _not_ being made.
 - **A public "available draw years" endpoint.** The year filter is a bounded number field (2000–2200,
   matching the server's CHECK) rather than a picker, because a select built from whatever happened to
   be on the current page would present an incomplete list as a complete one.
-- **Citizen accounts, OTP, SMS, notifications.**
+- **Citizen accounts, OTP, SMS, notifications.** Nobody is told they have been called except by
+  whoever calls them.
 - **Result retraction**, and any client path that could imply one.
+- **The replacement relationship.** "Reserve #1 replaced winner #4" is not in the public contract, and
+  adding it would publish a link between two identifiable households. The page shows the two facts
+  independently.
+- **Abandonment after promotion, reconsidering a declined reserve, and automatic call expiry.** None
+  of these exists server-side (see docs/reserves-and-replacements.md), so there is nothing to render;
+  each is a policy decision before it is a screen.

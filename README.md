@@ -134,6 +134,13 @@ transparent results, across Arabic (RTL), French, and English.
 > draw, nothing reorders the list, and nothing rewrites the original result. Public
 > pages for reserves, notifications and citizen accounts remain unimplemented.
 
+> **Status:** Step 20 — public reserve and withdrawn-winner UI. A commune's official result now shows
+> its reserve list in a second table, under its own heading, in the order the draw produced it, and an
+> original winner who gave up their place stays exactly where the draw put them with a status saying
+> so. A promoted reserve keeps its reserve number rather than being relabelled a winner, why a place
+> was given up is never published, and which winner a reserve replaced is not part of the public
+> contract. Notifications and citizen accounts remain unimplemented.
+
 ## Architecture
 
 ```
@@ -577,6 +584,15 @@ one message for every way the lookup can miss, client-side validation that check
 emptiness and nothing else, and a rate-limit message that names no cause. Nothing
 is written to `localStorage`, `sessionStorage` or a cookie, the page is `noindex`,
 and no reference ever appears in a URL.
+
+**The result page keeps the original draw and the current outcome apart.** Winners
+and reserves are two tables under two headings, because a reserve is not a winner.
+An original winner who gave up their place stays in the winner list, at the same
+position, with a status saying the place was given up — never moved, renumbered, or
+shown as not-selected. A promoted reserve stays in the reserve list, keeping its
+reserve number, rather than being relabelled into a winner position. The reserve
+order is the server's and nothing on the client sorts it. Why a place was given up
+is never published, and neither is which winner a reserve replaced.
 
 **The live draw visualiser performs no lottery logic.** It does not select, sample,
 weight, shuffle or randomise anything — `Math.random` is banned across the client
