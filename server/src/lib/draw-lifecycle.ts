@@ -1,73 +1,38 @@
-import type { CommuneDrawStatus, DrawYearStatus } from '@hajj-lottery/shared'
+import {
+  COMMUNE_DRAW_TRANSITIONS,
+  DRAW_YEAR_TRANSITIONS,
+  EXECUTION_ONLY_COMMUNE_DRAW_STATUSES,
+  type CommuneDrawStatus,
+  type DrawYearStatus,
+} from '@hajj-lottery/shared'
 
 /**
- * Every state transition in the draw configuration, in one place.
+ * Every state transition in the draw configuration, enforced in one place.
  *
- * Pure, and deliberately declarative: the legal moves are data, not a thicket
- * of `if (status === ...)` scattered through controllers where a missing case
- * is invisible. Anything not listed here cannot happen, which is the point —
- * a lifecycle enforced by omission rather than by remembering to check.
+ * The tables themselves live in `shared/src/draw-configuration.ts` — one
+ * definition, imported here and read by the administrative console, so the
+ * console can offer only moves that exist rather than discovering them by
+ * being refused. A mirrored copy would be two lifecycles waiting to disagree.
  *
- * Only transitions the system can actually perform are present. A state nothing
- * can reach would be an invented lifecycle rather than a recorded one.
+ * This module is where the tables are *applied*. The console rendering a
+ * button is not permission to press it: every mutation still comes through
+ * these predicates, and through the database constraints behind them.
+ *
+ * There is deliberately no DRAW_IN_PROGRESS between LOCKED and COMPLETED.
+ * Execution claims COMPLETED and writes every winner in a single transaction,
+ * so an intermediate state would be invisible to every other reader and undone
+ * by any failure — see docs/winner-processing.md.
  */
-
-/**
- * The national cycle: draft it, open it, close it, file it away.
- *
- * There is no route back from REGISTRATION_CLOSED. Reopening intake after
- * closing it would let applications arrive after everyone has been told the
- * year is settled, and whether that is ever permitted is a policy decision
- * nobody has made. Until someone does, the system cannot do it.
- */
-const DRAW_YEAR_TRANSITIONS: Record<DrawYearStatus, readonly DrawYearStatus[]> = {
-  DRAFT: ['REGISTRATION_OPEN', 'ARCHIVED'],
-  REGISTRATION_OPEN: ['REGISTRATION_CLOSED'],
-  REGISTRATION_CLOSED: ['ARCHIVED'],
-  ARCHIVED: [],
-}
-
-/**
- * One commune's draw: configure it, settle it, lock it, run it.
- *
- * READY can fall back to DRAFT, because "settled" is a statement about
- * intent and an official may reconsider before the allocation is fixed.
- * LOCKED cannot: it is the promise that the terms of the draw stopped moving,
- * and the whole value of that promise is that it cannot be taken back.
- *
- * COMPLETED is terminal, and there is no route back from it for anybody. A
- * concluded lottery has told people they won; reopening it would take that
- * back, and no correction workflow exists to do so responsibly.
- *
- * There is deliberately no DRAW_IN_PROGRESS between the two. Execution claims
- * COMPLETED and writes every winner in a single transaction, so an intermediate
- * state would be invisible to every other reader and undone by any failure —
- * see docs/winner-processing.md.
- */
-const COMMUNE_DRAW_TRANSITIONS: Record<CommuneDrawStatus, readonly CommuneDrawStatus[]> = {
-  DRAFT: ['READY', 'CANCELLED'],
-  READY: ['DRAFT', 'LOCKED', 'CANCELLED'],
-  LOCKED: ['COMPLETED'],
-  COMPLETED: [],
-  CANCELLED: [],
-}
 
 /**
  * States an administrator may never write by hand.
  *
- * LOCKED → COMPLETED is a legal transition, but only winner processing may
- * perform it, and only alongside the result and winners it commits with. An
- * administrator setting it directly would produce a draw that claims to have
- * concluded with no winners to show — the worst state this system could reach.
- *
- * The database refuses it too, through a deferred constraint trigger. This check
- * exists so the refusal arrives as a sentence rather than as a constraint
- * violation at commit.
+ * The database refuses them too, through a deferred constraint trigger. This
+ * check exists so the refusal arrives as a sentence rather than as a
+ * constraint violation at commit.
  */
-const EXECUTION_ONLY_STATUSES: readonly CommuneDrawStatus[] = ['COMPLETED']
-
 export function isAdministrativelySettable(status: CommuneDrawStatus): boolean {
-  return !EXECUTION_ONLY_STATUSES.includes(status)
+  return !EXECUTION_ONLY_COMMUNE_DRAW_STATUSES.includes(status)
 }
 
 export function canTransitionDrawYear(from: DrawYearStatus, to: DrawYearStatus): boolean {

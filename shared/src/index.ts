@@ -1,3 +1,4 @@
+export * from './admin-console.js'
 export * from './application.js'
 export * from './audit.js'
 export * from './auth.js'
