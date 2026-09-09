@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router-dom'
 
 import { publicErrorMessage } from '../components/public/publicError'
+import { ReserveList } from '../components/public/ReserveList'
 import { WinnerList } from '../components/public/WinnerList'
 import { Alert, Button, Card, ErrorState, Loading, PageHeader } from '../components/ui'
 import { useDocumentTitle } from '../lib/document'
@@ -97,6 +98,15 @@ export function PublicResult() {
             <Figure label={t('public.results.winningParticipantCount')}>
               {formatNumber(result.winningParticipantCount, locale)}
             </Figure>
+            {/*
+              Counted from the list the API sent rather than from a separate
+              figure, so the number above the table and the rows in it cannot
+              disagree. A reserve position is not a place, which is why it is a
+              figure of its own rather than added to the winner count.
+            */}
+            <Figure label={t('public.results.reserveCount')}>
+              {formatNumber(result.reserves.length, locale)}
+            </Figure>
             <Figure label={t('public.results.drawnAt')}>{formatDateTime(result.drawnAt, locale)}</Figure>
             <Figure label={t('public.results.publishedAt')}>
               {formatDateTime(result.publishedAt, locale)}
@@ -104,11 +114,27 @@ export function PublicResult() {
           </dl>
         </Card>
 
+        {/*
+          Two sections, two headings, two tables — never one merged list. The
+          draw produced two different things: N applications that won a place,
+          and N ordered contingency positions that did not. Running them together
+          under one heading, or moving a promoted reserve up into the winners,
+          would present the current state of affairs as though it were the
+          lottery's own result. It is not; both facts are kept, side by side.
+        */}
         <section aria-labelledby="winners-heading">
           <h2 id="winners-heading" className="mb-3 text-lg font-semibold text-stone-900">
-            {t('public.results.winners')}
+            {t('public.results.originalWinners')}
           </h2>
-          <WinnerList winners={result.winners} />
+          <WinnerList winners={result.winners} labelledBy="winners-heading" />
+        </section>
+
+        <section aria-labelledby="reserves-heading">
+          <h2 id="reserves-heading" className="mb-1 text-lg font-semibold text-stone-900">
+            {t('public.results.reserveList')}
+          </h2>
+          <p className="mb-3 max-w-prose text-sm text-stone-600">{t('public.results.reserveListHint')}</p>
+          <ReserveList reserves={result.reserves} labelledBy="reserves-heading" />
         </section>
 
         {/*
