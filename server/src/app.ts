@@ -11,6 +11,7 @@ import { createAuthRouter } from './routes/auth.js'
 import { communesRouter } from './routes/communes.js'
 import { healthRouter } from './routes/health.js'
 import { participantsRouter } from './routes/participants.js'
+import { createPublicRouter } from './routes/public.js'
 import { wilayasRouter } from './routes/wilayas.js'
 
 export function createApp() {
@@ -44,6 +45,9 @@ export function createApp() {
   app.use('/api/participants', participantsRouter)
   // Public: citizens register without an account, by design.
   app.use('/api/applications', createApplicationsRouter())
+  // The citizen-facing read surface — status lookup, official results, draw
+  // state. Grouped under one prefix so a CDN and a WAF have a path to point at.
+  app.use('/api/public', createPublicRouter())
 
   // Order matters: unmatched /api routes 404 as JSON, then every error —
   // thrown or forwarded — leaves through the single handler.
