@@ -174,9 +174,13 @@ export class ResultPublicationService {
       return {
         ...base,
         drawWinnerCount: 0,
+        drawReserveCount: 0,
         selectionEventCount: 0,
         selectionOrderBounds: null,
+        reservePositionBounds: null,
+        reserveSelectionOrderBounds: null,
         expectedWinningParticipants: 0,
+        promotedReserveParticipants: 0,
         archivedWinnerCount: 0,
         excludedWinnerCount: 0,
         pooledParticipantCount: 0,
@@ -187,8 +191,12 @@ export class ResultPublicationService {
     const [
       drawWinnerCount,
       pairedWinnerCount,
+      drawReserveCount,
       selectionEventCount,
       selectionOrder,
+      reserveOrder,
+      promotedReserveCount,
+      pairedPromotedReserveCount,
       archivedWinnerCount,
       excludedWinnerCount,
       poolEntryCount,
@@ -197,11 +205,23 @@ export class ResultPublicationService {
     ] = await Promise.all([
       tx.drawWinner.count({ where: { drawResultId: result.id } }),
       tx.drawWinner.count({ where: { drawResultId: result.id, secondaryParticipantId: { not: null } } }),
+      tx.drawReserve.count({ where: { drawResultId: result.id } }),
       tx.drawSelectionEvent.count({ where: { drawResultId: result.id } }),
       tx.drawWinner.aggregate({
         where: { drawResultId: result.id },
         _min: { selectionOrder: true },
         _max: { selectionOrder: true },
+      }),
+      // Both of the reserve list's orderings in one aggregate: where each
+      // reserve sits in the call order, and where it sat in the draw.
+      tx.drawReserve.aggregate({
+        where: { drawResultId: result.id },
+        _min: { reservePosition: true, selectionOrder: true },
+        _max: { reservePosition: true, selectionOrder: true },
+      }),
+      tx.drawReserve.count({ where: { drawResultId: result.id, status: 'ACCEPTED' } }),
+      tx.drawReserve.count({
+        where: { drawResultId: result.id, status: 'ACCEPTED', secondaryParticipantId: { not: null } },
       }),
       tx.winnerArchive.count({ where: { drawResultId: result.id } }),
       tx.winnerArchive.count({ where: { drawResultId: result.id, participant: { hasWonHajj: true } } }),
@@ -223,16 +243,20 @@ export class ResultPublicationService {
       }),
     ])
 
-    const bounds = selectionOrder._min.selectionOrder
-    const upper = selectionOrder._max.selectionOrder
-
     return {
       ...base,
       drawWinnerCount,
+      drawReserveCount,
       selectionEventCount,
-      selectionOrderBounds: bounds !== null && upper !== null ? { min: bounds, max: upper } : null,
+      selectionOrderBounds: toBounds(selectionOrder._min.selectionOrder, selectionOrder._max.selectionOrder),
+      reservePositionBounds: toBounds(reserveOrder._min.reservePosition, reserveOrder._max.reservePosition),
+      reserveSelectionOrderBounds: toBounds(
+        reserveOrder._min.selectionOrder,
+        reserveOrder._max.selectionOrder,
+      ),
       // A paired entry wins for two people, a single one for one.
       expectedWinningParticipants: drawWinnerCount + pairedWinnerCount,
+      promotedReserveParticipants: promotedReserveCount + pairedPromotedReserveCount,
       archivedWinnerCount,
       excludedWinnerCount,
       pooledParticipantCount: poolEntryCount + pairedPoolEntryCount,
@@ -256,6 +280,11 @@ function notPublishable(issues: ResultIntegrityIssue[]): ApiError {
     'This result cannot be published until it reconciles with the records behind it',
     { issues },
   )
+}
+
+/** An aggregate's min/max as a range, or null when there were no rows at all. */
+function toBounds(min: number | null, max: number | null): { min: number; max: number } | null {
+  return min !== null && max !== null ? { min, max } : null
 }
 
 function isDuplicatePublication(error: unknown): boolean {

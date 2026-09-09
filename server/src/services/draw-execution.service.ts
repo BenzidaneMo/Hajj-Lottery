@@ -40,6 +40,7 @@ export interface DrawExecutionEvent {
   algorithmVersion: string
   winnerCount: number
   winningParticipantCount: number
+  reserveCount: number
   at: string
 }
 
@@ -49,6 +50,8 @@ export interface DrawExecution {
   communeDraw: CommuneDrawWithPlace
   selection: DrawSelection
   winningParticipantCount: number
+  /** Reserve positions recorded. Equal to the allocation, like the winners. */
+  reserveCount: number
   notSelectedCount: number
   historyRecordsCreated: number
   startedAt: Date
@@ -60,8 +63,9 @@ export interface DrawExecution {
  * Draw execution: the one operation that turns a frozen pool into winners.
  *
  * Everything happens in a single transaction — the claim, the selection, the
- * result, the winners, the archive, lifetime exclusion, the application outcomes,
- * the participation ledger and the commune draw's own transition. Either a
+ * result, the winners, the reserve list, the archive, lifetime exclusion, the
+ * application outcomes, the participation ledger and the commune draw's own
+ * transition. Either a
  * commune has a complete, consistent, permanent result, or it is exactly as it
  * was before anybody pressed the button. There is no state in between, because
  * every intermediate state this system could be caught in is one somebody would
@@ -73,6 +77,7 @@ export interface DrawExecution {
  *   a winner is recorded  ⟺  that person is excluded for life
  *   a draw is COMPLETED   ⟺  a result with all of its winners exists
  *   a result exists       ⟹  the draw cannot be run again
+ *   a reserve is recorded ⟹  that person is *not* excluded by that alone
  *
  * Concurrency is settled by the database, not by this process. The claim is a
  * conditional `UPDATE ... WHERE status = 'LOCKED'`, so two simultaneous
@@ -179,8 +184,32 @@ export class DrawExecutionService {
         })),
       })
 
+      // The second half of the same sample, written in the same transaction as
+      // the first. A reserve list produced at any other moment — when somebody
+      // drops out, on a later administrator's initiative — could not be shown
+      // to be the lottery's own ordering, and being able to show that is the
+      // entire reason reserves are drawn now rather than then.
+      //
+      // Nobody here becomes a winner. No archive row, no `has_won_hajj`, no
+      // place: a reserve holds an ordered contingency position and nothing
+      // more, until an abandonment is recorded and they are called.
+      await tx.drawReserve.createMany({
+        data: selection.reserves.map((entry) => ({
+          drawResultId: result.id,
+          drawPoolEntryId: entry.drawPoolEntryId,
+          applicationId: entry.applicationId,
+          primaryParticipantId: entry.primaryParticipantId,
+          secondaryParticipantId: entry.secondaryParticipantId,
+          selectionOrder: entry.selectionOrder,
+          reservePosition: entry.reservePosition,
+          selectedWeight: entry.weight,
+        })),
+      })
+
       // The randomness, kept so the result can be replayed and checked by
-      // somebody who does not trust the software that produced it.
+      // somebody who does not trust the software that produced it. One event
+      // per selection, winners and reserves alike — the reserve order is drawn
+      // and is as checkable as the winner order.
       await tx.drawSelectionEvent.createMany({
         data: selection.events.map((event) => ({
           drawResultId: result.id,
@@ -220,16 +249,25 @@ export class DrawExecutionService {
       }
 
       const selectedApplicationIds = selection.selected.map((entry) => entry.applicationId)
-      const notSelectedApplicationIds = selection.pooledApplicationIds.filter(
-        (id) => !selectedApplicationIds.includes(id),
-      )
+      const reserveApplicationIds = selection.reserves.map((entry) => entry.applicationId)
+      const drawn = new Set([...selectedApplicationIds, ...reserveApplicationIds])
+      const notSelectedApplicationIds = selection.pooledApplicationIds.filter((id) => !drawn.has(id))
 
       // Final outcomes, for the applications that were in the pool and only
       // those. An application that never reached the pool took no part in this
       // lottery and keeps whatever the eligibility engine said about it.
+      //
+      // Three outcomes now, not two. A reserve was neither selected nor passed
+      // over, and telling them either would be false: `NOT_SELECTED` would say
+      // they had lost when they may yet be called, and `SELECTED` would say they
+      // had a place they do not hold.
       const finalizedSelected = await tx.application.updateMany({
         where: { id: { in: selectedApplicationIds } },
         data: { status: 'SELECTED' },
+      })
+      const finalizedReserve = await tx.application.updateMany({
+        where: { id: { in: reserveApplicationIds } },
+        data: { status: 'RESERVE' },
       })
       const finalizedNotSelected = await tx.application.updateMany({
         where: { id: { in: notSelectedApplicationIds } },
@@ -272,6 +310,7 @@ export class DrawExecutionService {
             algorithmVersion: selection.algorithmVersion,
             winnerCount: selection.selected.length,
             winningParticipantCount: winners.length,
+            reserveCount: selection.reserves.length,
             totalWeightAtDraw: selection.totalWeight,
             entryCount: selection.entryCount,
           },
@@ -284,8 +323,9 @@ export class DrawExecutionService {
       // can be updated at all.
       await this.assertComplete(tx, result.id, {
         winnerCount: selection.selected.length,
+        reserveCount: selection.reserves.length,
         winningParticipantCount: winners.length,
-        finalizedApplications: finalizedSelected.count + finalizedNotSelected.count,
+        finalizedApplications: finalizedSelected.count + finalizedReserve.count + finalizedNotSelected.count,
         pooledApplications: selection.pooledApplicationIds.length,
         historyRecords: pooled.length,
       })
@@ -295,6 +335,7 @@ export class DrawExecutionService {
         communeDraw,
         selection,
         winningParticipantCount: winners.length,
+        reserveCount: selection.reserves.length,
         notSelectedCount: notSelectedApplicationIds.length,
         historyRecordsCreated: pooled.length,
         startedAt,
@@ -309,6 +350,7 @@ export class DrawExecutionService {
           algorithmVersion: selection.algorithmVersion,
           winnerCount: selection.selected.length,
           winningParticipantCount: winners.length,
+          reserveCount: selection.reserves.length,
           at: completedAt.toISOString(),
         },
       }
@@ -419,21 +461,25 @@ export class DrawExecutionService {
     drawResultId: string,
     expected: {
       winnerCount: number
+      reserveCount: number
       winningParticipantCount: number
       finalizedApplications: number
       pooledApplications: number
       historyRecords: number
     },
   ): Promise<void> {
-    const [winners, events, archived] = await Promise.all([
+    const [winners, reserves, events, archived] = await Promise.all([
       tx.drawWinner.count({ where: { drawResultId } }),
+      tx.drawReserve.count({ where: { drawResultId } }),
       tx.drawSelectionEvent.count({ where: { drawResultId } }),
       tx.winnerArchive.count({ where: { drawResultId } }),
     ])
 
     const complete =
       winners === expected.winnerCount &&
-      events === expected.winnerCount &&
+      reserves === expected.reserveCount &&
+      // One event per selection, across both halves of the sample.
+      events === expected.winnerCount + expected.reserveCount &&
       archived === expected.winningParticipantCount &&
       expected.finalizedApplications === expected.pooledApplications &&
       expected.historyRecords >= expected.pooledApplications
@@ -446,7 +492,15 @@ export class DrawExecutionService {
     }
   }
 
-  /** A concluded draw with its winners and randomness, for administrative reading. */
+  /**
+   * A concluded draw with its winners, its reserves and its randomness, for
+   * administrative reading.
+   *
+   * The winners and the reserves are the lottery's own record and never change.
+   * What travels alongside them — an abandonment, a reserve's lifecycle state —
+   * is the current administrative outcome, kept in separate rows so the two can
+   * never be confused for one another.
+   */
   async findResult(communeDrawId: string) {
     return this.db.drawResult.findUnique({
       where: { communeDrawId },
@@ -458,8 +512,34 @@ export class DrawExecutionService {
             selectedWeight: true,
             secondaryParticipantId: true,
             drawPoolEntry: { select: { applicationReference: true, entryType: true } },
+            // The reason and explanation are administrative and reach only
+            // scoped administrators; no public payload carries either.
+            abandonment: {
+              select: {
+                reason: true,
+                explanation: true,
+                recordedAt: true,
+                recordedBy: { select: { id: true, username: true } },
+              },
+            },
           },
           orderBy: { selectionOrder: 'asc' },
+        },
+        reserves: {
+          select: {
+            reservePosition: true,
+            selectionOrder: true,
+            selectedWeight: true,
+            secondaryParticipantId: true,
+            status: true,
+            calledAt: true,
+            decidedAt: true,
+            drawPoolEntry: { select: { applicationReference: true, entryType: true } },
+            // Which vacated place this reserve was called for, named by that
+            // winner's original selection order rather than by an internal id.
+            replacesDrawWinner: { select: { selectionOrder: true } },
+          },
+          orderBy: { reservePosition: 'asc' },
         },
         events: {
           select: { selectionOrder: true, activeTotalWeight: true, randomValue: true },

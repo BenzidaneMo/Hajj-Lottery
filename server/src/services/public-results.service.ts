@@ -7,7 +7,7 @@ import type {
 import type { Prisma, PrismaClient } from '@prisma/client'
 
 import { prisma as defaultPrisma } from '../lib/prisma.js'
-import { toPublicPage, toPublicPlace, toPublicWinner } from '../lib/public-dto.js'
+import { toPublicPage, toPublicPlace, toPublicReserve, toPublicWinner } from '../lib/public-dto.js'
 import { toPublicDrawPhase } from '../lib/public-status.js'
 
 /** What a public listing may be narrowed by. Codes, never internal ids. */
@@ -144,16 +144,32 @@ export class PublicResultsService {
             algorithmVersion: true,
             completedAt: true,
             winners: {
-              // Exactly three columns, two of them from the frozen entry. No
-              // participant id is loaded, so `participantCount` is derived from
-              // the entry type and nothing identifying is ever in memory.
+              // Exactly three columns, two of them from the frozen entry, plus
+              // the *existence* of an abandonment. No participant id is loaded,
+              // so `participantCount` is derived from the entry type and nothing
+              // identifying is ever in memory — and the abandonment's reason and
+              // explanation are not selected at all, so no query on this route
+              // can put a death or an illness within reach of a response.
               select: {
                 selectionOrder: true,
                 drawPoolEntry: { select: { applicationReference: true, entryType: true } },
+                abandonment: { select: { id: true } },
               },
               // The order the entries were drawn in, as persisted. Nothing is
               // re-run, re-sorted or recomputed to publish a result.
               orderBy: { selectionOrder: 'asc' },
+            },
+            // The reserve list, in the order the same draw produced it. Its
+            // lifecycle status is public in the coarse form `toPublicReserve`
+            // maps it to; who was asked, when, and about which place is not.
+            reserves: {
+              select: {
+                reservePosition: true,
+                selectionOrder: true,
+                status: true,
+                drawPoolEntry: { select: { applicationReference: true, entryType: true } },
+              },
+              orderBy: { reservePosition: 'asc' },
             },
           },
         },
@@ -179,6 +195,16 @@ export class PublicResultsService {
           selectionOrder: winner.selectionOrder,
           applicationReference: winner.drawPoolEntry.applicationReference,
           entryType: winner.drawPoolEntry.entryType,
+          abandoned: winner.abandonment !== null,
+        }),
+      ),
+      reserves: publication.drawResult.reserves.map((reserve) =>
+        toPublicReserve({
+          reservePosition: reserve.reservePosition,
+          selectionOrder: reserve.selectionOrder,
+          applicationReference: reserve.drawPoolEntry.applicationReference,
+          entryType: reserve.drawPoolEntry.entryType,
+          status: reserve.status,
         }),
       ),
     }

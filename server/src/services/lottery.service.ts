@@ -1,4 +1,4 @@
-import { LOTTERY_ALGORITHM_VERSION } from '@hajj-lottery/shared'
+import { LOTTERY_ALGORITHM_VERSION, totalDrawSelections } from '@hajj-lottery/shared'
 import type { EntryType, PrismaClient } from '@prisma/client'
 
 import { hashPool, SNAPSHOT_VERSION } from '../lib/draw-pool-hash.js'
@@ -52,6 +52,20 @@ export interface SelectedEntry {
 }
 
 /**
+ * One selected entry in the reserve half of the same draw.
+ *
+ * `selectionOrder` continues straight on from the winners — reserve 1 of a ten
+ * place draw is selection 11 — because there was only ever one sample. The two
+ * numbers are kept apart because they answer different questions: the selection
+ * order says where in the lottery this entry came out, and the reserve position
+ * says who gets asked next.
+ */
+export interface SelectedReserve extends SelectedEntry {
+  /** 1..N, the order reserves are called in. */
+  reservePosition: number
+}
+
+/**
  * A completed selection.
  *
  * Everything needed to reproduce it: which frozen pool was drawn from (by id
@@ -69,11 +83,22 @@ export interface DrawSelection {
   snapshotHash: string
   entryCount: number
   totalWeight: number
-  /** The number of places, and therefore the number of entries selected. */
+  /** The number of places. Half the entries selected — see `selected`. */
   allocatedSpots: number
   /** Which implementation produced this selection. Recorded with every result. */
   algorithmVersion: string
+  /** The winning entries: selections 1..N, in the order they were drawn. */
   selected: SelectedEntry[]
+  /**
+   * The reserve list: selections N+1..2N of the *same* sample, in the order
+   * they were drawn.
+   *
+   * Not a second draw, not the losers sorted by weight, and not something
+   * produced later when somebody drops out. The ordering a replacement will
+   * follow months from now was fixed by the same random values that chose the
+   * winners, at the same moment, and is recorded alongside them.
+   */
+  reserves: SelectedReserve[]
   /**
    * Every application in the pool, selected or not — the authoritative list of
    * who actually took part in this draw. Winner processing finalizes exactly
@@ -89,7 +114,14 @@ export interface DrawSelection {
  *
  * It reads a `LOCKED` commune draw's immutable pool, draws from it with a
  * cryptographically secure random source, and returns the selected entries in
- * order. That is all it does. It writes nothing: no winners, no `has_won_hajj`,
+ * order. That is all it does.
+ *
+ * A commune with N places draws 2N entries in one continuous sample: the first
+ * N are the winners, the next N are the reserves, in the order they came out.
+ * The split is a slice of one result, not two draws — which is what makes the
+ * reserve order provably the lottery's rather than somebody's arrangement of the
+ * people who did not win. Nothing sorts the remainder by weight, and nothing
+ * regenerates a reserve list later; see docs/reserves-and-replacements.md. It writes nothing: no winners, no `has_won_hajj`,
  * no lifecycle change, no audit row, not even a log line. `COMPLETED` does not
  * exist on the commune draw lifecycle, and a selection this service produces
  * has not concluded anything.
@@ -125,8 +157,8 @@ export class LotteryService {
   }
 
   /**
-   * Draws this commune draw's allocated number of places from its frozen pool,
-   * and persists nothing.
+   * Draws this commune draw's places *and its reserve list* from the frozen
+   * pool — one sample, twice the allocation — and persists nothing.
    *
    * Reads only. Every refusal happens before a single random number is drawn,
    * so a draw either runs against a complete, verified snapshot or does not run
@@ -185,22 +217,43 @@ export class LotteryService {
     this.assertSnapshotIntact(communeDraw, pool)
 
     const winnerCount = pool.allocatedSpots
+    // N winners and N reserves, drawn as one sample. The reserve list has to be
+    // produced by the same draw as the winners — a list assembled afterwards,
+    // however honestly, could not be shown to have been.
+    const selectionCount = totalDrawSelections(winnerCount)
 
-    // A pool smaller than the allocation is refused, never truncated. Freezing
-    // allows it on purpose — 100 places with 20 applicants is a valid pool —
-    // so whether such a draw selects everybody is a policy decision the domain
-    // has not made, and this engine will not make it silently.
-    if (pool.entryCount < winnerCount) {
+    // A pool that cannot supply both halves is refused, never truncated. This is
+    // stricter than it was before reserves existed, and deliberately so: a
+    // commune drawing ten winners and five reserves would have a contingency
+    // list that runs out, and which five of the ten places were the protected
+    // ones would have been decided by nobody. Freezing still permits such a pool
+    // — whether an undersubscribed commune should draw at all is a policy
+    // question the engine will not answer silently.
+    if (pool.entryCount < selectionCount) {
       throw new ConflictError(
         'INSUFFICIENT_DRAW_ENTRIES',
-        `This pool holds ${pool.entryCount} entries for ${winnerCount} allocated places`,
+        `This pool holds ${pool.entryCount} entries; a draw for ${winnerCount} places needs ` +
+          `${selectionCount} — ${winnerCount} winners and ${winnerCount} reserves`,
       )
     }
 
     // The pool rows already carry `id` and `weight`, so the algorithm sees each
     // entry through the two fields it is allowed to choose on and hands the
-    // whole row back.
-    const selection = weightedSampleWithoutReplacement(pool.entries, winnerCount, this.random)
+    // whole row back. One call, one continuous sample without replacement: the
+    // split into winners and reserves below is where the sample is cut, not a
+    // second draw.
+    const selection = weightedSampleWithoutReplacement(pool.entries, selectionCount, this.random)
+
+    const drawn = selection.selected.map((entry, index) => ({
+      drawPoolEntryId: entry.id,
+      applicationId: entry.applicationId,
+      applicationReference: entry.applicationReference,
+      entryType: entry.entryType,
+      weight: entry.weight,
+      selectionOrder: index + 1,
+      primaryParticipantId: entry.primaryParticipantId,
+      secondaryParticipantId: entry.secondaryParticipantId,
+    }))
 
     return {
       communeDrawId: communeDraw.id,
@@ -212,15 +265,10 @@ export class LotteryService {
       totalWeight: pool.totalWeight,
       allocatedSpots: pool.allocatedSpots,
       algorithmVersion: LOTTERY_ALGORITHM_VERSION,
-      selected: selection.selected.map((entry, index) => ({
-        drawPoolEntryId: entry.id,
-        applicationId: entry.applicationId,
-        applicationReference: entry.applicationReference,
-        entryType: entry.entryType,
-        weight: entry.weight,
-        selectionOrder: index + 1,
-        primaryParticipantId: entry.primaryParticipantId,
-        secondaryParticipantId: entry.secondaryParticipantId,
+      selected: drawn.slice(0, winnerCount),
+      reserves: drawn.slice(winnerCount).map((entry) => ({
+        ...entry,
+        reservePosition: entry.selectionOrder - winnerCount,
       })),
       pooledApplicationIds: pool.entries.map((entry) => entry.applicationId),
       events: selection.events,
