@@ -119,6 +119,13 @@ transparent results, across Arabic (RTL), French, and English.
 > behind it, and there is no way back. Winner names, notifications, citizen
 > accounts and the live draw visualizer remain unimplemented.
 
+> **Status:** Step 18 — the public citizen portal. The status lookup, the official
+> results, the per-commune result pages, the draw status board and a live draw
+> visualiser are real pages now, in Arabic, French and English. The visualiser
+> observes and nothing more: it polls the public draw-status endpoint, performs no
+> selection of any kind, and a static guard keeps `Math.random` out of the whole
+> client. Winner names, notifications and citizen accounts remain unimplemented.
+
 ## Architecture
 
 ```
@@ -164,14 +171,16 @@ npm run --workspace server start
 
 ## Other scripts
 
-| Command                 | Description                                   |
-| ----------------------- | --------------------------------------------- |
-| `npm test`              | Vitest suites (needs `TEST_DATABASE_URL`)     |
-| `npm run lint`          | ESLint across the whole repository            |
-| `npm run format`        | Prettier — write                              |
-| `npm run format:check`  | Prettier — check only                         |
-| `npm run typecheck`     | TypeScript project checks for every workspace |
-| `npm run prisma:studio` | Prisma Studio (visual database browser)       |
+| Command                           | Description                                           |
+| --------------------------------- | ----------------------------------------------------- |
+| `npm test`                        | Every Vitest suite (server needs `TEST_DATABASE_URL`) |
+| `npm run test --workspace client` | Public page tests only — jsdom, no database           |
+| `npm run test --workspace server` | API and domain tests — needs `TEST_DATABASE_URL`      |
+| `npm run lint`                    | ESLint across the whole repository                    |
+| `npm run format`                  | Prettier — write                                      |
+| `npm run format:check`            | Prettier — check only                                 |
+| `npm run typecheck`               | TypeScript project checks for every workspace         |
+| `npm run prisma:studio`           | Prisma Studio (visual database browser)               |
 
 ## Application shell
 
@@ -537,6 +546,49 @@ are paginated with a server-enforced cap, and `?pageSize=10000000` is clamped
 rather than honoured.
 
 See [docs/public-access.md](docs/public-access.md).
+
+## Public citizen portal
+
+The pages a citizen actually uses, all of them reading the API above.
+
+| Route                                         | Purpose                                                |
+| --------------------------------------------- | ------------------------------------------------------ |
+| `/application-status`                         | Check your own application (posts; nothing in the URL) |
+| `/winners`                                    | Announced results, filtered and paginated              |
+| `/results/:drawYear/:wilayaCode/:communeCode` | One commune's official result — shareable, cacheable   |
+| `/draw`                                       | Where every commune's draw stands                      |
+| `/draw/:drawYear/:wilayaCode/:communeCode`    | The live draw visualiser for one commune               |
+
+Places are addressed by **official code** throughout, never by a database id, so a
+result URL is one that can be read out over the telephone. Wilaya and commune both,
+since commune codes are unique only within a wilaya. Geography comes from the
+existing public reference API — no commune list is bundled into the frontend.
+
+The status page preserves the API's enumeration resistance rather than undoing it:
+one message for every way the lookup can miss, client-side validation that checks
+emptiness and nothing else, and a rate-limit message that names no cause. Nothing
+is written to `localStorage`, `sessionStorage` or a cookie, the page is `noindex`,
+and no reference ever appears in a URL.
+
+**The live draw visualiser performs no lottery logic.** It does not select, sample,
+weight, shuffle or randomise anything — `Math.random` is banned across the client
+and a test enforces it over the whole source tree, as the server suite already does
+for `server/src`. The draw is decided once, on the server, inside one transaction,
+from the operating system's CSPRNG.
+
+The transport is **polling a cacheable GET**, not SSE or WebSockets, because the
+server exposes no per-selection events to subscribe to — a draw is one transaction,
+and publication is a separate deliberate act. Polling widens the further a draw is
+from happening, narrows while waiting for the announcement, stops entirely once the
+result is published or the tab is hidden, and backs off on failure. Identical URLs
+across viewers mean a CDN can serve the whole country from one origin request.
+
+Visual design is restrained on purpose: no wheel, no slot machine, no jackpot
+flashing. The one animation is a paced reveal of the published winner list in the
+server's own selection order, disabled under `prefers-reduced-motion`, and nothing
+about a result requires seeing it move.
+
+See [docs/public-ui.md](docs/public-ui.md).
 
 ## Winner processing
 
