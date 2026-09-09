@@ -1,11 +1,28 @@
 import { localizedGeoName, type SupportedLocale } from '@hajj-lottery/shared'
+import { LogOutIcon, UserIcon } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
-import { useAuth } from '../../../lib/auth-context'
-import { UserIcon } from '../../icons'
+import { Button } from '@/components/shadcn/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/shadcn/dropdown-menu'
+import { useAuth } from '@/lib/auth-context'
 
+/**
+ * Who is signed in, what they may reach, and the way out.
+ *
+ * The role and scope shown here are the server's answer from
+ * `GET /api/auth/me`, displayed so an operator can tell at a glance whose
+ * territory they are looking at. They are a label, never a permission: nothing
+ * in this component decides what the account can do.
+ */
 export function AdminProfile() {
   const { t, i18n } = useTranslation()
   const { user, signOut } = useAuth()
@@ -28,27 +45,37 @@ export function AdminProfile() {
   const scopeLabel = place ? localizedGeoName(place, locale) : t('admin.profile.scope.national')
 
   return (
-    <div className="flex items-center gap-3 border-s border-stone-200 ps-4">
-      <span
-        aria-hidden="true"
-        className="flex h-9 w-9 items-center justify-center rounded-full bg-stone-100 text-stone-500"
-      >
-        <UserIcon className="h-5 w-5" />
-      </span>
-      <div className="hidden text-start sm:block">
-        <p className="text-sm font-medium text-stone-900">{user?.username ?? t('admin.profile.role')}</p>
-        <p className="text-xs text-stone-500">
-          {user ? `${t(`admin.roles.${user.role}`)} · ${scopeLabel}` : null}
-        </p>
-        <button
-          type="button"
-          onClick={handleSignOut}
-          disabled={isSigningOut}
-          className="text-xs text-stone-500 hover:text-primary-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-700 disabled:opacity-50"
-        >
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="h-auto gap-2 px-2 py-1.5">
+          <span
+            aria-hidden="true"
+            className="flex size-8 items-center justify-center rounded-full bg-muted text-muted-foreground"
+          >
+            <UserIcon className="size-4" />
+          </span>
+          <span className="hidden text-start sm:block">
+            <span className="block text-sm font-medium">{user?.username ?? t('admin.profile.role')}</span>
+            <span className="block text-xs text-muted-foreground">
+              {user ? `${t(`admin.roles.${user.role}`)} · ${scopeLabel}` : null}
+            </span>
+          </span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel className="flex flex-col gap-0.5">
+          <span className="font-medium">{user?.username}</span>
+          <span className="text-xs font-normal text-muted-foreground">
+            {user ? t(`admin.roles.${user.role}`) : null}
+          </span>
+          <span className="text-xs font-normal text-muted-foreground">{scopeLabel}</span>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem disabled={isSigningOut} onSelect={handleSignOut}>
+          <LogOutIcon aria-hidden="true" />
           {isSigningOut ? t('admin.profile.signingOut') : t('admin.profile.signOut')}
-        </button>
-      </div>
-    </div>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

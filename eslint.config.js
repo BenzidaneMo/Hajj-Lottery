@@ -37,6 +37,23 @@ export default tseslint.config(
     },
   },
   {
+    // Two places where Fast Refresh has nothing to preserve, so the rule only
+    // produces noise:
+    //
+    //   `routes/index.tsx` is a routing manifest. Its `lazy()` bindings are
+    //   route targets, not components this file renders — the console is
+    //   code-split so the citizen pages never download it.
+    //
+    //   `components/shadcn/` is vendored upstream source. Exporting a `cva`
+    //   variant table beside its component is shadcn's own convention, and
+    //   editing generated files to satisfy a dev-server nicety would make
+    //   every future `shadcn add` a merge conflict.
+    files: ['client/src/routes/index.tsx', 'client/src/components/shadcn/**/*.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
+  {
     files: ['server/**/*.ts', 'shared/**/*.ts', 'prisma/**/*.{js,mjs,ts}', '*.config.{js,ts}'],
     languageOptions: {
       globals: globals.node,

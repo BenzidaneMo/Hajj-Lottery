@@ -1,8 +1,10 @@
+import { MenuIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { MenuIcon } from '../../icons'
+import { Button } from '@/components/shadcn/button'
+import { Separator } from '@/components/shadcn/separator'
+
 import { LanguageSwitcher } from '../../LanguageSwitcher'
-import { IconButton } from '../../ui'
 import { AdminProfile } from './AdminProfile'
 
 export interface AdminTopbarProps {
@@ -13,16 +15,20 @@ export function AdminTopbar({ onOpenSidebar }: AdminTopbarProps) {
   const { t } = useTranslation()
 
   return (
-    <header className="flex h-16 items-center gap-4 border-b border-stone-200 bg-white px-4 sm:px-6 lg:px-8">
-      <IconButton
-        icon={<MenuIcon className="h-5 w-5" />}
-        label={t('common.openMenu')}
+    <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border bg-card px-4 sm:px-6 lg:px-8">
+      <Button
+        type="button"
         variant="ghost"
+        size="icon"
         className="md:hidden"
         onClick={onOpenSidebar}
-      />
-      <div className="flex flex-1 items-center justify-end gap-4">
+        aria-label={t('common.openMenu')}
+      >
+        <MenuIcon className="size-5" aria-hidden="true" />
+      </Button>
+      <div className="flex flex-1 items-center justify-end gap-3">
         <LanguageSwitcher />
+        <Separator orientation="vertical" className="h-8" />
         <AdminProfile />
       </div>
     </header>
