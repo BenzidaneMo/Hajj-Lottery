@@ -12,6 +12,7 @@
  */
 
 import type { EntryType } from './application.js'
+import type { DrawReserveDto, WinnerAbandonmentDto, WinnerOutcome } from './reserves.js'
 
 /**
  * The identifier of the selection implementation a result was produced by.
@@ -40,6 +41,17 @@ export interface DrawWinnerDto {
   selectedWeight: number
   /** How many individuals this entry wins for: 1 for SINGLE, 2 for PAIRED. */
   participantCount: number
+  /**
+   * What has happened to this winning entry since — `ACTIVE`, or `ABANDONED`
+   * once an official has recorded that they gave up the place.
+   *
+   * Derived from whether an abandonment record exists, never stored on the
+   * winner row: the selection above is immutable evidence of a lottery, and the
+   * outcome is a separate administrative fact about a person's circumstances.
+   */
+  outcome: WinnerOutcome
+  /** The recorded abandonment, if there is one. Administrative, never public. */
+  abandonment: WinnerAbandonmentDto | null
 }
 
 /**
@@ -60,8 +72,21 @@ export interface DrawResultDto {
   id: string
   drawYear: number
   communeCode: string
-  /** Entries selected — equal to the commune's allocated spots. */
+  /** Winning entries — equal to the commune's allocated spots. */
   winnerCount: number
+  /**
+   * Reserve positions, also equal to the allocated spots. A draw selects 2N
+   * entries in one continuous sample: N winners, then N ordered reserves.
+   */
+  reserveCount: number
+  /**
+   * Places currently held: original winners who have not abandoned, plus
+   * reserves who were called and accepted. Equal to `winnerCount` for a draw
+   * whose every abandonment has been replaced, and lower while one is open.
+   *
+   * A replacement does not add a place, so this never exceeds `winnerCount`.
+   */
+  activeWinnerCount: number
   /**
    * People who won, which can exceed `winnerCount`: ten places filled by nine
    * single and one paired application is ten winning entries and eleven winning
@@ -84,6 +109,8 @@ export interface DrawResultDto {
    */
   publishedAt: string | null
   winners: DrawWinnerDto[]
+  /** The reserve list, in call order, with each one's lifecycle state. */
+  reserves: DrawReserveDto[]
   events: DrawSelectionEventDto[]
 }
 

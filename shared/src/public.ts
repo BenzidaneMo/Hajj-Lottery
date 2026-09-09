@@ -42,6 +42,14 @@ export const PUBLIC_APPLICATION_STATUSES = [
    */
   'AWAITING_RESULTS',
   'SELECTED',
+  /**
+   * Drawn into the reserve list. Not a winner, and not passed over: this
+   * application holds an ordered contingency position and may be called if a
+   * winner gives up their place. Whether they have since been called, and
+   * whether they said yes, is administrative and is not reported here — a
+   * reserve who accepts becomes `SELECTED`.
+   */
+  'RESERVE',
   'NOT_SELECTED',
 ] as const
 
@@ -127,6 +135,49 @@ export interface PublicWinnerDto {
   entryType: EntryType
   /** 1 for SINGLE, 2 for PAIRED. Spots count entries; a pair is one entry. */
   participantCount: number
+  /**
+   * Whether this entry still holds the place it won.
+   *
+   * `WITHDRAWN` says only that the place was given up, never why: an
+   * abandonment's reason and explanation are administrative and may describe a
+   * death or an illness. The original selection is unchanged either way — the
+   * list still reports who the lottery drew, in the order it drew them.
+   */
+  outcome: PublicWinnerOutcome
+}
+
+/** An original winner's place, as the public may see it. Never a reason. */
+export const PUBLIC_WINNER_OUTCOMES = ['ACTIVE', 'WITHDRAWN'] as const
+export type PublicWinnerOutcome = (typeof PUBLIC_WINNER_OUTCOMES)[number]
+
+/**
+ * A reserve's standing, as the public may see it.
+ *
+ * `CALLED` is deliberately visible: a place has been offered and the answer is
+ * not in yet, which is a fact about the draw rather than about the person.
+ */
+export const PUBLIC_RESERVE_OUTCOMES = ['WAITING', 'CALLED', 'PROMOTED', 'DECLINED'] as const
+export type PublicReserveOutcome = (typeof PUBLIC_RESERVE_OUTCOMES)[number]
+
+/**
+ * One reserve position, as published.
+ *
+ * Published for the same reason the winner list is: a citizen holding a receipt
+ * must be able to find out where they stand without asking anybody. It carries
+ * exactly what the winner list carries — reference, entry type, how many people
+ * — plus the two orderings that make the reserve list checkable: the position in
+ * the call order, and the position in the whole draw it came from.
+ */
+export interface PublicReserveDto {
+  /** 1..N, the order reserves are called in. */
+  reservePosition: number
+  /** Position in the whole draw: always after every winner. */
+  selectionOrder: number
+  applicationReference: string
+  entryType: EntryType
+  /** 1 for SINGLE, 2 for PAIRED. A paired reserve is still one position. */
+  participantCount: number
+  outcome: PublicReserveOutcome
 }
 
 /** A published commune result, without its winner list. */
@@ -160,6 +211,13 @@ export interface PublicResultDto extends PublicResultSummaryDto {
   /** When the draw itself concluded, which is not when it was published. */
   drawnAt: string
   winners: PublicWinnerDto[]
+  /**
+   * The reserve list, in call order — the second half of the same continuous
+   * draw. Published so the order is on the record before anybody is called: a
+   * reserve list produced after the fact, or reordered, would be a second
+   * lottery, and being able to check that it was neither is the point.
+   */
+  reserves: PublicReserveDto[]
 }
 
 /**

@@ -50,6 +50,17 @@ export const AUDIT_ACTIONS = [
    *  published result writes no second event. */
   'DRAW_RESULT_PUBLISHED',
 
+  /** The reserve lifecycle, which is the only mutable part of a concluded draw.
+   *  Four events for the four decisions somebody actually takes: an official
+   *  records that a winner gave up their place, the next reserve is called for
+   *  it, and the citizen either refuses or accepts. There is no separate
+   *  RESERVE_ACCEPTED — accepting *is* being promoted, in one transaction, so a
+   *  second event would describe the same act twice. */
+  'WINNER_ABANDONED',
+  'RESERVE_CALLED',
+  'RESERVE_DECLINED',
+  'RESERVE_PROMOTED',
+
   /** Only corrections: a concluded draw writes hundreds of historical records at
    *  once, and the execution event is their provenance. */
   'HISTORICAL_RECORD_CORRECTED',
@@ -79,6 +90,8 @@ export const AUDIT_TARGET_TYPES = [
   'COMMUNE_DRAW',
   'DRAW_POOL',
   'DRAW_RESULT',
+  'DRAW_WINNER',
+  'DRAW_RESERVE',
   'PARTICIPATION_HISTORY',
   'APPROVAL_REQUEST',
   'IMPORT_BATCH',
@@ -96,6 +109,14 @@ export type AuditTargetType = (typeof AUDIT_TARGET_TYPES)[number]
  */
 export const REASON_REQUIRED_ACTIONS: readonly AuditAction[] = [
   'HISTORICAL_RECORD_CORRECTED',
+  /** Somebody has been removed from a pilgrimage they were told they had won,
+   *  or has refused one. Both need a human account of what happened, because
+   *  neither is recoverable and neither leaves other evidence. Calling and
+   *  promoting are absent: they follow mechanically from the abandonment
+   *  already on the record, and demanding a sentence for them would only teach
+   *  everybody to type one. */
+  'WINNER_ABANDONED',
+  'RESERVE_DECLINED',
   'ADMIN_SCOPE_CHANGED',
   'ADMIN_DISABLED',
   /** Accepting or refusing a legacy batch is a judgement about evidence nobody

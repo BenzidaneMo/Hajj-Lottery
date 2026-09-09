@@ -6,16 +6,29 @@ export type EntryType = (typeof ENTRY_TYPES)[number]
  * Lifecycle states an application can be in.
  *
  * `PENDING` is intake: received, not yet evaluated. `ELIGIBLE`/`INELIGIBLE` are
- * verdicts of the eligibility engine — see docs/eligibility.md. `SELECTED` and
- * `NOT_SELECTED` are outcomes of a concluded draw, written only by winner
- * processing and only for applications that were in the frozen pool.
+ * verdicts of the eligibility engine — see docs/eligibility.md. `SELECTED`,
+ * `RESERVE` and `NOT_SELECTED` are outcomes of a concluded draw, written only by
+ * winner processing and only for applications that were in the frozen pool.
  *
- * All five are written by the server alone. `NOT_SELECTED` is deliberately not a
+ * All six are written by the server alone. `NOT_SELECTED` is deliberately not a
  * refusal: that application took full part in the lottery and was not drawn,
  * which is a different fact from `INELIGIBLE` and feeds the participation ledger
  * differently.
+ *
+ * `RESERVE` is the lottery's verdict too, not a lifecycle state: it says this
+ * application was drawn into the second half of the sample. A reserve who is
+ * later called and accepts becomes `SELECTED`; one who declines stays `RESERVE`,
+ * because declining changes what happened next, not what the draw decided. See
+ * docs/reserves-and-replacements.md.
  */
-export const APPLICATION_STATUSES = ['PENDING', 'ELIGIBLE', 'INELIGIBLE', 'SELECTED', 'NOT_SELECTED'] as const
+export const APPLICATION_STATUSES = [
+  'PENDING',
+  'ELIGIBLE',
+  'INELIGIBLE',
+  'SELECTED',
+  'RESERVE',
+  'NOT_SELECTED',
+] as const
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number]
 
 /** One applicant, as submitted by the registration form. */
