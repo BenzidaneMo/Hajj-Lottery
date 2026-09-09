@@ -1,16 +1,27 @@
-import { AdminRole, type PrismaClient, type User } from '@prisma/client'
+import { AdminRole, type Commune, type PrismaClient, type User, type Wilaya } from '@prisma/client'
 
 import { normalizeAuditReason } from '../lib/audit-payload.js'
 import { ApiError, ForbiddenError } from '../lib/errors.js'
+import { hashPassword } from '../lib/password.js'
 import { prisma as defaultPrisma } from '../lib/prisma.js'
 import { canAccessCommune, canAccessWilaya, resolveScope } from '../lib/scope.js'
 import { auditActor, auditService, AuditService } from './audit.service.js'
+import { normalizeUsername } from './auth.service.js'
+
+/** An administrator with the places their scope names, ready to present. */
+export type UserWithPlaces = User & { wilaya: Wilaya | null; commune: Commune | null }
 
 /** A requested role/scope assignment, before it has been proven valid. */
 export interface ScopeAssignment {
   role: AdminRole
   wilayaId?: string | null
   communeId?: string | null
+}
+
+/** A new administrator account, before validation. */
+export interface NewAdminAccount extends ScopeAssignment {
+  username: string
+  password: string
 }
 
 /** A validated assignment, safe to write. */
@@ -52,6 +63,83 @@ export class AdminAccountService {
   constructor(db: PrismaClient = defaultPrisma, audit: AuditService = auditService) {
     this.db = db
     this.audit = audit
+  }
+
+  /**
+   * Every administrator account, with the places their scope names.
+   *
+   * Deliberately unscoped, and therefore SUPER_ADMIN-only at the route. An
+   * administrator's authority is not a property of a territory even when it
+   * names one: letting a WILAYA_ADMIN list "their" administrators would tell
+   * them who can overrule them, and letting them not see the rest would make
+   * the list a misleading account of who holds power over their wilaya.
+   */
+  async list(): Promise<UserWithPlaces[]> {
+    return this.db.user.findMany({
+      include: { wilaya: true, commune: true },
+      orderBy: [{ isActive: 'desc' }, { username: 'asc' }],
+    })
+  }
+
+  /** One administrator with their places, or null when the id names nobody. */
+  async findById(id: string): Promise<UserWithPlaces | null> {
+    return this.db.user.findUnique({ where: { id }, include: { wilaya: true, commune: true } })
+  }
+
+  /**
+   * Creates an administrator, with its audit record, in one transaction.
+   *
+   * The password is hashed before the transaction opens — argon2id is
+   * deliberately slow, and holding a database transaction open across it would
+   * make account creation a way to exhaust the connection pool. Nothing but the
+   * digest is ever written, and neither the password nor the digest is logged
+   * or returned.
+   */
+  async create(actor: User, account: NewAdminAccount): Promise<UserWithPlaces> {
+    const assignment = await this.validateAssignment(account)
+    this.assertMayAssign(actor, assignment)
+
+    const username = normalizeUsername(account.username)
+    const existing = await this.db.user.findUnique({ where: { username } })
+    if (existing) {
+      throw new ApiError(409, 'DUPLICATE_USERNAME', 'An administrator with that username already exists')
+    }
+
+    const passwordHash = await hashPassword(account.password)
+
+    return this.db.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          username,
+          passwordHash,
+          role: assignment.role,
+          wilayaId: assignment.wilayaId,
+          communeId: assignment.communeId,
+        },
+        include: { wilaya: true, commune: true },
+      })
+
+      // The username is the account's public handle, not a credential, so it is
+      // safe to name here. `assertSafePayload` would refuse the digest.
+      await this.audit.record(
+        {
+          action: 'ADMIN_CREATED',
+          actor: auditActor(actor),
+          targetType: 'USER',
+          targetId: created.id,
+          after: {
+            username: created.username,
+            role: created.role,
+            wilayaId: created.wilayaId,
+            communeId: created.communeId,
+            isActive: created.isActive,
+          },
+        },
+        tx,
+      )
+
+      return created
+    })
   }
 
   /**
