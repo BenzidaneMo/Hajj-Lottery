@@ -24,6 +24,12 @@ import {
 import { executeDraw, getDrawResult, publishResult } from '../controllers/admin-draw-result.controller.js'
 import { getCommune, getWilaya, listCommunes, listWilayas } from '../controllers/admin-geo.controller.js'
 import {
+  abandonWinner,
+  acceptReserve,
+  callReserve,
+  declineReserve,
+} from '../controllers/admin-reserve.controller.js'
+import {
   approveRequest,
   cancelRequest,
   correctHistoryRecord,
@@ -120,6 +126,41 @@ adminRouter.post(
   '/commune-draws/:id/publish-result',
   requireRole(AdminRole.SUPER_ADMIN),
   asyncHandler(publishResult),
+)
+
+// The reserve lifecycle — the only part of a concluded draw that still moves.
+// All four are national, for the same reason executing and publishing are: each
+// either takes a place from the person holding it or gives one to somebody else,
+// and nobody should be able to do either to a draw they are subject to. Scoped
+// administrators see their commune's winners and reserves on the result route
+// above, which is the whole of their authority here.
+//
+// Abandoning and calling are deliberately two requests. One person records that
+// a place was given up; another offers it to the next reserve. A single endpoint
+// doing both would leave a trail that could not say who decided what.
+//
+// The reserve position in the path is a confirmation, never a choice: the
+// service refuses anything but the next waiting reserve, because the order came
+// from the lottery and picking within it would be picking a winner.
+adminRouter.post(
+  '/commune-draws/:id/winners/:selectionOrder/abandon',
+  requireRole(AdminRole.SUPER_ADMIN),
+  asyncHandler(abandonWinner),
+)
+adminRouter.post(
+  '/commune-draws/:id/reserves/:reservePosition/call',
+  requireRole(AdminRole.SUPER_ADMIN),
+  asyncHandler(callReserve),
+)
+adminRouter.post(
+  '/commune-draws/:id/reserves/:reservePosition/accept',
+  requireRole(AdminRole.SUPER_ADMIN),
+  asyncHandler(acceptReserve),
+)
+adminRouter.post(
+  '/commune-draws/:id/reserves/:reservePosition/decline',
+  requireRole(AdminRole.SUPER_ADMIN),
+  asyncHandler(declineReserve),
 )
 
 // The audit trail. No role gate: what an administrator sees is narrowed to
