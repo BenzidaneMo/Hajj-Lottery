@@ -239,6 +239,20 @@
       "SINGLE": "Individual",
       "PAIRED": "Pair"
     },
+    "errors": {
+      "validation": "Check the details you entered and try again.",
+      "notFound": "There is nothing to show here.",
+      "rateLimited": "Too many requests from this connection. Please wait a while and try again.",
+      "network": "We could not reach the service. Check your connection and try again.",
+      "server": "The service is unavailable at the moment. Please try again shortly."
+    },
+    "filters": {
+      "heading": "Filters",
+      "allYears": "All years",
+      "allWilayas": "All wilayas",
+      "allCommunes": "All communes",
+      "clear": "Clear filters"
+    },
     "lookup": {
       "title": "Check your application",
       "intro": "Enter the reference from your receipt and the mobile number given on the application.",
@@ -248,17 +262,38 @@
       "phoneHint": "The number entered by the first applicant.",
       "submit": "Check status",
       "submitting": "Checking…",
+      "checkAnother": "Check another application",
+      "privacyNote": "No account is needed and nothing is saved on this device. Your details are sent only to check this application.",
+      "resultTitle": "Your application",
+      "submittedAt": "Submitted",
+      "twoApplicants": "two applicants",
+      "resultsPendingTitle": "Results not yet published",
       "resultsPending": "The official result for your commune has not been announced yet.",
+      "selectedTitle": "Your application was selected",
+      "selectedBody": "Your commune office will contact you about the next steps.",
+      "notSelectedTitle": "Your application was not selected",
+      "notSelectedBody": "Your participation this year is recorded and counts towards your priority in future draws.",
+      "notEligibleTitle": "This application is not taking part in the draw",
+      "notEligibleBody": "Please contact your commune office, which can explain the decision and what to do next.",
       "errors": {
+        "referenceRequired": "Enter your application reference.",
+        "phoneRequired": "Enter the mobile number given on the application.",
         "notFound": "We could not find an application matching that reference and mobile number. Check both and try again.",
-        "tooMany": "Too many attempts. Please wait a while and try again.",
+        "tooMany": "Too many attempts. Please wait a while before trying again.",
         "validation": "Check the reference and mobile number you entered.",
         "unknown": "Something went wrong. Please try again."
       }
     },
     "results": {
       "title": "Official results",
+      "intro": "Results announced by the national administration, most recent first.",
+      "documentTitle": "{{commune}} {{year}} — official result",
+      "communeTitle": "{{commune}} — {{year}} draw",
+      "summary": "Summary",
+      "backToList": "All results",
       "empty": "No results have been announced yet.",
+      "emptyHint": "Results appear here once a commune’s draw has been officially announced.",
+      "total": "Announced results: {{total}}",
       "drawYear": "Draw year",
       "wilaya": "Wilaya",
       "commune": "Commune",
@@ -269,21 +304,66 @@
       "publishedAt": "Announced",
       "drawnAt": "Draw held",
       "verification": "Verification",
+      "verificationHint": "Published so the result can be shown to be the one that was drawn. It identifies nobody and was not used to choose the winners.",
       "poolHash": "Snapshot fingerprint",
       "algorithmVersion": "Draw method",
       "winners": "Winning applications",
       "selectionOrder": "Order drawn",
       "reference": "Application reference",
       "entryType": "Type",
-      "pairNote": "A pair is one winning application covering two pilgrims."
+      "participantCount": "Pilgrims",
+      "noWinnersYet": "No winning applications to show.",
+      "pairNote": "Applications are listed by the reference printed on each receipt, in the order they were drawn. The order is not a ranking. A pair is one winning application covering two pilgrims.",
+      "notPublishedTitle": "No result announced",
+      "notPublishedBody": "There is no officially announced result for this commune and draw year. Check the draw status page for where this commune stands."
     },
     "drawStatus": {
       "title": "Draw status",
+      "intro": "Where each commune’s draw stands, and whether its result has been announced.",
       "empty": "No draws are configured yet.",
+      "emptyHint": "Try a different year, wilaya or commune.",
+      "total": "Commune draws: {{total}}",
+      "phase": "Stage",
+      "registration": "Registration",
       "registrationOpen": "Registration open",
       "registrationClosed": "Registration closed",
       "resultsPublished": "Results announced",
       "resultsPending": "Results not yet announced"
+    },
+    "draw": {
+      "title": "Draw",
+      "documentTitle": "{{commune}} {{year}} — draw",
+      "communeTitle": "{{commune}} — {{year}} draw",
+      "backToList": "All draws",
+      "watching": "This page updates itself while the draw is under way.",
+      "notWatching": "This draw has reached its final state. This page has stopped updating.",
+      "viewOfficialResult": "View the official result",
+      "authorityNote": "The draw for {{commune}} ({{year}}) is carried out and recorded by the national system. This page only displays the official state; it takes no part in selecting anyone.",
+      "state": {
+        "WAITING": "Not yet drawn",
+        "DRAWING": "Draw held",
+        "COMPLETED": "Result announced",
+        "UNAVAILABLE": "Unavailable"
+      },
+      "announce": {
+        "WAITING": "The {{year}} draw for {{commune}}, {{wilaya}} has not been held yet.",
+        "DRAWING": "The {{year}} draw for {{commune}}, {{wilaya}} has been held. The official result is being verified before it is announced.",
+        "COMPLETED": "The official result of the {{year}} draw for {{commune}}, {{wilaya}} has been announced.",
+        "UNAVAILABLE": "There is no draw to display for {{commune}}, {{wilaya}} in {{year}}.",
+        "UNAVAILABLE_NO_PLACE": "There is no draw to display here."
+      },
+      "waitingTitle": "The draw has not been held",
+      "waitingBody": "This page will update on its own once the draw for this commune has taken place.",
+      "drawingTitle": "The draw has been held",
+      "drawingBody": "The result is being verified by the national administration before it is officially announced.",
+      "awaitingPublication": "Awaiting the official announcement.",
+      "notYetAnnounced": "Not yet announced",
+      "completedTitle": "Official result",
+      "completedBody": "The winning applications, in the order the draw selected them.",
+      "resultUnavailable": "The result has been announced but could not be loaded just now. Please try again shortly.",
+      "revealing": "Showing {{revealed}} of {{total}} winning applications.",
+      "unavailableTitle": "Nothing to display",
+      "unavailableBody": "There is no draw for this commune and year, or it was cancelled. Check the draw status page for other communes."
     }
   }
 }
