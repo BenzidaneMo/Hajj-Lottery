@@ -96,6 +96,18 @@ export function ApplicationStatusPanel({ status }: { status: PublicApplicationSt
         </div>
       )}
 
+      {/* Says what a reserve position is and, deliberately, nothing about where
+          this one stands: whether anybody has been called is administrative,
+          and a page that counted down would be reporting on other people's
+          circumstances. */}
+      {status.status === 'RESERVE' && (
+        <div className="mt-6">
+          <Alert variant="info" title={t('public.lookup.reserveTitle')}>
+            {t('public.lookup.reserveBody')}
+          </Alert>
+        </div>
+      )}
+
       {status.status === 'NOT_SELECTED' && (
         <div className="mt-6">
           <Alert variant="info" title={t('public.lookup.notSelectedTitle')}>

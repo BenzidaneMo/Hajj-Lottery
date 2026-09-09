@@ -227,6 +227,7 @@
       "NOT_ELIGIBLE": "Non éligible au tirage",
       "AWAITING_RESULTS": "Le tirage a eu lieu — résultats non encore annoncés",
       "SELECTED": "Retenue",
+      "RESERVE": "Liste d’attente",
       "NOT_SELECTED": "Non retenue"
     },
     "phase": {
@@ -271,6 +272,8 @@
       "resultsPending": "Le résultat officiel de votre commune n’a pas encore été annoncé.",
       "selectedTitle": "Votre demande a été retenue",
       "selectedBody": "Le service de votre commune vous contactera au sujet des démarches à suivre.",
+      "reserveTitle": "Votre demande est sur la liste d’attente",
+      "reserveBody": "Votre demande a été tirée dans la liste d’attente ordonnée de votre commune. Un suppléant n’est pas un lauréat : il peut être appelé si un lauréat renonce à sa place. Votre participation de cette année est enregistrée et compte pour votre priorité lors des prochains tirages.",
       "notSelectedTitle": "Votre demande n’a pas été retenue",
       "notSelectedBody": "Votre participation de cette année est enregistrée et compte pour votre priorité lors des prochains tirages.",
       "notEligibleTitle": "Cette demande ne participe pas au tirage",

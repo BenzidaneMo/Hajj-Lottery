@@ -227,6 +227,7 @@
       "NOT_ELIGIBLE": "Not eligible for the draw",
       "AWAITING_RESULTS": "The draw has been held — results not yet announced",
       "SELECTED": "Selected",
+      "RESERVE": "On the reserve list",
       "NOT_SELECTED": "Not selected"
     },
     "phase": {
@@ -271,6 +272,8 @@
       "resultsPending": "The official result for your commune has not been announced yet.",
       "selectedTitle": "Your application was selected",
       "selectedBody": "Your commune office will contact you about the next steps.",
+      "reserveTitle": "Your application is on the reserve list",
+      "reserveBody": "Your application was drawn into your commune’s ordered reserve list. A reserve is not a winner: they may be called if a winner gives up their place. Your participation this year is recorded and counts towards your priority in future draws.",
       "notSelectedTitle": "Your application was not selected",
       "notSelectedBody": "Your participation this year is recorded and counts towards your priority in future draws.",
       "notEligibleTitle": "This application is not taking part in the draw",

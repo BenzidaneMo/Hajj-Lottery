@@ -20,6 +20,9 @@ const STATUS_VARIANTS: Record<PublicApplicationStatus, BadgeVariant> = {
   NOT_ELIGIBLE: 'error',
   AWAITING_RESULTS: 'warning',
   SELECTED: 'success',
+  /* Its own colour, because a reserve is neither of the two things beside it:
+     they hold an ordered contingency position and may yet be called. */
+  RESERVE: 'info',
   NOT_SELECTED: 'neutral',
 }
 

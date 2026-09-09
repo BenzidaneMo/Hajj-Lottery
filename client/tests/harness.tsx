@@ -186,18 +186,34 @@ export function fullResult(overrides: Partial<PublicResultDto> = {}): PublicResu
         applicationReference: 'HZ-2027-MES-8F42K1',
         entryType: 'SINGLE',
         participantCount: 1,
+        outcome: 'ACTIVE',
       },
       {
         selectionOrder: 2,
         applicationReference: 'HZ-2027-MES-QQ19ZP',
         entryType: 'PAIRED',
         participantCount: 2,
+        outcome: 'ACTIVE',
       },
       {
         selectionOrder: 3,
         applicationReference: 'HZ-2027-MES-3KD7VB',
         entryType: 'SINGLE',
         participantCount: 1,
+        outcome: 'ACTIVE',
+      },
+    ],
+    // The second half of the same draw. The public pages do not render these
+    // yet — see docs/reserves-and-replacements.md — so the fixture carries them
+    // to prove the winner list stays exactly what it was when they arrive.
+    reserves: [
+      {
+        reservePosition: 1,
+        selectionOrder: 4,
+        applicationReference: 'HZ-2027-MES-R51TTA',
+        entryType: 'SINGLE',
+        participantCount: 1,
+        outcome: 'WAITING',
       },
     ],
     ...overrides,
