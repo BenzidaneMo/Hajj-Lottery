@@ -497,13 +497,59 @@ describe('drawing from a frozen pool', () => {
     const entries = await poolEntries(poolId)
 
     // Four applicants with no history: every weight is 1, so the total is 4 and
-    // value v selects the entry at index v in application-id order.
-    const first = await lotteryWith(scripted(0, 2)).selectFromPool(communeDraw.id)
-    const again = await lotteryWith(scripted(0, 2)).selectFromPool(communeDraw.id)
+    // value v selects the entry at index v among those still in play. Four
+    // values, because two places means two winners and two reserves.
+    const first = await lotteryWith(scripted(0, 2, 0, 0)).selectFromPool(communeDraw.id)
+    const again = await lotteryWith(scripted(0, 2, 0, 0)).selectFromPool(communeDraw.id)
 
     expect(first.selected.map((s) => s.drawPoolEntryId)).toEqual([entries[0]?.id, entries[3]?.id])
+    // The reserve list is the rest of the same sample, in the order it came
+    // out — the same values reproduce it exactly as they reproduce the winners.
+    expect(first.reserves.map((s) => s.drawPoolEntryId)).toEqual([entries[1]?.id, entries[2]?.id])
+    expect(first.reserves.map((s) => s.reservePosition)).toEqual([1, 2])
+    expect(first.reserves.map((s) => s.selectionOrder)).toEqual([3, 4])
     expect(again.selected.map((s) => s.drawPoolEntryId)).toEqual(first.selected.map((s) => s.drawPoolEntryId))
-    expect(first.events.map((e) => e.totalActiveWeight)).toEqual([4, 3])
+    expect(again.reserves.map((s) => s.drawPoolEntryId)).toEqual(first.reserves.map((s) => s.drawPoolEntryId))
+    expect(first.events.map((e) => e.totalActiveWeight)).toEqual([4, 3, 2, 1])
+  })
+
+  it('draws the reserves from the same continuous sample, never a second one', async () => {
+    const { communeDraw, poolId } = await lockedPool([0, 0, 0, 0, 0, 0], 2)
+    const entries = await poolEntries(poolId)
+
+    const selection = await lotteryWith(cryptoRandomIntSource).selectFromPool(communeDraw.id)
+
+    // Winners then reserves, 1..4 with no gap and no repetition: one sample,
+    // cut in half, rather than two draws that happened to agree.
+    const drawn = [...selection.selected, ...selection.reserves]
+    expect(drawn.map((entry) => entry.selectionOrder)).toEqual([1, 2, 3, 4])
+    expect(new Set(drawn.map((entry) => entry.drawPoolEntryId)).size).toBe(4)
+    expect(selection.events.map((event) => event.selectionNumber)).toEqual([1, 2, 3, 4])
+    expect(selection.events.map((event) => event.selectedEntryId)).toEqual(
+      drawn.map((entry) => entry.drawPoolEntryId),
+    )
+
+    for (const entry of drawn) {
+      expect(entries.some((pooled) => pooled.id === entry.drawPoolEntryId)).toBe(true)
+    }
+  })
+
+  it('does not order the reserve list by weight', async () => {
+    // Two places, and the two heaviest entries scripted to win. Whatever comes
+    // next is decided by the draw, so the reserve list must not arrive sorted by
+    // the weights that are left — it is a sample, not a ranking.
+    const { communeDraw, poolId } = await lockedPool([9, 9, 0, 4, 0, 4], 2)
+    const entries = await poolEntries(poolId)
+    const weightOf = new Map(entries.map((entry) => [entry.id, entry.weight]))
+
+    const selection = await lotteryWith(cryptoRandomIntSource).selectFromPool(communeDraw.id)
+    const reserveWeights = selection.reserves.map((entry) => weightOf.get(entry.drawPoolEntryId) ?? 0)
+
+    // Not an assertion about randomness — it is that nothing sorts. A sorted
+    // list of four weights drawn from {1, 5, 10} would be the signature of a
+    // second, deterministic pass over the losers.
+    expect(reserveWeights).toHaveLength(2)
+    expect(selection.reserves.map((entry) => entry.reservePosition)).toEqual([1, 2])
   })
 
   it('weights the draw by the frozen entry weights', async () => {
@@ -513,13 +559,17 @@ describe('drawing from a frozen pool', () => {
 
     // Weights 1 and 5, total 6. Only the value 0 or the light entry's slice can
     // select it; everything from its cumulative bound on belongs to the other.
-    const source = scripted(entries[0]?.weight === 1 ? 1 : 0)
+    // The second value draws the reserve from the one entry left.
+    const source = scripted(entries[0]?.weight === 1 ? 1 : 0, 0)
     const selection = await lotteryWith(source).selectFromPool(communeDraw.id)
 
     expect(selection.totalWeight).toBe(6)
-    expect(source.bounds).toEqual([6])
+    // The bound falls by the winner's weight, which is what makes this sampling
+    // without replacement across both halves of the draw.
+    expect(source.bounds).toEqual([6, 1])
     expect(selection.selected[0]?.drawPoolEntryId).toBe(heavy?.id)
     expect(selection.selected[0]?.weight).toBe(5)
+    expect(selection.reserves[0]?.weight).toBe(1)
   })
 
   it('reads the snapshot, not the live application weight', async () => {
@@ -534,31 +584,34 @@ describe('drawing from a frozen pool', () => {
       data: { calculatedWeight: 1000 },
     })
 
-    const source = scripted(0)
+    const source = scripted(0, 0)
     const selection = await lotteryWith(source).selectFromPool(communeDraw.id)
 
-    expect(source.bounds).toEqual([2])
+    expect(source.bounds).toEqual([2, 1])
     expect(selection.totalWeight).toBe(2)
     expect(selection.selected[0]?.weight).toBe(1)
   })
 
   it('takes the winner count from the frozen allocation, not from a caller', async () => {
-    const { communeDraw } = await lockedPool([0, 0, 0], 3)
+    const { communeDraw } = await lockedPool([0, 0, 0, 0, 0, 0], 3)
 
     const selection = await lotteryWith(cryptoRandomIntSource).selectFromPool(communeDraw.id)
 
-    // The signature has nowhere to pass a count: the configuration decides.
+    // The signature has nowhere to pass a count: the configuration decides, and
+    // it decides both halves — three places means three winners and three
+    // reserves, never one without the other.
     expect(selection.selected).toHaveLength(3)
-    expect(selection.entryCount).toBe(3)
+    expect(selection.reserves).toHaveLength(3)
+    expect(selection.entryCount).toBe(6)
   })
 
-  it('can draw the entire pool when the allocation matches it exactly', async () => {
-    const { communeDraw, poolId } = await lockedPool([0, 1, 2], 3)
+  it('can draw the entire pool when it holds exactly twice the allocation', async () => {
+    const { communeDraw, poolId } = await lockedPool([0, 1, 2, 0, 1, 2], 3)
 
     const selection = await lotteryWith(cryptoRandomIntSource).selectFromPool(communeDraw.id)
 
     const entries = await poolEntries(poolId)
-    expect(new Set(selection.selected.map((s) => s.drawPoolEntryId))).toEqual(
+    expect(new Set([...selection.selected, ...selection.reserves].map((s) => s.drawPoolEntryId))).toEqual(
       new Set(entries.map((e) => e.id)),
     )
   })
@@ -574,14 +627,29 @@ describe('drawing from a frozen pool', () => {
     })
   })
 
-  it('exposes the random value behind every selection', async () => {
+  it('refuses a pool that covers the places but not the reserves', async () => {
+    // Three entries for two places: enough to fill the commune's allocation and
+    // not enough to give it a reserve list. Refused rather than drawn with one
+    // reserve, because which of the two places went unprotected would have been
+    // decided by nobody.
     const { communeDraw } = await lockedPool([0, 0, 0], 2)
 
-    const selection = await lotteryWith(scripted(1, 0)).selectFromPool(communeDraw.id)
+    await expect(lotteryWith(cryptoRandomIntSource).selectFromPool(communeDraw.id)).rejects.toMatchObject({
+      status: 409,
+      code: 'INSUFFICIENT_DRAW_ENTRIES',
+    })
+  })
 
-    expect(selection.events).toHaveLength(2)
-    expect(selection.events.map((e) => e.randomValue)).toEqual([1, 0])
-    expect(selection.events.map((e) => e.totalActiveWeight)).toEqual([3, 2])
+  it('exposes the random value behind every selection', async () => {
+    const { communeDraw } = await lockedPool([0, 0, 0, 0], 2)
+
+    const selection = await lotteryWith(scripted(1, 0, 0, 0)).selectFromPool(communeDraw.id)
+
+    // One event per selection, reserves included: the reserve order is drawn,
+    // and is checkable against its randomness exactly as the winners are.
+    expect(selection.events).toHaveLength(4)
+    expect(selection.events.map((e) => e.randomValue)).toEqual([1, 0, 0, 0])
+    expect(selection.events.map((e) => e.totalActiveWeight)).toEqual([4, 3, 2, 1])
     expect(selection.snapshotHash).toMatch(/^[0-9a-f]{64}$/)
   })
 })
@@ -716,7 +784,7 @@ describe('only a locked draw with an intact pool may be drawn', () => {
 
 describe('a draw has no side effects at all', () => {
   it('leaves the pool, the applications and the participants exactly as they were', async () => {
-    const { communeDraw, poolId } = await lockedPool([0, 2, 4], 2)
+    const { communeDraw, poolId } = await lockedPool([0, 2, 4, 1], 2)
 
     const poolBefore = await prisma.drawPool.findUniqueOrThrow({ where: { id: poolId } })
     const entriesBefore = await poolEntries(poolId)
@@ -734,7 +802,7 @@ describe('a draw has no side effects at all', () => {
   })
 
   it('sets nobody as a past Hajj winner', async () => {
-    const { communeDraw } = await lockedPool([0, 0], 2)
+    const { communeDraw } = await lockedPool([0, 0, 0, 0], 2)
 
     await lotteryWith(cryptoRandomIntSource).selectFromPool(communeDraw.id)
 
@@ -762,6 +830,10 @@ describe('a draw has no side effects at all', () => {
     // is DrawExecutionService's transaction, never a side effect of drawing.
     expect(await prisma.drawResult.count()).toBe(0)
     expect(await prisma.drawWinner.count()).toBe(0)
+    // Including the reserve list. A selection produces one and persists none:
+    // the reserve ordering becomes a record when execution writes it, not when
+    // somebody calculates it.
+    expect(await prisma.drawReserve.count()).toBe(0)
     expect(await prisma.drawSelectionEvent.count()).toBe(0)
     expect(await prisma.winnerArchive.count()).toBe(0)
 

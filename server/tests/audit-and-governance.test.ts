@@ -406,28 +406,36 @@ describe('draw configuration is audited', () => {
 })
 
 describe('the lottery is audited', () => {
-  /** A locked commune draw with a frozen pool, ready to execute. */
-  async function frozen(cookie: string, allocatedSpots = 1) {
+  /**
+   * A locked commune draw with a frozen pool, ready to execute.
+   *
+   * Enough entries for the winners *and* the reserve list by default — a draw
+   * for N places needs 2N — with `entries` left open so a test can deliberately
+   * under-supply one and watch the execution refuse.
+   */
+  async function frozen(cookie: string, allocatedSpots = 1, entries = allocatedSpots * 2) {
     const communeDraw = await drawConfigurationService.createCommuneDraw({
       drawYearId: drawYear.id,
       communeId: geo.communeA1.id,
       allocatedSpots,
     })
 
-    const response = await request(app)
-      .post('/api/applications')
-      .send({
-        entryType: 'SINGLE',
-        wilayaId: geo.wilayaA.id,
-        communeId: geo.communeA1.id,
-        primary: { nationalId: nationalId(), fullName: 'Draw Subject', dob: '1980-04-12' },
-      })
-    if (response.status !== 201) throw new Error(`Registration failed: ${response.status}`)
+    for (let entry = 0; entry < entries; entry += 1) {
+      const response = await request(app)
+        .post('/api/applications')
+        .send({
+          entryType: 'SINGLE',
+          wilayaId: geo.wilayaA.id,
+          communeId: geo.communeA1.id,
+          primary: { nationalId: nationalId(), fullName: 'Draw Subject', dob: '1980-04-12' },
+        })
+      if (response.status !== 201) throw new Error(`Registration failed: ${response.status}`)
 
-    const application = await prisma.application.findFirstOrThrow({
-      where: { applicationReference: response.body.applicationReference },
-    })
-    await weightService.freezeApplicationWeight(application.id)
+      const application = await prisma.application.findFirstOrThrow({
+        where: { applicationReference: response.body.applicationReference },
+      })
+      await weightService.freezeApplicationWeight(application.id)
+    }
 
     await drawConfigurationService.updateCommuneDraw(communeDraw.id, { status: 'READY' })
     await drawConfigurationService.updateDrawYearStatus(drawYear.id, 'REGISTRATION_CLOSED')
@@ -471,6 +479,9 @@ describe('the lottery is audited', () => {
       poolHash: result.poolHash,
       algorithmVersion: 'weighted-csprng-v1',
       winnerCount: 1,
+      // The reserve list is part of what the draw produced, so the record of
+      // running it says how long the list is.
+      reserveCount: 1,
     })
 
     // No winner is named, and no random value is repeated: the immutable
@@ -483,7 +494,7 @@ describe('the lottery is audited', () => {
   it('leaves no audit record when the execution rolls back', async () => {
     const { cookie } = await superAdmin()
     // Two places, one entry: refused, and the whole transaction unwinds.
-    const communeDraw = await frozen(cookie, 2)
+    const communeDraw = await frozen(cookie, 2, 1)
 
     const refused = await request(app)
       .post(`/api/admin/commune-draws/${communeDraw.id}/execute`)

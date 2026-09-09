@@ -147,7 +147,10 @@ describe('executing a draw', () => {
     expect(result.algorithmVersion).toBe('weighted-csprng-v1')
     expect(result.totalWeightAtDraw).toBe(pool.totalWeight)
     expect(await prisma.drawWinner.count({ where: { drawResultId: result.id } })).toBe(2)
-    expect(await prisma.drawSelectionEvent.count({ where: { drawResultId: result.id } })).toBe(2)
+    // Two places produce two winners and two reserves from one sample, so the
+    // randomness behind the whole thing is four events, not two.
+    expect(await prisma.drawReserve.count({ where: { drawResultId: result.id } })).toBe(2)
+    expect(await prisma.drawSelectionEvent.count({ where: { drawResultId: result.id } })).toBe(4)
     expect(execution.drawResultId).toBe(result.id)
   })
 
@@ -163,41 +166,82 @@ describe('executing a draw', () => {
   })
 
   it('preserves selection order as a contiguous 1-based sequence', async () => {
-    const { communeDraw } = await lockedPool(singles(6), 4)
+    const { communeDraw } = await lockedPool(singles(9), 4)
 
     await drawExecutionService.execute(communeDraw.id)
 
     const winners = await prisma.drawWinner.findMany({ orderBy: { selectionOrder: 'asc' } })
     expect(winners.map((winner) => winner.selectionOrder)).toEqual([1, 2, 3, 4])
     expect(new Set(winners.map((winner) => winner.drawPoolEntryId)).size).toBe(4)
+
+    // And the reserves carry on from where the winners stopped, with no gap and
+    // no overlap: one sample, cut in half.
+    const reserves = await prisma.drawReserve.findMany({ orderBy: { reservePosition: 'asc' } })
+    expect(reserves.map((reserve) => reserve.reservePosition)).toEqual([1, 2, 3, 4])
+    expect(reserves.map((reserve) => reserve.selectionOrder)).toEqual([5, 6, 7, 8])
   })
 
   it('preserves the random value behind every selection, in range', async () => {
-    const { communeDraw } = await lockedPool(singles(5), 3)
+    const { communeDraw } = await lockedPool(singles(7), 3)
 
     await drawExecutionService.execute(communeDraw.id)
 
     const events = await prisma.drawSelectionEvent.findMany({ orderBy: { selectionOrder: 'asc' } })
-    expect(events.map((event) => event.selectionOrder)).toEqual([1, 2, 3])
-    // Five entries of weight 1: the active total falls by one each round.
-    expect(events.map((event) => event.activeTotalWeight)).toEqual([5, 4, 3])
+    // Six selections for three places, and one event for each of them.
+    expect(events.map((event) => event.selectionOrder)).toEqual([1, 2, 3, 4, 5, 6])
+    // Seven entries of weight 1: the active total falls by one each round.
+    expect(events.map((event) => event.activeTotalWeight)).toEqual([7, 6, 5, 4, 3, 2])
     for (const event of events) {
       expect(event.randomValue).toBeGreaterThanOrEqual(0)
       expect(event.randomValue).toBeLessThan(event.activeTotalWeight)
     }
   })
 
-  it('matches every event to the winner it selected', async () => {
-    const { communeDraw } = await lockedPool(singles(4), 3)
+  it('matches every event to the winner or reserve it selected', async () => {
+    const { communeDraw } = await lockedPool(singles(6), 3)
 
     await drawExecutionService.execute(communeDraw.id)
 
     const winners = await prisma.drawWinner.findMany({ orderBy: { selectionOrder: 'asc' } })
+    const reserves = await prisma.drawReserve.findMany({ orderBy: { selectionOrder: 'asc' } })
     const events = await prisma.drawSelectionEvent.findMany({ orderBy: { selectionOrder: 'asc' } })
 
-    expect(events.map((event) => event.selectedPoolEntryId)).toEqual(
-      winners.map((winner) => winner.drawPoolEntryId),
-    )
+    expect(events.map((event) => event.selectedPoolEntryId)).toEqual([
+      ...winners.map((winner) => winner.drawPoolEntryId),
+      ...reserves.map((reserve) => reserve.drawPoolEntryId),
+    ])
+  })
+
+  it('draws a reserve list as long as the allocation, and no longer', async () => {
+    const { communeDraw } = await lockedPool(singles(11), 3)
+
+    const execution = await drawExecutionService.execute(communeDraw.id)
+
+    expect(execution.reserveCount).toBe(3)
+    expect(await prisma.drawWinner.count()).toBe(3)
+    expect(await prisma.drawReserve.count()).toBe(3)
+    // Eleven entries, six of them drawn: the rest were not selected at all.
+    expect(await prisma.application.count({ where: { status: 'NOT_SELECTED' } })).toBe(5)
+  })
+
+  it('refuses a pool that covers the places but not the reserves', async () => {
+    // Three entries for two places. Enough to fill the commune's allocation and
+    // not enough to protect it, which is refused rather than drawn short — see
+    // docs/reserves-and-replacements.md.
+    const { communeDraw } = await lockedPool(singles(3), 2)
+
+    await expect(drawExecutionService.execute(communeDraw.id)).rejects.toMatchObject({
+      status: 409,
+      code: 'INSUFFICIENT_DRAW_ENTRIES',
+    })
+
+    // And nothing survives the refusal: the draw is still drawable once the
+    // policy question about an undersubscribed commune has an answer.
+    const after = await prisma.communeDraw.findUniqueOrThrow({ where: { id: communeDraw.id } })
+    expect(after.status).toBe('LOCKED')
+    expect(await prisma.drawResult.count()).toBe(0)
+    expect(await prisma.drawReserve.count()).toBe(0)
+    expect(await prisma.participant.count({ where: { hasWonHajj: true } })).toBe(0)
   })
 
   it('finalizes the commune draw and nothing else about it', async () => {
@@ -244,18 +288,30 @@ describe('executing a draw', () => {
 })
 
 describe('application outcomes', () => {
-  it('marks drawn applications SELECTED and pooled others NOT_SELECTED', async () => {
+  it('marks drawn applications SELECTED, reserves RESERVE and pooled others NOT_SELECTED', async () => {
     const { communeDraw } = await lockedPool(singles(5), 2)
 
     await drawExecutionService.execute(communeDraw.id)
 
-    const winners = await prisma.drawWinner.findMany({ select: { applicationId: true } })
-    const winnerIds = new Set(winners.map((winner) => winner.applicationId))
+    const winnerIds = new Set(
+      (await prisma.drawWinner.findMany({ select: { applicationId: true } })).map((w) => w.applicationId),
+    )
+    const reserveIds = new Set(
+      (await prisma.drawReserve.findMany({ select: { applicationId: true } })).map((r) => r.applicationId),
+    )
 
+    // Three outcomes, and every pooled application gets exactly the one that
+    // describes it. A reserve told NOT_SELECTED would have been told they lost.
     for (const application of await prisma.application.findMany()) {
-      expect(application.status).toBe(winnerIds.has(application.id) ? 'SELECTED' : 'NOT_SELECTED')
+      const expected = winnerIds.has(application.id)
+        ? 'SELECTED'
+        : reserveIds.has(application.id)
+          ? 'RESERVE'
+          : 'NOT_SELECTED'
+      expect(application.status).toBe(expected)
     }
     expect(await prisma.application.count({ where: { status: 'ELIGIBLE' } })).toBe(0)
+    expect(await prisma.application.count({ where: { status: 'RESERVE' } })).toBe(2)
   })
 
   it('leaves an application that never reached the pool alone', async () => {
@@ -298,8 +354,8 @@ describe('lifetime exclusion', () => {
   })
 
   it('marks both travellers of a paired application', async () => {
-    // One paired entry, and it is the only entry, so it must be the winner.
-    const { communeDraw } = await lockedPool([{ paired: true }], 1)
+    // Two paired entries for one place: one wins, the other becomes reserve #1.
+    const { communeDraw } = await lockedPool([{ paired: true }, { paired: true }], 1)
 
     await drawExecutionService.execute(communeDraw.id)
 
@@ -314,6 +370,26 @@ describe('lifetime exclusion', () => {
     }
   })
 
+  it('excludes nobody for having been drawn as a reserve', async () => {
+    const { communeDraw } = await lockedPool([{ paired: true }, { paired: true }], 1)
+
+    await drawExecutionService.execute(communeDraw.id)
+
+    const reserve = await prisma.drawReserve.findFirstOrThrow()
+    expect(reserve.status).toBe('WAITING')
+
+    // A paired reserve is two people, and neither of them has won anything.
+    // Being on the list is not a place, and it must not spend a lifetime
+    // eligibility that may never be used.
+    for (const id of [reserve.primaryParticipantId, reserve.secondaryParticipantId]) {
+      const participant = await prisma.participant.findUniqueOrThrow({ where: { id: id ?? '' } })
+      expect(participant.hasWonHajj).toBe(false)
+    }
+    expect(await prisma.winnerArchive.count({ where: { participantId: reserve.primaryParticipantId } })).toBe(
+      0,
+    )
+  })
+
   it('leaves everybody who was not drawn untouched', async () => {
     const { communeDraw } = await lockedPool(singles(5), 2)
 
@@ -324,7 +400,7 @@ describe('lifetime exclusion', () => {
   })
 
   it('archives every winning individual exactly once', async () => {
-    const { communeDraw } = await lockedPool([{ paired: true }, {}, {}], 2)
+    const { communeDraw } = await lockedPool([{ paired: true }, {}, {}, {}], 2)
 
     await drawExecutionService.execute(communeDraw.id)
 
@@ -396,7 +472,10 @@ describe('lifetime exclusion', () => {
 describe('spot semantics: entries, not people', () => {
   it('counts a paired application as one place and two winners', async () => {
     // Every entry paired, so however the draw falls, two places is four people.
-    const { communeDraw } = await lockedPool([{ paired: true }, { paired: true }, { paired: true }], 2)
+    const { communeDraw } = await lockedPool(
+      [{ paired: true }, { paired: true }, { paired: true }, { paired: true }],
+      2,
+    )
 
     await drawExecutionService.execute(communeDraw.id)
 
@@ -406,6 +485,22 @@ describe('spot semantics: entries, not people', () => {
     expect(await prisma.application.count({ where: { status: 'SELECTED' } })).toBe(2)
 
     // More individuals than places, which is expected and correct.
+    expect(await prisma.participant.count({ where: { hasWonHajj: true } })).toBe(4)
+    expect(await prisma.winnerArchive.count()).toBe(4)
+  })
+
+  it('counts a paired reserve as one position and no places at all', async () => {
+    const { communeDraw } = await lockedPool(
+      [{ paired: true }, { paired: true }, { paired: true }, { paired: true }],
+      2,
+    )
+
+    await drawExecutionService.execute(communeDraw.id)
+
+    // Two reserve positions covering four people, and not one of those four
+    // holds a place or a lifetime exclusion. Reserves do not occupy spots.
+    expect(await prisma.drawReserve.count()).toBe(2)
+    expect(await prisma.application.count({ where: { status: 'RESERVE' } })).toBe(2)
     expect(await prisma.participant.count({ where: { hasWonHajj: true } })).toBe(4)
     expect(await prisma.winnerArchive.count()).toBe(4)
   })
@@ -434,13 +529,22 @@ describe('participation history', () => {
   })
 
   it('records both travellers of a paired entry', async () => {
-    const { communeDraw } = await lockedPool([{ paired: true }], 1)
+    const { communeDraw } = await lockedPool([{ paired: true }, { paired: true }], 1)
 
     await drawExecutionService.execute(communeDraw.id)
 
+    const winner = await prisma.drawWinner.findFirstOrThrow()
+    const winningIds = [winner.primaryParticipantId, winner.secondaryParticipantId]
+
+    // Four people took part: the winning pair, and the pair drawn as reserve #1.
     const history = await prisma.participationHistory.findMany({ where: { drawYear: YEAR } })
-    expect(history).toHaveLength(2)
-    expect(history.every((record) => record.won)).toBe(true)
+    expect(history).toHaveLength(4)
+    for (const record of history) {
+      expect(record.participated).toBe(true)
+      // A reserve took part and has not won. If they are called and accept, this
+      // same row's outcome changes — a second row for the year is never written.
+      expect(record.won).toBe(winningIds.includes(record.participantId))
+    }
   })
 
   it('creates nothing for an application that never reached the pool', async () => {
@@ -449,7 +553,9 @@ describe('participation history', () => {
       communeId: geo.communeA1.id,
       allocatedSpots: 1,
     })
+    // Two pooled applicants: one place and one reserve position.
     const pooled = await register(geo.communeA1.id, geo.wilayaA.id)
+    const alsoPooled = await register(geo.communeA1.id, geo.wilayaA.id)
 
     // An ineligible application: refused before the pool, so it took no part.
     const rejected = await register(geo.communeA1.id, geo.wilayaA.id)
@@ -461,8 +567,10 @@ describe('participation history', () => {
     await drawExecutionService.execute(communeDraw.id)
 
     const history = await prisma.participationHistory.findMany({ where: { drawYear: YEAR } })
-    expect(history).toHaveLength(1)
-    expect(history[0]?.participantId).toBe(pooled.primaryParticipantId)
+    expect(history).toHaveLength(2)
+    expect(new Set(history.map((record) => record.participantId))).toEqual(
+      new Set([pooled.primaryParticipantId, alsoPooled.primaryParticipantId]),
+    )
 
     // A refused applicant must not be credited with a non-winning year, which
     // would grow their priority for a draw they never entered.
@@ -536,7 +644,8 @@ describe('a draw runs once, and only from a locked pool', () => {
     expect(fulfilled).toHaveLength(1)
     expect(await prisma.drawResult.count()).toBe(1)
     expect(await prisma.drawWinner.count()).toBe(3)
-    expect(await prisma.drawSelectionEvent.count()).toBe(3)
+    expect(await prisma.drawReserve.count()).toBe(3)
+    expect(await prisma.drawSelectionEvent.count()).toBe(6)
     expect(await prisma.winnerArchive.count()).toBe(3)
     expect(await prisma.participant.count({ where: { hasWonHajj: true } })).toBe(3)
     expect(await prisma.participationHistory.count({ where: { drawYear: YEAR } })).toBe(8)
@@ -874,7 +983,7 @@ describe('a commune draw cannot claim to be complete without a result', () => {
 
 describe('executing over HTTP', () => {
   it('lets a SUPER_ADMIN execute and read the result', async () => {
-    const { communeDraw } = await lockedPool([{ paired: true }, {}, {}], 2)
+    const { communeDraw } = await lockedPool([{ paired: true }, {}, {}, {}, {}], 2)
     const { cookie } = await superAdmin()
 
     const executed = await executeVia(communeDraw.id, cookie)
@@ -882,21 +991,38 @@ describe('executing over HTTP', () => {
     expect(executed.status).toBe(201)
     expect(executed.body).toMatchObject({
       winnerCount: 2,
+      reserveCount: 2,
+      activeWinnerCount: 2,
       allocatedSpots: 2,
-      entryCount: 3,
+      entryCount: 5,
       algorithmVersion: 'weighted-csprng-v1',
       notSelectedCount: 1,
-      historyRecordsCreated: 4,
     })
     expect(executed.body.winners).toHaveLength(2)
-    expect(executed.body.events).toHaveLength(2)
+    expect(executed.body.reserves).toHaveLength(2)
+    // Four selections, four events: the reserve half of the draw is recorded
+    // with the same randomness as the first.
+    expect(executed.body.events).toHaveLength(4)
     expect(executed.body.poolHash).toMatch(/^[0-9a-f]{64}$/)
+
+    // Every winner and every reserve starts out exactly as the draw left them.
+    expect(executed.body.winners.every((winner: { outcome: string }) => winner.outcome === 'ACTIVE')).toBe(
+      true,
+    )
+    expect(
+      executed.body.reserves.map((reserve: { reservePosition: number }) => reserve.reservePosition),
+    ).toEqual([1, 2])
+    expect(executed.body.reserves.every((reserve: { status: string }) => reserve.status === 'WAITING')).toBe(
+      true,
+    )
 
     const read = await resultVia(communeDraw.id, cookie)
     expect(read.status).toBe(200)
     expect(read.body).toMatchObject({
       id: executed.body.id,
       winnerCount: 2,
+      reserveCount: 2,
+      activeWinnerCount: 2,
       winningParticipantCount: executed.body.winningParticipantCount,
       poolHash: executed.body.poolHash,
     })
@@ -1067,13 +1193,16 @@ describe('reading a result is scoped', () => {
 
 describe('integrity properties hold in the database', () => {
   it('holds every invariant a completed draw is supposed to have', async () => {
-    const { communeDraw, poolId } = await lockedPool([{ paired: true }, {}, {}, { streakYears: 3 }], 3)
+    const { communeDraw, poolId } = await lockedPool(
+      [{ paired: true }, {}, {}, { streakYears: 3 }, { paired: true }, {}, {}],
+      3,
+    )
 
     await drawExecutionService.execute(communeDraw.id)
 
     const result = await prisma.drawResult.findUniqueOrThrow({
       where: { communeDrawId: communeDraw.id },
-      include: { winners: true, events: true, archivedWinners: true },
+      include: { winners: true, reserves: true, events: true, archivedWinners: true },
     })
     const poolEntries = await prisma.drawPoolEntry.findMany({ where: { drawPoolId: poolId } })
     const poolEntryIds = new Set(poolEntries.map((entry) => entry.id))
@@ -1091,9 +1220,23 @@ describe('integrity properties hold in the database', () => {
     const orders = result.winners.map((winner) => winner.selectionOrder).sort((a, b) => a - b)
     expect(orders).toEqual([1, 2, 3])
 
-    // Every winner and every event references an entry of this pool.
+    // As many reserves as places, occupying positions 1..N and the selections
+    // straight after the winners — and none of them holds a place.
+    expect(result.reserves).toHaveLength(3)
+    expect(result.reserves.map((r) => r.reservePosition).sort((a, b) => a - b)).toEqual([1, 2, 3])
+    expect(result.reserves.map((r) => r.selectionOrder).sort((a, b) => a - b)).toEqual([4, 5, 6])
+    expect(result.reserves.every((r) => r.status === 'WAITING')).toBe(true)
+    expect(await prisma.application.count({ where: { status: 'RESERVE' } })).toBe(3)
+
+    // No entry is both a winner and a reserve: one sample, without replacement.
+    const winnerEntryIds = new Set(result.winners.map((winner) => winner.drawPoolEntryId))
+    for (const reserve of result.reserves) expect(winnerEntryIds.has(reserve.drawPoolEntryId)).toBe(false)
+
+    // Every winner, reserve and event references an entry of this pool.
     for (const winner of result.winners) expect(poolEntryIds.has(winner.drawPoolEntryId)).toBe(true)
+    for (const reserve of result.reserves) expect(poolEntryIds.has(reserve.drawPoolEntryId)).toBe(true)
     for (const event of result.events) expect(poolEntryIds.has(event.selectedPoolEntryId)).toBe(true)
+    expect(result.events).toHaveLength(6)
 
     // Every winning individual is archived, and archived exactly once — a paired
     // winner contributing one entry and two people.

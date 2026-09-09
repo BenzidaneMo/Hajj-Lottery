@@ -1,3 +1,4 @@
+import { totalDrawSelections } from '@hajj-lottery/shared'
 import { PrismaClient, type Application, type Commune, type CommuneDraw, type DrawYear } from '@prisma/client'
 import request from 'supertest'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -136,7 +137,9 @@ async function completedDraws(specs: DrawSpec[]): Promise<CompletedDraw[]> {
     const communeDraw = await ensureCommuneDraw(spec.commune.id, spec.allocatedSpots ?? 1)
 
     const registered: RegisteredApplication[] = []
-    for (const options of spec.entries ?? [{}]) registered.push(await register(spec.commune, options))
+    for (const options of spec.entries ?? defaultEntries(spec.allocatedSpots ?? 1)) {
+      registered.push(await register(spec.commune, options))
+    }
 
     await drawConfigurationService.updateCommuneDraw(communeDraw.id, { status: 'READY' })
     prepared.push({ communeDraw, registered })
@@ -152,12 +155,25 @@ async function completedDraws(specs: DrawSpec[]): Promise<CompletedDraw[]> {
   return prepared
 }
 
+/**
+ * The smallest pool a draw for `allocatedSpots` places can run against.
+ *
+ * Twice the allocation, because every draw produces a reserve list as long as
+ * its winner list — a commune that cannot supply both is refused rather than
+ * drawn short. See docs/reserves-and-replacements.md.
+ */
+function defaultEntries(allocatedSpots: number): RegisterOptions[] {
+  return Array.from({ length: totalDrawSelections(allocatedSpots) }, () => ({}))
+}
+
 async function completedDraw(
   commune: { id: string; wilayaId: string },
-  entries: RegisterOptions[] = [{}],
+  entries?: RegisterOptions[],
   allocatedSpots = 1,
 ): Promise<CompletedDraw> {
-  const [only] = await completedDraws([{ commune, entries, allocatedSpots }])
+  const [only] = await completedDraws([
+    { commune, entries: entries ?? defaultEntries(allocatedSpots), allocatedSpots },
+  ])
   if (!only) throw new Error('fixture produced no draw')
   return only
 }
@@ -251,9 +267,14 @@ describe('the publication integrity rules, in isolation', () => {
     result: { winnerCount: 3, drawPoolId: 'pool-1', poolHash: 'hash-1' },
     pool: { id: 'pool-1', snapshotHash: 'hash-1', entryCount: 9, allocatedSpots: 3 },
     drawWinnerCount: 3,
-    selectionEventCount: 3,
+    drawReserveCount: 3,
+    // Six selections for three places: the winners, then the reserve list.
+    selectionEventCount: 6,
     selectionOrderBounds: { min: 1, max: 3 },
+    reservePositionBounds: { min: 1, max: 3 },
+    reserveSelectionOrderBounds: { min: 4, max: 6 },
     expectedWinningParticipants: 4,
+    promotedReserveParticipants: 0,
     archivedWinnerCount: 4,
     excludedWinnerCount: 4,
     pooledParticipantCount: 11,
@@ -554,7 +575,7 @@ describe('public results', () => {
   })
 
   it('publishes winners in the persisted selection order, never a fresh draw', async () => {
-    const { communeDraw } = await completedDraw(geo.communeA1, [{}, {}, {}, {}], 3)
+    const { communeDraw } = await completedDraw(geo.communeA1, [{}, {}, {}, {}, {}, {}], 3)
     await publish(communeDraw.id)
 
     const stored = await prisma.drawWinner.findMany({
@@ -577,7 +598,7 @@ describe('public results', () => {
   })
 
   it('treats a paired application as one winning entry covering two people', async () => {
-    const { communeDraw } = await completedDraw(geo.communeA1, [{ paired: true }], 1)
+    const { communeDraw } = await completedDraw(geo.communeA1, [{ paired: true }, { paired: true }], 1)
     await publish(communeDraw.id)
 
     const response = await request(app).get(
@@ -593,7 +614,11 @@ describe('public results', () => {
   })
 
   it('publishes no identity, no contact details and no internal identifiers', async () => {
-    const { communeDraw, registered } = await completedDraw(geo.communeA1, [{ paired: true }], 1)
+    const { communeDraw, registered } = await completedDraw(
+      geo.communeA1,
+      [{ paired: true }, { paired: true }],
+      1,
+    )
     await publish(communeDraw.id)
     const [entry] = registered
     const participants = await prisma.participant.findMany()
@@ -624,12 +649,28 @@ describe('public results', () => {
     for (const field of ['"weight"', 'selectedWeight', 'totalWeight', 'calculatedWeight']) {
       expect(serialized).not.toContain(field)
     }
+    // Exactly these fields, on a winner and on a reserve alike. `outcome` says
+    // whether a place is still held and nothing about why it might not be: an
+    // abandonment's reason and explanation are administrative, and this route
+    // does not select the columns they live in.
     expect(Object.keys(response.body.winners[0]).sort()).toEqual([
       'applicationReference',
       'entryType',
+      'outcome',
       'participantCount',
       'selectionOrder',
     ])
+    expect(Object.keys(response.body.reserves[0]).sort()).toEqual([
+      'applicationReference',
+      'entryType',
+      'outcome',
+      'participantCount',
+      'reservePosition',
+      'selectionOrder',
+    ])
+    for (const forbidden of ['explanation', 'VOLUNTARY_WITHDRAWAL', 'MEDICAL', 'recordedBy']) {
+      expect(serialized).not.toContain(forbidden)
+    }
   })
 
   it('carries all three locales so the client renders the active language', async () => {
@@ -767,7 +808,7 @@ describe('public draw status', () => {
   })
 
   it('leaks nothing about an unpublished result or the pool behind it', async () => {
-    const { registered } = await completedDraw(geo.communeA1, [{}, {}, {}], 2)
+    const { registered } = await completedDraw(geo.communeA1, [{}, {}, {}, {}, {}], 2)
     const pool = await prisma.drawPool.findFirstOrThrow()
     const winners = await prisma.drawWinner.findMany({
       include: { drawPoolEntry: { select: { applicationReference: true } } },
@@ -1027,44 +1068,39 @@ describe('checking your own application', () => {
   })
 
   it('withholds the outcome of a concluded draw until it is published', async () => {
-    const { communeDraw, registered } = await completedDraw(geo.communeA1, [{}, {}], 1)
+    // Three entries for one place: a winner, a reserve, and somebody who was
+    // drawn neither way — all three outcomes the draw can produce.
+    const { communeDraw, registered } = await completedDraw(geo.communeA1, [{}, {}, {}], 1)
 
     const selected = await prisma.application.findFirstOrThrow({ where: { status: 'SELECTED' } })
+    const reserve = await prisma.application.findFirstOrThrow({ where: { status: 'RESERVE' } })
     const notSelected = await prisma.application.findFirstOrThrow({ where: { status: 'NOT_SELECTED' } })
     const numbers = new Map(
       registered.map((entry) => [entry.application.applicationReference, entry.phoneNumber]),
     )
+    const check = (reference: string) =>
+      lookup({ applicationReference: reference, phoneNumber: numbers.get(reference) ?? '' })
 
-    const winner = await lookup({
-      applicationReference: selected.applicationReference,
-      phoneNumber: numbers.get(selected.applicationReference) ?? '',
-    })
-    const loser = await lookup({
-      applicationReference: notSelected.applicationReference,
-      phoneNumber: numbers.get(notSelected.applicationReference) ?? '',
-    })
+    const winner = await check(selected.applicationReference)
+    const waiting = await check(reserve.applicationReference)
+    const loser = await check(notSelected.applicationReference)
 
     // Identical, so polling one's own reference cannot front-run the
-    // announcement — nor can comparing two applicants' answers.
+    // announcement — nor can comparing two applicants' answers. The reserve
+    // collapses onto the same value as the other two: three outcomes told apart
+    // before the announcement are three outcomes somebody can learn early.
     expect(winner.body.status).toBe('AWAITING_RESULTS')
+    expect(waiting.body.status).toBe('AWAITING_RESULTS')
     expect(loser.body.status).toBe('AWAITING_RESULTS')
     expect(winner.body.resultsPublished).toBe(false)
     expect(winner.body.drawPhase).toBe('DRAWN')
 
     await publish(communeDraw.id)
 
-    const winnerAfter = await lookup({
-      applicationReference: selected.applicationReference,
-      phoneNumber: numbers.get(selected.applicationReference) ?? '',
-    })
-    const loserAfter = await lookup({
-      applicationReference: notSelected.applicationReference,
-      phoneNumber: numbers.get(notSelected.applicationReference) ?? '',
-    })
-
-    expect(winnerAfter.body.status).toBe('SELECTED')
-    expect(loserAfter.body.status).toBe('NOT_SELECTED')
-    expect(winnerAfter.body.resultsPublished).toBe(true)
+    expect((await check(selected.applicationReference)).body.status).toBe('SELECTED')
+    expect((await check(reserve.applicationReference)).body.status).toBe('RESERVE')
+    expect((await check(notSelected.applicationReference)).body.status).toBe('NOT_SELECTED')
+    expect((await check(selected.applicationReference)).body.resultsPublished).toBe(true)
   })
 
   it('is never stored in a shared cache', async () => {
