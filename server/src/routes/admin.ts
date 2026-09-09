@@ -2,9 +2,21 @@ import { AdminRole } from '@prisma/client'
 import { Router } from 'express'
 
 import {
+  changeAdminScope,
+  createAdmin,
+  deactivateAdmin,
+  listAdmins,
+} from '../controllers/admin-account.controller.js'
+import {
   getApplicationEligibility,
   getApplicationWeight,
 } from '../controllers/admin-application.controller.js'
+import {
+  getApplication,
+  getDashboard,
+  listApplications,
+  listParticipants,
+} from '../controllers/admin-console.controller.js'
 import {
   createCommuneDraw,
   createDrawYear,
@@ -69,12 +81,28 @@ adminRouter.get('/wilayas/:id', asyncHandler(getWilaya))
 adminRouter.get('/communes', asyncHandler(listCommunes))
 adminRouter.get('/communes/:id', asyncHandler(getCommune))
 
+// The console's operational summary. No role gate: the counts are computed
+// inside the caller's own territory, and the national queues are withheld by
+// the service rather than by hiding a link.
+adminRouter.get('/dashboard', asyncHandler(getDashboard))
+
+// The applications table. Scoped by the query, like everything else here —
+// a filter in the query string can only ever narrow what the ceiling allows.
+adminRouter.get('/applications', asyncHandler(listApplications))
+
 // Same rule: no role gate, because every administrator reviews applications —
 // but only the ones in their own territory, which the query enforces rather
 // than this line.
 adminRouter.get('/applications/:id/eligibility', asyncHandler(getApplicationEligibility))
 // Inspection only: reading a weight never freezes one.
 adminRouter.get('/applications/:id/weight', asyncHandler(getApplicationWeight))
+adminRouter.get('/applications/:id', asyncHandler(getApplication))
+
+// The national identity registry. SUPER_ADMIN-only, because a participant
+// belongs to no commune and there is therefore no scope that could narrow it —
+// a scoped administrator reaches a person through their own commune's
+// applications or ledger, where their territory is part of the query.
+adminRouter.get('/participants', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(listParticipants))
 
 // The participation ledger. Both are scoped by the *record's* commune, not by
 // the participant — see the controller for why a participant id is not
@@ -205,3 +233,17 @@ adminRouter.post('/approvals/:id/reject', requireRole(AdminRole.SUPER_ADMIN), as
 // Withdrawing is not a decision, so it needs no elevated role — only authorship,
 // which the service checks.
 adminRouter.post('/approvals/:id/cancel', asyncHandler(cancelRequest))
+
+// Administrator accounts. SUPER_ADMIN-only and unscoped, deliberately: an
+// administrator's authority is not a property of a territory even when it names
+// one, and a scoped list would tell a WILAYA_ADMIN who can overrule them while
+// hiding everyone else who can. The rules that matter — no self-editing, no
+// granting reach you do not hold, no removing the last way in — live in the
+// service, so no route here can skip them.
+//
+// There is no DELETE: an account is the actor on audit records that must outlive
+// it. Deactivating is the operation, and it revokes the sessions too.
+adminRouter.get('/admins', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(listAdmins))
+adminRouter.post('/admins', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(createAdmin))
+adminRouter.patch('/admins/:id/scope', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(changeAdminScope))
+adminRouter.post('/admins/:id/deactivate', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(deactivateAdmin))
