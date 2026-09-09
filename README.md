@@ -126,6 +126,14 @@ transparent results, across Arabic (RTL), French, and English.
 > selection of any kind, and a static guard keeps `Math.random` out of the whole
 > client. Winner names, notifications and citizen accounts remain unimplemented.
 
+> **Status:** Step 19 — reserve winners and the replacement lifecycle. Every draw
+> now selects twice its allocation in one continuous sample: N winners, then N
+> ordered reserves. When a winner gives up their place, an administrator records
+> it — with a reason, permanently, and without touching their lifetime win — and
+> the next reserve in the lottery's own order is called for it. Nothing re-runs the
+> draw, nothing reorders the list, and nothing rewrites the original result. Public
+> pages for reserves, notifications and citizen accounts remain unimplemented.
+
 ## Architecture
 
 ```
@@ -600,11 +608,12 @@ Executing a draw is one transaction, run once, and irreversible.
 | `GET /api/admin/commune-draws/:id/result`   | yes  | any admin   | The result, scoped |
 
 That single transaction claims the commune draw, verifies and draws from the
-frozen pool, records the result with its winners and the random value behind every
-selection, sets `has_won_hajj` for every winning individual, archives each of them,
-finalizes the pooled applications as `SELECTED` or `NOT_SELECTED`, and writes the
-participation ledger. Any failure unwinds all of it, including the claim: the
-commune draw returns to `LOCKED` with nothing left behind.
+frozen pool, records the result with its winners, its reserve list and the random
+value behind every selection, sets `has_won_hajj` for every winning individual,
+archives each of them, finalizes the pooled applications as `SELECTED`, `RESERVE`
+or `NOT_SELECTED`, and writes the participation ledger. Any failure unwinds all of
+it, including the claim: the commune draw returns to `LOCKED` with nothing left
+behind.
 
 So none of these can occur — a winner recorded without lifetime exclusion, a
 person excluded without a winner record, a draw marked complete with winners
@@ -630,6 +639,54 @@ commune draw that has no result. Nothing is published: winner publication and
 notifications carry their own consent questions and do not exist yet.
 
 See [docs/winner-processing.md](docs/winner-processing.md).
+
+## Reserves and replacements
+
+A commune with N places draws **2N** entries in one continuous weighted sample: N
+winners, then N reserves, in the order they came out. The reserve list is produced
+by the original lottery and never regenerated, never reordered, and never sorted
+by weight — which is the whole reason it is drawn now rather than when somebody
+drops out.
+
+| Endpoint                                                            | Role        | Purpose                         |
+| ------------------------------------------------------------------- | ----------- | ------------------------------- |
+| `POST /api/admin/commune-draws/:id/winners/:selectionOrder/abandon` | SUPER_ADMIN | Record a place being given up   |
+| `POST /api/admin/commune-draws/:id/reserves/:position/call`         | SUPER_ADMIN | Offer it to the next reserve    |
+| `POST /api/admin/commune-draws/:id/reserves/:position/accept`       | SUPER_ADMIN | They took it — they now win     |
+| `POST /api/admin/commune-draws/:id/reserves/:position/decline`      | SUPER_ADMIN | They refused; the place reopens |
+
+**The original draw is a record and never moves.** A promoted reserve stays
+reserve #1 of this draw forever and _separately_ becomes a winner — nothing turns
+them into "winner #4". `draw_winners`, `draw_selection_events` and the pool are
+untouched by every operation above; the only mutable state is a reserve's
+lifecycle and the existence of an abandonment record, and a trigger refuses any
+change to a reserve's position, order, entry, participants or weight.
+
+**A reserve is not a winner until they accept.** No archive row, no
+`has_won_hajj`, no place. Their application reads `RESERVE` — neither selected nor
+passed over — and their year in the ledger says they took part and did not win,
+which is what grows their priority if they are never called.
+
+**An abandoned winner stays a winner.** `has_won_hajj` remains `true`, the archive
+row and the selection order are untouched, and the ledger still says they won. A
+place that was awarded and given up was still awarded; there is no operation
+anywhere in this system that turns a lifetime exclusion back off.
+
+**The order is enforced, not chosen.** Calling takes a position and refuses
+anything but the next waiting reserve — an administrator with a preference between
+reserve #1 and reserve #7 is an administrator choosing a winner. A reserve who
+declines is not asked again, and the next may be called for the same place.
+
+**A pool must now hold at least 2N entries.** Ten winners and five reserves would
+leave five places unprotected with nobody having decided which, so an
+under-supplied pool is refused with `INSUFFICIENT_DRAW_ENTRIES` and the draw stays
+`LOCKED`.
+
+Paired applications are one entry throughout: one place or one reserve position,
+two lifetime winners when it wins, abandoned as a whole, and promoted whole or not
+at all.
+
+See [docs/reserves-and-replacements.md](docs/reserves-and-replacements.md).
 
 ## The lottery engine
 

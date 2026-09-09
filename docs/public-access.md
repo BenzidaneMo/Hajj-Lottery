@@ -139,17 +139,22 @@ purely, in one place:
 | `ELIGIBLE`     | `IN_DRAW`                                                   |
 | `INELIGIBLE`   | `NOT_ELIGIBLE`                                              |
 | `SELECTED`     | `AWAITING_RESULTS` before publication, `SELECTED` after     |
+| `RESERVE`      | `AWAITING_RESULTS` before publication, `RESERVE` after      |
 | `NOT_SELECTED` | `AWAITING_RESULTS` before publication, `NOT_SELECTED` after |
 
-**The last two rows are the release gate.** A draw concludes in one transaction
+**The last three rows are the release gate.** A draw concludes in one transaction
 that writes the final status onto every pooled application — the outcome is
 settled and stored long before anybody may be told it. Passing that straight
 through would turn the status lookup into an early results feed for anyone willing
 to poll their own reference: unfair to everybody who waits for the announcement,
 and a way to learn the outcome of a draw officials have not finished checking.
 
-Both outcomes collapse onto the _same_ value, not two similar ones, so comparing
-two applicants' answers reveals nothing either.
+All three outcomes collapse onto the _same_ value, not three similar ones, so
+comparing two applicants' answers reveals nothing either. A reserve who is later
+called and accepts reads as `SELECTED`, because by then they hold a place; that
+they were _called_ is never reported, since it is administrative and concerns
+another identifiable household's circumstances. See
+[reserves-and-replacements.md](reserves-and-replacements.md).
 
 Reason codes never appear. `INELIGIBLE` becomes "not eligible" and nothing more —
 naming the rule would confirm which national IDs exist and who has won before, for
@@ -302,10 +307,29 @@ is exactly the window in which that is worth something.
       "applicationReference": "HZ-2027-MES-8F42K1",
       "entryType": "PAIRED",
       "participantCount": 2,
+      "outcome": "ACTIVE",
+    },
+  ],
+  "reserves": [
+    {
+      "reservePosition": 1,
+      "selectionOrder": 13,
+      "applicationReference": "HZ-2027-MES-R51TTA",
+      "entryType": "SINGLE",
+      "participantCount": 1,
+      "outcome": "WAITING",
     },
   ],
 }
 ```
+
+**The reserve list is published**, in the order the same draw produced it, so the
+ordering is on the record before anybody is called. `outcome` is `WAITING`,
+`CALLED`, `PROMOTED` or `DECLINED` for a reserve, and `ACTIVE` or `WITHDRAWN` for
+a winner — a place given up, never _why_. An abandonment's reason and explanation
+are administrative and may describe a death or an illness; the public query does
+not select those columns at all. See
+[reserves-and-replacements.md](reserves-and-replacements.md).
 
 **Winner names are not published, and that is a deliberate open decision.** Nothing
 here assumes full names are legally appropriate to publish, and the safe default is

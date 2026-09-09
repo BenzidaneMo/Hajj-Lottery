@@ -92,8 +92,17 @@ influence who wins.
 | -------------------- | ------------------ | --------------------------------------------------------------- |
 | `DrawResult`         | commune draw       | `UNIQUE(commune_draw_id)`, `UNIQUE(draw_pool_id)`               |
 | `DrawWinner`         | selected entry     | `UNIQUE(draw_pool_entry_id)`, `UNIQUE(result, selection_order)` |
+| `DrawReserve`        | reserve position   | `UNIQUE(result, reserve_position)`, positions `1..N`            |
 | `DrawSelectionEvent` | selection          | `CHECK(0 <= random_value < active_total_weight)`                |
 | `WinnerArchive`      | winning **person** | `UNIQUE(participant_id)` — one win per life                     |
+
+A draw for `N` places selects `2N` entries in one continuous sample: the first
+`N` become `DrawWinner` rows and the rest become the ordered reserve list. There
+is one selection event for each of the `2N`, so the reserve order is as checkable
+as the winner order. See
+[reserves-and-replacements.md](reserves-and-replacements.md) — a reserve holds no
+place, gets no archive row and is **not** excluded from future draws by having
+been drawn as one.
 
 `DrawResult` carries the pool's hash, the total weight it drew from, and
 `algorithm_version` — a fixed identifier like `weighted-csprng-v1`, never a moving
@@ -147,12 +156,18 @@ violation.
 ## Application outcomes
 
 ```
-ELIGIBLE ──▶ SELECTED       drawn
-         ──▶ NOT_SELECTED   in the pool, not drawn
+ELIGIBLE ──▶ SELECTED       drawn as a winner
+         ──▶ RESERVE        drawn into the reserve list
+         ──▶ NOT_SELECTED   in the pool, drawn neither way
 ```
 
-Only applications **in the frozen pool** are finalized. `NOT_SELECTED` is
-emphatically not a refusal: that application took full part in the lottery. An
+Only applications **in the frozen pool** are finalized. `RESERVE` is the
+lottery's verdict too, not a lifecycle state: telling a reserve `NOT_SELECTED`
+would tell them they had lost, and `SELECTED` would tell them they had a place
+they do not hold. A reserve who is later called and accepts becomes `SELECTED`.
+
+`NOT_SELECTED` is emphatically not a refusal: that application took full part in
+the lottery and was drawn neither as a winner nor as a reserve. An
 application that never reached the pool — refused by eligibility, or filed after
 the freeze — keeps whatever the eligibility engine said about it, because it did
 not take part in anything.
@@ -204,8 +219,9 @@ approval and an audit trail, not a flag somebody can flip.
 
 ## Insufficient entries: still a refusal
 
-Unchanged from [the lottery engine](lottery-engine.md). If the pool holds fewer
-entries than the commune has places, execution fails with
+Unchanged from [the lottery engine](lottery-engine.md), and stricter since
+reserves: if the pool holds fewer than **twice** the commune's places — the
+winners and the reserve list come from the same sample — execution fails with
 `INSUFFICIENT_DRAW_ENTRIES` and:
 
 - no result, no winners, no archive rows
@@ -308,7 +324,10 @@ so whatever eventually stores it needs no restructuring.
 - **The live draw visualizer.**
 - **Persistent audit logging**, and the `audit_logs` table.
 - **A correction workflow** — the only legitimate route to reversing a win, an
-  archive row or `has_won_hajj`, with approval and an audit trail.
+  archive row or `has_won_hajj`, with approval and an audit trail. Recording that
+  a winner _gave up_ their place is a different thing entirely and does exist:
+  see [reserves-and-replacements.md](reserves-and-replacements.md). It leaves the
+  win, the archive row and the exclusion exactly where they were.
 - **Recovery tooling** for the insufficient-entries situation: the policy
   decision, and whatever administrative resolution follows from it.
 - **Bulk execution.** One commune at a time; nothing sweeps a wilaya.

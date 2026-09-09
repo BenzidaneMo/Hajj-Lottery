@@ -228,10 +228,19 @@ wrong fingerprint and confirms the draw refuses it.
 
 ### Insufficient entries: a policy boundary
 
-Freezing accepts a pool smaller than the allocation on purpose — 100 places with
-20 eligible applicants is a valid pool, and registration never refuses somebody
-for being oversubscribed. So this situation is **reachable**, and the engine
-**refuses it** with `INSUFFICIENT_DRAW_ENTRIES` rather than truncating.
+Since Step 19 a draw for `N` places selects `2N` entries — `N` winners and `N`
+reserves, in one continuous sample — so the pool must hold at least `2N`. See
+[reserves-and-replacements.md](reserves-and-replacements.md); the split into
+halves happens in `LotteryService`, and `lib/lottery.ts` is simply asked for a
+larger sample.
+
+Freezing accepts a pool smaller than that on purpose — 100 places with 20
+eligible applicants is a valid pool, and registration never refuses somebody for
+being oversubscribed. So this situation is **reachable**, and the engine
+**refuses it** with `INSUFFICIENT_DRAW_ENTRIES` rather than truncating. A pool
+that covers the places but not the reserves is refused for the same reason and by
+the same code: drawing ten winners and five reserves would leave five of the ten
+places unprotected, and which five would have been decided by nobody.
 
 Quietly selecting all 20 would answer a question the domain has not been asked:
 _does an undersubscribed commune award every applicant a place automatically?_
@@ -299,7 +308,8 @@ shape is fixed so that whatever eventually stores it needs no restructuring.
 
 The winner count is taken from the **pool's** frozen `allocated_spots`, not from
 a caller and not from the live commune draw. `selectFromPool(communeDrawId)` has
-nowhere to pass a number, so no request can influence how many people win.
+nowhere to pass a number, so no request can influence how many people win — or
+how long the reserve list is, since both come from the same figure.
 
 ## Entry order
 
