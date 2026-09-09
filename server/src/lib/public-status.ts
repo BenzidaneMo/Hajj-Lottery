@@ -30,9 +30,14 @@ import type {
  * unfair to everyone who waits for the announcement and a way to learn the
  * result of a draw that officials have not finished checking.
  *
- * So before publication both outcomes collapse onto `AWAITING_RESULTS` — the
- * *same* value, not two similar ones, so watching for a change reveals nothing
- * either.
+ * So before publication every settled outcome collapses onto `AWAITING_RESULTS`
+ * — the *same* value, not three similar ones, so watching for a change reveals
+ * nothing either.
+ *
+ * After publication a promoted reserve reads as `SELECTED`, because by then they
+ * hold a place and that is what the status means. What is never reported is the
+ * lifecycle in between: whether a reserve has been called, and whether anybody
+ * declined, are administrative facts about identifiable people's circumstances.
  */
 export function toPublicApplicationStatus(
   status: ApplicationStatus,
@@ -47,6 +52,12 @@ export function toPublicApplicationStatus(
       return 'NOT_ELIGIBLE'
     case 'SELECTED':
       return resultsPublished ? 'SELECTED' : 'AWAITING_RESULTS'
+    // Reserves collapse onto the same holding value as the other two, and for
+    // the same reason: three outcomes that are told apart before the
+    // announcement are three outcomes somebody can learn by polling. A reserve
+    // is told they are a reserve when everybody else is told what they are.
+    case 'RESERVE':
+      return resultsPublished ? 'RESERVE' : 'AWAITING_RESULTS'
     case 'NOT_SELECTED':
       return resultsPublished ? 'NOT_SELECTED' : 'AWAITING_RESULTS'
   }

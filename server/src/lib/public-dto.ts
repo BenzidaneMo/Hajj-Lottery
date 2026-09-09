@@ -1,4 +1,10 @@
-import type { PublicPlaceDto, PublicWinnerDto } from '@hajj-lottery/shared'
+import type {
+  PublicPlaceDto,
+  PublicReserveDto,
+  PublicReserveOutcome,
+  PublicWinnerDto,
+  ReserveStatus,
+} from '@hajj-lottery/shared'
 import type { EntryType } from '@prisma/client'
 
 /**
@@ -46,12 +52,61 @@ export function toPublicWinner(winner: {
   selectionOrder: number
   applicationReference: string
   entryType: EntryType
+  /** Whether an abandonment has been recorded. Not the reason, which is never a parameter here. */
+  abandoned: boolean
 }): PublicWinnerDto {
   return {
     selectionOrder: winner.selectionOrder,
     applicationReference: winner.applicationReference,
     entryType: winner.entryType,
     participantCount: winner.entryType === 'PAIRED' ? 2 : 1,
+    outcome: winner.abandoned ? 'WITHDRAWN' : 'ACTIVE',
+  }
+}
+
+/**
+ * One published reserve position.
+ *
+ * The same three fields the winner list carries, plus the two orderings that
+ * make the reserve list checkable. Like the winner above, it cannot leak an
+ * abandonment reason or a weight because neither is a parameter: the caller
+ * passes a lifecycle status, and `reserveOutcome` collapses it onto the four
+ * values the public vocabulary has.
+ */
+export function toPublicReserve(reserve: {
+  reservePosition: number
+  selectionOrder: number
+  applicationReference: string
+  entryType: EntryType
+  status: ReserveStatus
+}): PublicReserveDto {
+  return {
+    reservePosition: reserve.reservePosition,
+    selectionOrder: reserve.selectionOrder,
+    applicationReference: reserve.applicationReference,
+    entryType: reserve.entryType,
+    participantCount: reserve.entryType === 'PAIRED' ? 2 : 1,
+    outcome: reserveOutcome(reserve.status),
+  }
+}
+
+/**
+ * The internal reserve lifecycle, in public words.
+ *
+ * `ACCEPTED` becomes `PROMOTED`, because from outside the system what happened
+ * is that a reserve took a place — "accepted" describes the administrative act
+ * of recording their answer, which is not what a citizen is reading about.
+ */
+function reserveOutcome(status: ReserveStatus): PublicReserveOutcome {
+  switch (status) {
+    case 'WAITING':
+      return 'WAITING'
+    case 'CALLED':
+      return 'CALLED'
+    case 'ACCEPTED':
+      return 'PROMOTED'
+    case 'DECLINED':
+      return 'DECLINED'
   }
 }
 

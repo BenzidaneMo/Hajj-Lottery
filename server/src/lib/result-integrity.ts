@@ -30,10 +30,17 @@ export const RESULT_INTEGRITY_ISSUES = [
   'POOL_HASH_MISMATCH',
   /** Winner rows do not match the count the result claims. */
   'WINNER_COUNT_MISMATCH',
+  /** A draw allocating N places did not record N reserve positions. */
+  'RESERVE_COUNT_MISMATCH',
   /** The randomness behind the selections is incomplete. */
   'SELECTION_EVENT_MISSING',
   /** Selection order is not the contiguous 1..n sequence a draw produces. */
   'SELECTION_ORDER_BROKEN',
+  /**
+   * The reserve list is not the second half of the draw: its positions do not
+   * span 1..N, or its selections do not follow every winner's.
+   */
+  'RESERVE_ORDER_BROKEN',
   /** Winning people are not all archived — or somebody extra is. */
   'WINNER_ARCHIVE_MISMATCH',
   /** An archived winner is not excluded from future draws. */
@@ -70,7 +77,9 @@ export interface ResultIntegrityFacts {
   } | null
   /** Rows in `draw_winners` for this result. */
   drawWinnerCount: number
-  /** Rows in `draw_selection_events` for this result. */
+  /** Rows in `draw_reserves` for this result. */
+  drawReserveCount: number
+  /** Rows in `draw_selection_events` for this result — winners and reserves. */
   selectionEventCount: number
   /**
    * The lowest and highest selection order stored, or null when there are no
@@ -84,11 +93,27 @@ export interface ResultIntegrityFacts {
    */
   selectionOrderBounds: { min: number; max: number } | null
   /**
+   * The lowest and highest *reserve* position, and the lowest and highest place
+   * those reserves took in the draw. Both, because the reserve list has two
+   * orderings to be wrong about: it must occupy positions 1..N, and it must sit
+   * entirely after the winners in the selection order it was drawn in.
+   */
+  reservePositionBounds: { min: number; max: number } | null
+  reserveSelectionOrderBounds: { min: number; max: number } | null
+  /**
    * People the winning entries win for: one per SINGLE entry, two per PAIRED.
    * Derived from the winner rows, so it is what the result actually says rather
    * than what the archive claims.
+   *
+   * Abandoned winners are still counted. Giving up a place does not un-archive
+   * anybody, so an abandonment must not make the archive look short.
    */
   expectedWinningParticipants: number
+  /**
+   * People promoted from the reserve list, who hold archive rows of their own.
+   * Zero for a draw nobody has dropped out of, which is nearly all of them.
+   */
+  promotedReserveParticipants: number
   /** Rows in `winner_archive` for this result. */
   archivedWinnerCount: number
   /** Archived winners whose `has_won_hajj` is set. */
@@ -128,9 +153,37 @@ export function assessResultIntegrity(facts: ResultIntegrityFacts): ResultIntegr
   if (result.poolHash !== pool.snapshotHash) issues.push('POOL_HASH_MISMATCH')
 
   if (facts.drawWinnerCount !== result.winnerCount) issues.push('WINNER_COUNT_MISMATCH')
-  if (facts.selectionEventCount !== result.winnerCount) issues.push('SELECTION_EVENT_MISSING')
+
+  // A draw produces as many reserves as it does winners. Fewer would mean a
+  // commune whose contingency list runs out before its places do, with nobody
+  // having decided which places were the protected ones.
+  if (facts.drawReserveCount !== result.winnerCount) issues.push('RESERVE_COUNT_MISMATCH')
+
+  // One event per selection, across both halves: the reserve order is drawn and
+  // is as checkable as the winner order. A missing event would mean part of the
+  // list could not be verified against the randomness that produced it.
+  if (facts.selectionEventCount !== facts.drawWinnerCount + facts.drawReserveCount) {
+    issues.push('SELECTION_EVENT_MISSING')
+  }
+
   if (!spansExactly(facts.selectionOrderBounds, facts.drawWinnerCount)) {
     issues.push('SELECTION_ORDER_BROKEN')
+  }
+
+  // The reserve half, checked on both of its orderings. Positions must be
+  // 1..N — that is the call order an official reads out — and the selections
+  // they came from must all follow the winners, which is what makes "the
+  // reserves were drawn after the winners, by the same draw" a fact rather than
+  // a claim.
+  if (
+    !spansExactly(facts.reservePositionBounds, facts.drawReserveCount) ||
+    !spansRange(
+      facts.reserveSelectionOrderBounds,
+      facts.drawWinnerCount + 1,
+      facts.drawWinnerCount + facts.drawReserveCount,
+    )
+  ) {
+    issues.push('RESERVE_ORDER_BROKEN')
   }
 
   // A draw awards exactly the places the pool was frozen with. Fewer would mean
@@ -138,7 +191,11 @@ export function assessResultIntegrity(facts: ResultIntegrityFacts): ResultIntegr
   // would mean the result was assembled by something other than the engine.
   if (result.winnerCount !== pool.allocatedSpots) issues.push('ALLOCATION_MISMATCH')
 
-  if (facts.archivedWinnerCount !== facts.expectedWinningParticipants) {
+  // The archive holds everyone this draw made a winner: the people the winning
+  // entries won for, plus anybody promoted from the reserve list since. An
+  // abandoned winner is still in that first group — a place given up was still
+  // awarded, and nothing un-archives anybody.
+  if (facts.archivedWinnerCount !== facts.expectedWinningParticipants + facts.promotedReserveParticipants) {
     issues.push('WINNER_ARCHIVE_MISMATCH')
   }
   // Lifetime exclusion and the archive are written in one transaction, so a
@@ -158,6 +215,19 @@ export function assessResultIntegrity(facts: ResultIntegrityFacts): ResultIntegr
 
 /** Whether `count` distinct orders span exactly 1..count, the sequence a draw produces. */
 function spansExactly(bounds: { min: number; max: number } | null, count: number): boolean {
-  if (count === 0) return bounds === null
-  return bounds !== null && bounds.min === 1 && bounds.max === count
+  return spansRange(bounds, 1, count)
+}
+
+/**
+ * Whether the stored orders span exactly `from`..`to`.
+ *
+ * Bounds rather than the values themselves, so each check costs one aggregate
+ * however many places a commune allocated. Distinctness does not have to be
+ * counted: `UNIQUE(draw_result_id, selection_order)` already guarantees it, and
+ * given that, the right number of rows spanning exactly the right range can only
+ * be the contiguous sequence.
+ */
+function spansRange(bounds: { min: number; max: number } | null, from: number, to: number): boolean {
+  if (to < from) return bounds === null
+  return bounds !== null && bounds.min === from && bounds.max === to
 }
