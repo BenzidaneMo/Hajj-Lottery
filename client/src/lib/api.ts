@@ -87,3 +87,40 @@ export function apiPost<T>(path: string, body?: unknown): Promise<T> {
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   })
 }
+
+export function apiPatch<T>(path: string, body: unknown): Promise<T> {
+  return apiRequest<T>(path, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
+/**
+ * Sends one file as multipart form data.
+ *
+ * No `Content-Type` header: the browser has to set it, because only the
+ * browser knows the boundary token it generated for the body.
+ */
+export function apiUpload<T>(path: string, field: string, file: File): Promise<T> {
+  const form = new FormData()
+  form.append(field, file)
+  return apiRequest<T>(path, { method: 'POST', body: form })
+}
+
+/**
+ * Builds a query string from the values that are actually set.
+ *
+ * Undefined, null and empty entries are dropped rather than sent blank: the
+ * admin query schemas are `.strict()` and reject a parameter they cannot
+ * parse, so an untouched filter must not appear in the URL at all.
+ */
+export function queryString(params: Record<string, string | number | boolean | undefined>): string {
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === '') continue
+    search.set(key, String(value))
+  }
+  const rendered = search.toString()
+  return rendered ? `?${rendered}` : ''
+}
