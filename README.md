@@ -141,6 +141,16 @@ transparent results, across Arabic (RTL), French, and English.
 > was given up is never published, and which winner a reserve replaced is not part of the public
 > contract. Notifications and citizen accounts remain unimplemented.
 
+> **Status:** Step 21 — administrative operations dashboard. The `/admin` area is now a working
+> console rather than a set of placeholders: an operational dashboard, applications and their
+> eligibility and weight, the participation ledger, draw years and commune allocations, and one page
+> that carries a commune's whole workflow from pool validation through freezing, execution,
+> publication and the reserve lifecycle — plus the legacy import pipeline, approvals, the audit trail
+> and administrator accounts. It is built on **shadcn/ui**, and it decides nothing: eligibility,
+> weight, reserve order, roles and territory all come from the server, and the console renders the
+> answer. Password reset, account deletion, result retraction and notifications remain
+> unimplemented.
+
 ## Architecture
 
 ```
@@ -613,6 +623,31 @@ server's own selection order, disabled under `prefers-reduced-motion`, and nothi
 about a result requires seeing it move.
 
 See [docs/public-ui.md](docs/public-ui.md).
+
+## Administrative console
+
+Everything under `/admin` is the operational side of the same system: a scoped
+dashboard, applications with their eligibility and weight, the participation
+ledger, draw years and commune allocations, one page carrying a commune's whole
+workflow from pool validation through freezing, execution, publication and the
+reserve lifecycle, plus the legacy import pipeline, approvals, the audit trail
+and administrator accounts.
+
+It is built on **shadcn/ui** — Radix primitives vendored into
+`client/src/components/shadcn/`, adjusted for RTL and given the status variants
+this domain needs. The public portal keeps its own kit; the two are not mixed.
+
+The console decides nothing. It offers only the lifecycle transitions the shared
+transition tables permit and hides sections a role cannot open, but both are
+courtesies: the server applies the caller's geographic ceiling inside every
+query, and refuses a request regardless of what was rendered. A scoped
+administrator's dashboard is not the national one with rows removed — the server
+counted only their territory, so there is no national figure in the response.
+Running a lottery sends no body at all, the reserve list is rendered in the
+server's order with nothing that could sort it, and there is no per-row control
+that would let an official choose which reserve is called.
+
+See [docs/admin-dashboard.md](docs/admin-dashboard.md).
 
 ## Winner processing
 
