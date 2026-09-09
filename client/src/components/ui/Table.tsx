@@ -11,12 +11,20 @@ export interface TableProps<T> {
   rows: T[]
   getRowKey: (row: T) => string
   emptyMessage?: string
+  /**
+   * The id of the heading that names this table.
+   *
+   * Worth passing whenever a page carries more than one: without it a reader
+   * moving between tables hears "table" twice and has to read a row to work out
+   * which is which. Undefined emits no attribute at all.
+   */
+  labelledBy?: string
 }
 
-export function Table<T>({ columns, rows, getRowKey, emptyMessage }: TableProps<T>) {
+export function Table<T>({ columns, rows, getRowKey, emptyMessage, labelledBy }: TableProps<T>) {
   return (
     <div className="overflow-x-auto rounded-lg border border-stone-200">
-      <table className="w-full min-w-full divide-y divide-stone-200 text-sm">
+      <table aria-labelledby={labelledBy} className="w-full min-w-full divide-y divide-stone-200 text-sm">
         <thead className="bg-stone-50">
           <tr>
             {columns.map((column) => (
