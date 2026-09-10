@@ -261,6 +261,23 @@ export interface PublicPageDto<T> {
 export const PUBLIC_PAGE_SIZE_DEFAULT = 25
 export const PUBLIC_PAGE_SIZE_MAX = 100
 
+/**
+ * Platform-wide scale, for the landing page's trust summary — the only public
+ * numbers this codebase aggregates across every wilaya, commune and draw year
+ * rather than scoping to one commune or one year. Nothing here is
+ * privacy-adjacent: a wilaya count, a commune count, and a sum of the same
+ * `allocatedSpots` figure `PublicDrawStatusDto` already publishes per
+ * commune, reveal nothing about who applied or who won.
+ */
+export interface PublicPlatformStatsDto {
+  /** Active wilayas in the reference dataset. */
+  totalWilayas: number
+  /** Active communes in the reference dataset. */
+  totalCommunes: number
+  /** Sum of `allocatedSpots` across every commune draw ever configured, any year, any status. */
+  totalAllocatedSpots: number
+}
+
 /** What an administrator gets back from publishing, or re-publishing. */
 export interface ResultPublicationDto {
   drawYear: number
