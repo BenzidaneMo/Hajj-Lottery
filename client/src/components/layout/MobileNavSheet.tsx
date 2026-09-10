@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { NavLink, type NavLinkProps } from 'react-router-dom'
+import { Logo } from '../Logo'
 
 import { Sheet, SheetContent, SheetTitle } from '@/components/shadcn/sheet'
 
@@ -34,6 +35,9 @@ export function MobileNavSheet({ open, onOpenChange, items, linkClassName }: Mob
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent id="mobile-nav" side="start" className="w-72 p-0">
         <SheetTitle className="sr-only">{t('nav.ariaLabel')}</SheetTitle>
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+          <Logo />
+        </div>
         <nav aria-label={t('nav.ariaLabel')} className="flex flex-col gap-1 p-4 text-sm">
           {items.map((item) => (
             <NavLink
