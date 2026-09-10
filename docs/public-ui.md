@@ -24,6 +24,14 @@ Geography comes from the existing public reference API (`/api/wilayas`,
 The layout, header, footer and language switcher are the ones the earlier steps established. No
 existing route changed; the two detail routes are additions.
 
+Three more routes complete the citizen-facing surface but sit outside this document's original scope
+because they do not read `/api/public`: `/` (`pages/Home`), `/register` (`pages/Register`, reading
+`GET /api/applications/registration-window` and posting to `POST /api/applications`) and `/about`
+(still a placeholder). Their visual design, the registration wizard, and the shared design system
+behind all of it are covered in
+["A public design system, and the registration wizard"](#a-public-design-system-and-the-registration-wizard)
+below.
+
 ## Addressing: codes, never ids
 
 Every public URL and every public request names a place by its **official code**, and a commune code
@@ -392,13 +400,158 @@ to absorb it.
 root `npm test`). `fetch` is stubbed globally and an unstubbed request throws, because several of
 the assertions are about requests _not_ being made.
 
-| File                          | Covers                                                                                                                                                                                                                                                                            |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `application-status.test.tsx` | Form states, identical failures, no private data, no echo, the result gate, rate limiting, network and 5xx handling, all three languages, `noindex`, storage.                                                                                                                     |
-| `winners.test.tsx`            | Listing, empty state, code-based filters, pagination, bounded page size, no refetch on locale change, the exact winner column set, the safe 404.                                                                                                                                  |
-| `reserves.test.tsx`           | Withdrawn winners staying put in the winner list, the reserve section, API order preserved against a hostile ordering, all four reserve statuses, promoted reserves not relabelled, the exact reserve column set, no abandonment reason or replacement link, all three languages. |
-| `draw.test.tsx`               | Draw status rendering and privacy, the four visualiser states, polling intervals and termination, reduced motion, read-only requests, and the static `Math.random` guard over the client tree.                                                                                    |
-| `public-safety.test.tsx`      | Static scans: no admin/participant/application endpoint in any public module, no browser storage, one POST in the whole public client, and route integrity.                                                                                                                       |
+| File                          | Covers                                                                                                                                                                                                                                                                                  |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `application-status.test.tsx` | Form states, identical failures, no private data, no echo, the result gate, rate limiting, network and 5xx handling, all three languages, `noindex`, storage.                                                                                                                           |
+| `winners.test.tsx`            | Listing, empty state, code-based filters, pagination, bounded page size, no refetch on locale change, the exact winner column set, the safe 404.                                                                                                                                        |
+| `reserves.test.tsx`           | Withdrawn winners staying put in the winner list, the reserve section, API order preserved against a hostile ordering, all four reserve statuses, promoted reserves not relabelled, the exact reserve column set, no abandonment reason or replacement link, all three languages.       |
+| `draw.test.tsx`               | Draw status rendering and privacy, the four visualiser states, polling intervals and termination, reduced motion, read-only requests, and the static `Math.random` guard over the client tree.                                                                                          |
+| `public-safety.test.tsx`      | Static scans: no admin/participant/application endpoint in any public module, no browser storage, one POST in the whole public client, and route integrity.                                                                                                                             |
+| `register.test.tsx`           | The registration wizard: per-step validation, the wilaya→commune dependency (loading, disabled, empty states), the review step's edit links, single vs. paired flows, the same-person rejection, server refusal handling, no national ID or phone in the address bar, Arabic rendering. |
+| `home.test.tsx`               | The three primary actions, the registration-window banner reflecting the server's own state, no link to `/admin`, Arabic rendering.                                                                                                                                                     |
+| `register-safety.test.tsx`    | The same static scans as `public-safety.test.tsx`, over the registration modules specifically — they are excluded from that file's endpoint scan because they legitimately call `/api/applications`, which every other public module is forbidden to name.                              |
+
+## A public design system, and the registration wizard
+
+Added after the rest of this document was written, to give the citizen-facing pages one visual
+language instead of each carrying its own. It touches presentation only: every validation rule, every
+request shape and every server contract described above and in
+[public-access.md](public-access.md) and [registration.md](registration.md) is unchanged.
+
+### One design system, two component sets
+
+`client/src/components/ui/` — the plain kit the original public pages were built on (`Card`, `Button`,
+`Alert`, `Badge`, `Input`, `Select`, `RadioGroup`, `PageHeader`, `EmptyState`, `ErrorState`, `Loading`,
+`Table`, `Pagination`) — is still the foundation for every public page, and stayed the foundation
+rather than being replaced: it already had the right DOM shape and ARIA roles, and every existing test
+asserts against those, not against class names. What changed is the styling underneath each one, moved
+onto the same CSS custom properties (`bg-card`, `text-foreground`, `border-border`, `bg-primary`, …)
+the administrative console's shadcn/ui layer already defined in `index.css` — so a `Card` on `/winners`
+and a `Card` in `/admin` now share one set of tokens, without the public pages taking on Radix or
+adopting shadcn's component API wholesale.
+
+Three shadcn/Radix primitives were pulled into the public tree deliberately, each for behaviour the
+plain kit cannot offer:
+
+- **`Select`** (`components/shadcn/select.tsx`), for `WilayaSelect`/`CommuneSelect` — see below.
+- **`Progress`**, for the registration step indicator.
+- **`Breadcrumb`**, for the two detail pages that sit two levels deep (`PublicBreadcrumb.tsx`).
+
+New shared pieces live in `client/src/components/public/`: `PageSection` (a titled block, replacing
+several ad-hoc heading/paragraph pairs), `DescriptionField` (`Field`/`StatTile`, the `dt`/`dd` pair
+every detail panel — the status panel, the receipt, the result page, the draw stage — used to define
+locally), `StepIndicator` (the wizard's progress display) and `PublicBreadcrumb`.
+
+### A bug fixed in the vendored `Progress`, not worked around
+
+shadcn's `Progress` fills by `transform: translateX(-${100 - value}%)` on a full-width bar. A
+transform is a physical operation — it does not mirror under `dir="rtl"` — so the vendored version
+fills left-to-right even in Arabic. The fix (`components/shadcn/progress.tsx`) replaces the transform
+with a plain `width: ${value}%` on a normal block box: block layout places a narrower box at its
+container's _inline-start_ edge, which **is** governed by `dir`, so the bar grows from the right in
+Arabic and the left in French/English with no variant needed — the same class of fix Step 21 made to
+the vendored `Sheet`'s `side` prop.
+
+### The geography pickers become searchable Selects, and a Radix gotcha worth recording
+
+`WilayaSelect`/`CommuneSelect` (`components/geo/`) moved from a native `<select>` to shadcn's `Select`,
+matching the pattern the admin console's `PlacePicker` already established, with three states beyond
+"has options": a `t('common.loading')` placeholder while the request is in flight, the load-error
+message on failure, and (new key: `geo.commune.empty`) an explicit empty state when a wilaya
+genuinely has no communes returned. `CommuneSelect` still resets its own selection when the wilaya
+changes and stays `disabled` until one is picked — that logic did not move.
+
+Getting the "nothing chosen yet" state right took two attempts. Radix's `Select.Root` is _controlled_
+the instant its `value` prop is anything but `undefined`, so passing `undefined` before a choice and a
+real id afterwards flips it from uncontrolled to controlled mid-life — a React warning, and the kind
+of bug that is easy to ship because it still renders. The fix was a sentinel value substituted for
+`undefined`, `value={value ?? UNSET}` — except the first version used `UNSET = '__unset__'`, which
+kept the component controlled but rendered a **blank trigger**, because Radix's `Select.Value` only
+falls back to its `placeholder` when the value is `''` or `undefined`, not merely "unmatched by any
+item". `UNSET = ''` satisfies both constraints at once: always defined (so always controlled), and the
+one value Radix itself treats as "nothing selected" (so the placeholder shows). An item's own `value`
+still may never be `''` — that constraint is unrelated and unchanged — but the `Select.Root`'s own
+controlled value is a different string and can be.
+
+### The registration wizard
+
+`pages/Register.tsx` presents the same registration this document's sibling,
+[registration.md](registration.md), describes — one `POST /api/applications`, decided entirely by the
+server — as five steps instead of one long form: participation type, location, the primary applicant,
+the second applicant (present only when entry type is `PAIRED`), and a review screen. `StepIndicator`
+is purely presentational; it has no validation logic and no opinion about which step may be entered.
+
+Each `Next` validates only the step being left — `checkLocation`/`checkApplicant`/`checkSecondary`,
+the same three checks the single-page form ran, just invoked individually instead of all at once — and
+blocks advancing on failure. The review step re-runs the complete `validate()` immediately before
+submission regardless, as a final check the wizard's own step-by-step gating cannot bypass. Every
+section on the review screen carries an "Edit" control that jumps back to it directly; because five
+otherwise-identical buttons are a real screen-reader annoyance, each one's accessible name includes the
+section title (`register.review.editSection`, `"Edit: {{section}}"`) while the visible label stays a
+plain "Edit".
+
+The whole step sequence is one `<form>`, not five, so pressing Enter in a field submits to whichever
+action the current step means — `Next`, or `Submit application` on the review step — the way a native
+form's submit-on-Enter already behaves, rather than doing nothing.
+
+### The landing page
+
+`pages/Home.tsx` was a two-line placeholder; it now states what the service is, offers three primary
+actions (`Register`, `Check application status`, `View results` — plain links to the existing routes,
+nothing new server-side), and shows the current registration window by reading the same
+`GET /api/applications/registration-window` `/register` itself uses. That call is a courtesy — a
+visitor learns before clicking rather than after — not a second source of truth; `/register` re-checks
+the window regardless, exactly as before.
+
+### Bundle size: why `/register` is the one public page that is lazy
+
+`routes/index.tsx` already lazy-loads the entire admin console behind `RequireAuth`, on the reasoning
+that `/results/...` — the address a whole commune opens at once — must never download an operations
+console it will not render. The same reasoning applies one level down: `Select`, `Popover` and `Label`
+together are the heaviest dependency this step added to the public tree, and only `/register` uses
+them. Left eager, they landed in the one chunk every public page shares, growing it from 429.8 kB
+(gzip 128.0 kB) to 510.3 kB (gzip 154.7 kB) — paid by every visit to `/winners`, `/draw` and the result
+pages, for a control none of them render.
+
+`Register` is now `React.lazy`-loaded, the same pattern the admin pages use, with a `Suspense`
+boundary in `AppLayout` (mirroring the one `RequireAuth` already has) around the shared `<Outlet />`.
+That returned the shared chunk to 440.3 kB (gzip 132.1 kB) — within noise of the pre-existing baseline
+— with the registration-specific weight (`Register-*.js`, ~14 kB, plus the shared `select-*.js` chunk
+already paid for once the admin console is opened) fetched only by the one route that needs it.
+
+## About page, footer and developer attribution
+
+`/about` (`pages/About.tsx`) was a placeholder; it now carries the project's own description — grounded
+in the root [README.md](../README.md), never in an invented statistic or claim of government
+affiliation — across the same sections `PageSection`/`Card`/`Badge` build everywhere else in the
+citizen portal: what the platform is, the six-stage lifecycle from registration to publication, the
+integrity properties behind a draw (immutable pools, CSPRNG randomness, the permanent audit trail),
+the winner/reserve distinction repeated from the result page's own framing, language support, the
+technology list, and a closing developer-attribution section — deliberately last, since the project is
+the subject of the page and the developer is a credit on it, not the other way around.
+
+`components/layout/Footer.tsx` grew from a single copyright line into three columns — project identity,
+navigation, developer — plus the same copyright line at the bottom. None of it links to `/admin` or
+`/admin/login`; the citizen footer is a different application's chrome from the console's, on purpose.
+
+**One list, two renderers.** `Header`/`MobileNavSheet` and `Footer` both need the public route list;
+it used to live only in `Header.tsx`. It is now `config/nav.ts`'s `PUBLIC_NAV_ITEMS`, imported by both,
+so a route added or renamed later changes one file rather than two that must be kept in step by hand.
+
+**Social links, and why they are hand-drawn.** `components/SocialLinks.tsx` renders the developer's five
+profiles from `config/site.ts` — the one place their URLs live, so About and Footer read the same list
+rather than each keeping a copy — as `target="_blank" rel="noopener noreferrer"` links, each with an
+`aria-label` naming the platform. `lucide-react` (the icon set the rest of the app uses) does not ship
+brand marks, so the five glyphs in `components/icons/brands.tsx` are hand-drawn `fill="currentColor"`
+paths, kept apart from `icons/index.tsx`'s stroke-based functional set: a brand logo is a solid mark,
+not a line drawing, and installing a whole icon-brand package for five fixed paths would be the
+dependency this step was told not to add.
+
+Every visible string on both surfaces — including the developer's name and handle, even though they do
+not change by language — goes through the same `ar`/`fr`/`en` locale files as the rest of the app,
+verified for structural parity the same way. The one thing that does not move between languages is the
+literal `DEVELOPER.name`/`.handle` and each `SocialLink.href` in `config/site.ts`: a URL and a proper
+name are not translatable content.
 
 ## Not in this step
 
