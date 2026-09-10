@@ -9,12 +9,14 @@ export interface CardProps extends PropsWithChildren {
 
 export function Card({ title, description, actions, className = '', children }: CardProps) {
   return (
-    <div className={`rounded-lg border border-stone-200 bg-white p-6 shadow-sm ${className}`}>
+    <div
+      className={`rounded-xl border border-border bg-card p-6 text-card-foreground shadow-sm ${className}`}
+    >
       {(title ?? actions) && (
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
-            {title && <h3 className="text-base font-semibold text-stone-900">{title}</h3>}
-            {description && <p className="mt-1 text-sm text-stone-500">{description}</p>}
+            {title && <h3 className="text-base font-semibold tracking-tight text-foreground">{title}</h3>}
+            {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
           </div>
           {actions}
         </div>

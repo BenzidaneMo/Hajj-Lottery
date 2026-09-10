@@ -23,18 +23,22 @@ export interface TableProps<T> {
 
 export function Table<T>({ columns, rows, getRowKey, emptyMessage, labelledBy }: TableProps<T>) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-stone-200">
-      <table aria-labelledby={labelledBy} className="w-full min-w-full divide-y divide-stone-200 text-sm">
+    <div className="overflow-x-auto rounded-xl border border-border">
+      <table aria-labelledby={labelledBy} className="w-full min-w-full divide-y divide-border text-sm">
         <thead className="bg-stone-50">
           <tr>
             {columns.map((column) => (
-              <th key={column.key} scope="col" className="px-4 py-3 text-start font-medium text-stone-600">
+              <th
+                key={column.key}
+                scope="col"
+                className="px-4 py-3 text-start text-xs font-semibold tracking-wide text-stone-500 uppercase"
+              >
                 {column.header}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-stone-200 bg-white">
+        <tbody className="divide-y divide-border bg-card">
           {rows.length === 0 ? (
             <tr>
               <td colSpan={columns.length} className="px-4 py-8 text-center text-stone-500">
@@ -43,7 +47,7 @@ export function Table<T>({ columns, rows, getRowKey, emptyMessage, labelledBy }:
             </tr>
           ) : (
             rows.map((row) => (
-              <tr key={getRowKey(row)}>
+              <tr key={getRowKey(row)} className="transition-colors hover:bg-stone-50">
                 {columns.map((column) => (
                   <td key={column.key} className="px-4 py-3 text-start text-stone-700">
                     {column.render(row)}
