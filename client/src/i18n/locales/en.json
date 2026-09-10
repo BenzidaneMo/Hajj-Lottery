@@ -14,9 +14,19 @@
   "footer": {
     "rights": "All rights reserved",
     "description": "A platform for organizing the communal Hajj lottery: registration, commune draws and published results.",
-    "navHeading": "Navigation",
-    "developerHeading": "Developer",
-    "developedBy": "Developed by {{name}}"
+    "navHeading": "Quick Links",
+    "officialLinksHeading": "Official Links",
+    "officialLinksHint": "External government resources, unaffiliated with this project.",
+    "officialLinks": {
+      "interior": "Ministry of the Interior",
+      "religiousAffairs": "Ministry of Religious Affairs and Wakfs",
+      "digitalServices": "Algeria Digital Services"
+    },
+    "contactHeading": "Contact",
+    "location": "Mostaganem, Algeria",
+    "privacyPolicy": "Privacy Policy",
+    "termsOfService": "Terms of Service",
+    "placeholderNotice": "This page has not been published yet."
   },
   "language": {
     "label": "Language"
@@ -51,6 +61,23 @@
       "results": {
         "title": "See the outcome",
         "body": "Check your application status or the published result for your commune."
+      }
+    },
+    "stats": {
+      "eyebrow": "At a glance",
+      "title": "The platform, in numbers",
+      "totalPlaces": {
+        "label": "Total Hajj places"
+      },
+      "totalMunicipalities": {
+        "label": "Municipalities"
+      },
+      "totalWilayas": {
+        "label": "Wilayas"
+      },
+      "certifiedResults": {
+        "title": "Certified draws",
+        "subtitle": "Transparent and auditable"
       }
     }
   },
@@ -1251,7 +1278,9 @@
     "github": "GitHub",
     "linkedin": "LinkedIn",
     "x": "X (Twitter)",
-    "instagram": "Instagram",
-    "facebook": "Facebook"
+    "facebook": "Facebook",
+    "portfolio": "Portfolio",
+    "email": "Email",
+    "phone": "Phone"
   }
 }

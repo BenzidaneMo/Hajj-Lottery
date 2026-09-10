@@ -14,9 +14,19 @@
   "footer": {
     "rights": "Tous droits réservés",
     "description": "Une plateforme pour organiser la loterie communale du Hadj : inscription, tirages communaux et résultats publiés.",
-    "navHeading": "Navigation",
-    "developerHeading": "Développeur",
-    "developedBy": "Développé par {{name}}"
+    "navHeading": "Liens rapides",
+    "officialLinksHeading": "Liens officiels",
+    "officialLinksHint": "Ressources gouvernementales externes, sans affiliation avec ce projet.",
+    "officialLinks": {
+      "interior": "Ministère de l'Intérieur",
+      "religiousAffairs": "Ministère des Affaires Religieuses et des Wakfs",
+      "digitalServices": "Services Numériques Algériens"
+    },
+    "contactHeading": "Contact",
+    "location": "Mostaganem, Algérie",
+    "privacyPolicy": "Politique de confidentialité",
+    "termsOfService": "Conditions d'utilisation",
+    "placeholderNotice": "Cette page n'a pas encore été publiée."
   },
   "language": {
     "label": "Langue"
@@ -51,6 +61,23 @@
       "results": {
         "title": "Consulter le résultat",
         "body": "Vérifiez le statut de votre demande ou le résultat publié pour votre commune."
+      }
+    },
+    "stats": {
+      "eyebrow": "En un coup d'œil",
+      "title": "La plateforme, en chiffres",
+      "totalPlaces": {
+        "label": "Places de Hajj au total"
+      },
+      "totalMunicipalities": {
+        "label": "Communes"
+      },
+      "totalWilayas": {
+        "label": "Wilayas"
+      },
+      "certifiedResults": {
+        "title": "Tirages certifiés",
+        "subtitle": "Transparents et vérifiables"
       }
     }
   },
@@ -1251,7 +1278,9 @@
     "github": "GitHub",
     "linkedin": "LinkedIn",
     "x": "X (Twitter)",
-    "instagram": "Instagram",
-    "facebook": "Facebook"
+    "facebook": "Facebook",
+    "portfolio": "Portfolio",
+    "email": "E-mail",
+    "phone": "Téléphone"
   }
 }

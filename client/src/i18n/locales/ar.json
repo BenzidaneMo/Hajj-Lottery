@@ -14,9 +14,19 @@
   "footer": {
     "rights": "جميع الحقوق محفوظة",
     "description": "منصة لتنظيم قرعة الحج الجماعية: التسجيل، قرعات البلديات، والنتائج المنشورة.",
-    "navHeading": "التصفح",
-    "developerHeading": "المطوّر",
-    "developedBy": "تطوير {{name}}"
+    "navHeading": "روابط سريعة",
+    "officialLinksHeading": "روابط مهمة",
+    "officialLinksHint": "روابط حكومية خارجية، لا علاقة تنظيمية لها بهذا المشروع.",
+    "officialLinks": {
+      "interior": "وزارة الداخلية",
+      "religiousAffairs": "وزارة الشؤون الدينية والأوقاف",
+      "digitalServices": "الخدمات الرقمية الجزائرية"
+    },
+    "contactHeading": "تواصل معنا",
+    "location": "مستغانم، الجزائر",
+    "privacyPolicy": "سياسة الخصوصية",
+    "termsOfService": "شروط الاستخدام",
+    "placeholderNotice": "لم يتم نشر هذه الصفحة بعد."
   },
   "language": {
     "label": "اللغة"
@@ -51,6 +61,23 @@
       "results": {
         "title": "الاطلاع على النتيجة",
         "body": "تحقق من حالة طلبك أو النتيجة المعلنة لبلديتك."
+      }
+    },
+    "stats": {
+      "eyebrow": "نظرة سريعة",
+      "title": "المنصة بالأرقام",
+      "totalPlaces": {
+        "label": "عدد الأماكن المخصصة للحج"
+      },
+      "totalMunicipalities": {
+        "label": "البلديات"
+      },
+      "totalWilayas": {
+        "label": "ولاية"
+      },
+      "certifiedResults": {
+        "title": "قرعة موثوقة",
+        "subtitle": "شفافة وقابلة للمراجعة"
       }
     }
   },
@@ -1239,19 +1266,21 @@
       "body": "تتوفر تجربة المواطن بأكملها — التسجيل، حالة الطلب، النتائج، وهذه الصفحة — بالعربية (من اليمين إلى اليسار)، والفرنسية، والإنجليزية."
     },
     "tech": {
-      "title": "بُنيت باستخدام",
+      "title": "طور باستخدام",
       "description": "التقنيات التي تقوم عليها المنصة."
     },
     "developer": {
       "title": "عن المطوّر",
-      "body": "قرعة الحج من تصميم وتطوير Mohamed Benzidane — من تسجيل المواطنين وصولاً إلى لوحة التحكم الإدارية."
+      "body": "قرعة الحج من تصميم وتطوير بن زيدان محمد — من تسجيل المواطنين وصولاً إلى لوحة التحكم الإدارية."
     }
   },
   "social": {
     "github": "GitHub",
     "linkedin": "LinkedIn",
-    "x": "X (تويتر)",
-    "instagram": "Instagram",
-    "facebook": "Facebook"
+    "x": "X (Twitter)",
+    "facebook": "Facebook",
+    "portfolio": "الموقع الشخصي",
+    "email": "البريد الإلكتروني",
+    "phone": "الهاتف"
   }
 }
