@@ -232,11 +232,11 @@ export function Register() {
         description={window_ ? t('register.subtitle', { year: window_.drawYear }) : undefined}
       />
 
-      <div className="mb-8 max-w-3xl">
+      <div className="mb-8 max-w-5xl mx-auto">
         <StepIndicator steps={stepLabels.map((label) => ({ label }))} current={stepIndex + 1} />
       </div>
 
-      <form className="flex max-w-3xl flex-col gap-6" onSubmit={handleFormSubmit} noValidate>
+      <form className="flex max-w-5xl mx-auto flex-col gap-6" onSubmit={handleFormSubmit} noValidate>
         {submissionError && <Alert variant="error">{submissionError}</Alert>}
 
         {currentKey === 'entryType' && (

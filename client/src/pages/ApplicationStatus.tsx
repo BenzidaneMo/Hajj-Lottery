@@ -114,7 +114,7 @@ export function ApplicationStatus() {
           </Button>
         </div>
       ) : (
-        <Card className="max-w-2xl">
+        <Card className="max-w-5xl mx-auto">
           <form className="flex flex-col gap-5" onSubmit={handleSubmit} noValidate>
             <Input
               label={t('public.lookup.reference')}
