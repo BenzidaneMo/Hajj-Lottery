@@ -553,6 +553,134 @@ verified for structural parity the same way. The one thing that does not move be
 literal `DEVELOPER.name`/`.handle` and each `SocialLink.href` in `config/site.ts`: a URL and a proper
 name are not translatable content.
 
+## Visual theme, typography and the landing hero
+
+A later pass over the same public tree Step 22 restyled — not a second redesign. It changes the design
+tokens the existing `ui`/`shadcn` kits already read from `index.css`, the fonts, the landing hero and the
+footer; no page's markup structure, component API or business logic moved.
+
+### One typography system, chosen by direction
+
+`index.css` maps writing direction to a font family rather than locale name: `html[dir="rtl"]` reads
+**Cairo**, `:root`'s default reads **Plus Jakarta Sans** — so French and English (both LTR) share one
+family and Arabic gets one built for the script, without the app ever branching on which of the three
+languages is active. Both load from Google Fonts (`index.html`'s `<link>`, with `preconnect` ahead of
+it); the fallback stack on both rules is a plain system sans-serif, so a blocked or slow font request
+never leaves the app unreadable, only briefly un-styled.
+
+### The color ramp is the project's own logo, not a generic palette
+
+`public/image/Logo.png`/`.webp` — the Kaaba-and-lottery-ticket mark now used in `Logo.tsx`, replacing
+the placeholder abstract shield — fixed the exact greens and gold this step's `--color-primary-*`/
+`--color-gold-*` tokens in `index.css` are drawn from, rather than the other way around. `primary-700`
+(`#006233`) and `primary-800` (`#004d28`) are the logo's own two greens; `primary-900` is a new, darker
+step added only because `Draw.tsx`/`Winners.tsx` already referenced a `hover:text-primary-900` that had
+never actually resolved to a color (the scale stopped at 800). `gold-*` is deliberately small and used in
+exactly one decorative place — the hero eyebrow's accent bar — never as a second interactive color or as
+text on a light background, where it fails WCAG contrast on its own.
+
+### The landing hero: a real photograph, held to the same RTL rule everywhere else breaks
+
+`Home.tsx`'s hero now carries an aerial photograph of the Kaaba (`public/image/Kaaba-home-hero.webp`),
+masked rather than placed full-bleed: a `mask-image` linear gradient fades the photo in from transparent
+to full strength over roughly the right two-thirds of the hero, so the text column sits on the plain
+gradient background and never on top of the image — no dark scrim is needed anywhere for the heading to
+stay readable, because the two never overlap.
+
+The photo is the one deliberate exception to "always use logical properties" in this codebase. It stays
+physically on the right (`right-0`, not `end-0`) in Arabic, French and English alike, and the text column
+is pinned to the physical left with `mr-auto` rather than left to its normal inline-start position. A
+photograph of one real, specific place has one true arrangement — the two minarets, the Kaaba's actual
+position between them — and mirroring it under `dir="rtl"` the way a logical property would misrepresent
+Masjid al-Haram's own layout. Only the text's own internal alignment still follows `dir`, exactly as
+everywhere else. The image is `loading="lazy"` inside an `lg:`-only ancestor, so a phone visitor's
+browser does not fetch the ~550KB photograph at all — only a desktop viewport, where the mask has room to
+read as a blend rather than a hard edge, pays for it.
+
+### A new public endpoint, added deliberately and only after the alternative was refused
+
+`Home.tsx` gained a four-tile trust summary below "How it works" — total Hajj places, municipalities,
+wilayas, and a static "certified draws" badge. The first three needed real numbers, and this step's own
+governing spec is explicit that a public page may not carry a fabricated statistic. Wilaya and commune
+counts already have a real source (`/api/wilayas`, `/api/communes`); a total across every commune's
+`allocated_spots` did not — nothing in the codebase aggregates it, by design (see "No
+`eligible_application_count`" under Draw configuration in `CLAUDE.md`).
+
+Rather than invent a number or silently compute one client-side by paging through every commune's already
+public `allocatedSpots` on every homepage load, the choice was to add `GET /api/public/stats`
+(`server/src/routes/public.ts`, `getPublicStats`, `PublicResultsService.getPlatformStats`) — one query
+that sums `allocated_spots` across every `CommuneDraw` ever configured, any year, any status, alongside
+two cheap `count()`s for active wilayas and communes. `PublicPlatformStatsDto` (`shared/src/public.ts`) is
+the DTO; the response is cached the same as `/api/public/draw-status` (`cachePublicListing`), since the
+numbers move only as fast as an administrator configures a new commune draw. Nothing here is
+privacy-adjacent — a wilaya count, a commune count, and a sum of a figure that is already published per
+commune reveal nothing about who applied or who won — and the route takes no input, so there is nothing to
+validate.
+
+This is the one place this step touched server code; everywhere else stayed public-UI-only. `Home.tsx`'s
+`StatTile` shows a skeleton while `usePublicStats()` (`lib/public.ts`) is loading and an em dash — never
+an error banner — if the request fails, the same "a missing number should not read as a broken page"
+choice the registration-window banner already made. `KaabaIcon` is hand-drawn locally in `Home.tsx` (no
+icon set ships one); the mosque and pin icons are lucide's own `MosqueIcon`/`MapPinIcon`.
+
+### Motion: Framer Motion, but code-split so `/winners` never pays for it
+
+Framer Motion is a new dependency — Step 22 and 23 deliberately avoided adding one for their own visual
+work, and this step's first pass at the hero (a hand-rolled `IntersectionObserver` hook, no library) held
+to that. It was replaced with Framer Motion on explicit direction mid-step, for the hero's staggered
+entrance and the primary CTA's hover/tap feedback.
+
+Importing `motion` directly would have put the whole animation engine in the chunk every public page
+shares — measured at the time: the shared chunk grew from 440 kB to 589 kB (gzip 132 kB → 181 kB) for a
+component only `/` renders, the exact regression Step 22's `/register` lazy-load was written to avoid.
+The fix is Framer Motion's own supported code-splitting shape: `Home.tsx` renders `m.div`/`m.img` (the
+lightweight variant) inside one `<LazyMotion features={loadMotionFeatures} strict>`, where
+`loadMotionFeatures` is a dynamic `import('../lib/motion-features')` — a one-line module whose only
+content is `export default domAnimation`. Rollup places `domAnimation` (the actual feature
+implementation) in its own chunk, fetched only once `LazyMotion` mounts, never inside the shared bundle.
+`components/public/Reveal.tsx` — the "how it works" cards' viewport-triggered entrance — uses the same
+`m` import and relies on `Home.tsx`'s `LazyMotion` ancestor rather than carrying its own.
+
+Net effect on the shared chunk: 507 kB (gzip 155.7 kB) after code-splitting, against a 440 kB (gzip
+132 kB) pre-Step-24 baseline — the framer-motion core (`m`, `LazyMotion`, `useReducedMotion`) still ships
+eagerly, since it is small and `Home.tsx` is not itself lazy (it is the entry route), but the ~37 kB
+(gzip 14 kB) `domAnimation` feature set is a separate, async chunk `/winners`, `/draw` and the result
+pages never fetch.
+
+Every animation reads `useReducedMotion()` and substitutes a reduced variant (no vertical travel, no
+scale) rather than skipping the entrance outright — content still appears, it just does not move. jsdom
+has no `IntersectionObserver`; `tests/setup.ts` gained the same kind of inert stand-in it already had for
+`ResizeObserver`, since nothing in this suite asserts on the animation itself, only on what it wraps.
+
+### The footer: four columns, and a dark band that is the brand's own dark green
+
+`Footer.tsx` moved from three light columns to four on a dark `bg-primary-800` band: brand identity (logo,
+tagline, the developer's social profiles via `SocialLinks variant="dark"` — a new variant, since the
+existing `circle` style's stone tones read as a smudge on a dark background), site navigation
+(`footer.navHeading`, now "Quick Links" rather than "Navigation"), official government resources, and
+direct contact details. A sub-footer repeats the copyright line beside two legal-placeholder triggers.
+
+**Official government links are a courtesy, not a claim.** `config/site.ts`'s `OFFICIAL_LINKS` points at
+three real Algerian government sites relevant to this domain — the Ministry of the Interior, the Ministry
+of Religious Affairs and Wakfs (which administers Hajj affairs), and Dzair Digital Services, the national
+digital-services portal — each verified against its own site or press coverage before being named, rather
+than guessed. `footer.officialLinksHint` states plainly that these are external resources with no
+affiliation to this project, so the column cannot be misread as a claim of the government affiliation
+Step 23 already established this platform does not make.
+
+**Contact is separate from social.** `SOCIAL_LINKS` in `config/site.ts` went back to profile links only
+(github/linkedin/x/facebook/portfolio); email and phone moved to a new `CONTACT` export, rendered in the
+footer's contact column as their own labelled rows (an icon plus the visible address/number) rather than
+icon-only circles — a citizen reaching out directly is a different action from following a profile, and
+the two are laid out to read that way. The phone number keeps `dir="ltr"` on its own link regardless of
+page direction, the same reasoning `lib/format.ts` already applies to numerals under Arabic.
+
+**Two placeholder dialogs, not two dead links.** Privacy Policy and Terms of Service do not exist yet.
+Rather than a link to nowhere or fabricated legal text, both open the same small dialog
+(`components/shadcn/dialog.tsx`, already vendored — the underlying Radix `Dialog` primitive is the one
+`Sheet`'s mobile navigation already loads eagerly, so this adds a thin wrapper, not a new dependency)
+stating plainly that the page has not been published yet.
+
 ## Not in this step
 
 - **Winner names.** An explicit policy decision, not an omission.

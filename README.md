@@ -168,6 +168,16 @@ transparent results, across Arabic (RTL), French, and English.
 > `components/SocialLinks.tsx`) beside its existing copyright line, kept entirely separate from the
 > administrative console.
 
+> **Status:** Step 24 — visual theme and landing hero. The public pages now read the project's own logo
+> (the Kaaba-and-ticket mark in `public/image/`) rather than a placeholder shield, in a green/gold color
+> ramp drawn from that mark and a Cairo/Plus Jakarta Sans typography system chosen by writing direction.
+> The landing page gained a masked hero photograph, a Framer Motion entrance code-split via `LazyMotion`
+> so the animation engine stays out of the bundle every other public page shares, and a four-tile trust
+> summary fed by one new endpoint (`GET /api/public/stats`) rather than a fabricated statistic. The footer
+> grew to four columns — brand, navigation, official (unaffiliated) government resources and direct
+> contact — on the brand's own dark green, with two legal-placeholder dialogs replacing dead links. No
+> validation rule, existing server contract or business logic changed.
+
 ## Architecture
 
 ```
