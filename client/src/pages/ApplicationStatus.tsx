@@ -1,4 +1,5 @@
 import type { PublicApplicationStatusDto } from '@hajj-lottery/shared'
+import { SearchIcon, ShieldCheckIcon } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -114,44 +115,42 @@ export function ApplicationStatus() {
         </div>
       ) : (
         <Card className="max-w-2xl">
-          <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
+          <form className="flex flex-col gap-5" onSubmit={handleSubmit} noValidate>
             <Input
               label={t('public.lookup.reference')}
               value={reference}
               onChange={(event) => setReference(event.target.value)}
               error={fieldErrors.reference}
+              hint={t('public.lookup.referenceHint')}
               disabled={isSubmitting}
               autoComplete="off"
               spellCheck={false}
               className="font-mono uppercase"
-              aria-describedby="reference-hint"
             />
-            <p id="reference-hint" className="-mt-2 text-xs text-stone-500">
-              {t('public.lookup.referenceHint')}
-            </p>
 
             <Input
               label={t('public.lookup.phoneNumber')}
               value={phoneNumber}
               onChange={(event) => setPhoneNumber(event.target.value)}
               error={fieldErrors.phoneNumber}
+              hint={t('public.lookup.phoneHint')}
               disabled={isSubmitting}
               type="tel"
               inputMode="tel"
               autoComplete="off"
-              aria-describedby="phone-hint"
             />
-            <p id="phone-hint" className="-mt-2 text-xs text-stone-500">
-              {t('public.lookup.phoneHint')}
-            </p>
 
             <div>
               <Button type="submit" disabled={isSubmitting}>
+                <SearchIcon aria-hidden="true" className="size-4" />
                 {isSubmitting ? t('public.lookup.submitting') : t('public.lookup.submit')}
               </Button>
             </div>
 
-            <p className="text-xs text-stone-500">{t('public.lookup.privacyNote')}</p>
+            <p className="flex items-start gap-2 text-xs text-stone-500">
+              <ShieldCheckIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+              {t('public.lookup.privacyNote')}
+            </p>
           </form>
         </Card>
       )}
