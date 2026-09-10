@@ -151,6 +151,23 @@ transparent results, across Arabic (RTL), French, and English.
 > answer. Password reset, account deletion, result retraction and notifications remain
 > unimplemented.
 
+> **Status:** Step 22 — citizen portal UI/UX overhaul. The public pages now share one design
+> system with the admin console's own — the same CSS tokens, restyled onto the existing `ui/` kit
+> rather than a second component API — across a redesigned landing page, registration presented as
+> a five-step wizard (one `POST /api/applications` still, validated and decided exactly as before),
+> and lighter visual polish on application status, winners, draw status and the two detail pages,
+> which gained breadcrumbs. The wilaya/commune pickers moved to shadcn's `Select`; `/register` is
+> the one public route that is lazy-loaded, since it is the only page that needs the Select/Popover
+> weight that comes with it. No validation rule, server contract or business logic changed.
+
+> **Status:** Step 23 — About page and footer. `/about` carries the project's own description —
+> grounded in this README, not an invented statistic or a claim of government affiliation — the
+> six-stage lifecycle from registration to publication, the integrity properties behind a draw, the
+> winners/reserves distinction, language support and a closing developer-attribution section. The
+> footer gained a navigation column and social links (`config/nav.ts`, `config/site.ts`,
+> `components/SocialLinks.tsx`) beside its existing copyright line, kept entirely separate from the
+> administrative console.
+
 ## Architecture
 
 ```
@@ -223,16 +240,23 @@ layout since there is no session yet):
   `/admin/draws`, `/admin/winners`, `/admin/history`, `/admin/imports`,
   `/admin/approvals`, `/admin/audit`, `/admin/admins`, `/admin/settings`
 
-All of the above render placeholder content only — no business logic.
+As of Step 22/23 every public route above renders real content; every admin route has rendered real
+content since Step 21. See [docs/public-ui.md](docs/public-ui.md) and
+[docs/admin-dashboard.md](docs/admin-dashboard.md).
 
 ## UI components
 
-Reusable, generic components live under `client/src/components/ui/`: `Button`,
-`IconButton`, `Input`, `Select`, `Textarea`, `Checkbox`, `RadioGroup`, `Badge`,
-`Alert`, `Card`, `Modal`, `Dropdown`, `Table`, `Pagination`, `Skeleton`,
-`EmptyState`, `ErrorState`, `PageHeader`. The brand accent is a single
-`primary-*` color token defined in `client/src/index.css`; status colors
-(success/warning/error/info) use Tailwind's stock palettes.
+Reusable, generic components for the **public** portal live under `client/src/components/ui/`:
+`Button`, `IconButton`, `Input`, `Select`, `Textarea`, `Checkbox`, `RadioGroup`, `Badge`, `Alert`,
+`Card`, `Table`, `Pagination`, `Skeleton`, `EmptyState`, `ErrorState`, `PageHeader`, plus
+`components/public/` for page-composition pieces (`PageSection`, `StepIndicator`,
+`DescriptionField`, `PublicBreadcrumb`) and domain-specific ones (`WinnerList`, `ReserveList`,
+`DrawStage`, `ApplicationStatusPanel`). The admin console is built on vendored shadcn/ui
+(`client/src/components/shadcn/`) instead — the two kits share one set of CSS tokens but are not
+mixed; a handful of public pages also use shadcn primitives directly (`Select` for the geo pickers,
+`Progress` for the registration step indicator, `Breadcrumb`) where the plain kit has no
+equivalent. The brand accent is a single `primary-*` color token defined in `client/src/index.css`;
+status colors (success/warning/error/info) use Tailwind's stock palettes.
 
 All spacing/alignment uses CSS logical properties (`ps-`/`pe-`, `ms-`/`me-`,
 `start-`/`end-`, `text-start`) instead of `left`/`right` so layouts mirror
