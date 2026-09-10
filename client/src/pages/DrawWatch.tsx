@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router-dom'
 
 import { DrawStage } from '../components/public/DrawStage'
+import { PublicBreadcrumb } from '../components/public/PublicBreadcrumb'
 import { publicErrorMessage } from '../components/public/publicError'
 import { Button, ErrorState, Loading, PageHeader } from '../components/ui'
 import { useDocumentTitle } from '../lib/document'
@@ -55,9 +56,9 @@ export function DrawWatch() {
   )
 
   const backToDraws = (
-    <Link to="/draw">
-      <Button variant="secondary">{t('public.draw.backToList')}</Button>
-    </Link>
+    <Button asChild variant="secondary">
+      <Link to="/draw">{t('public.draw.backToList')}</Link>
+    </Button>
   )
 
   if (watch.isLoading) return <Loading label={t('common.loading')} />
@@ -67,6 +68,7 @@ export function DrawWatch() {
   if (watch.error && !watch.status) {
     return (
       <div>
+        <PublicBreadcrumb steps={[{ label: t('nav.home'), to: '/' }, { label: t('public.draw.title') }]} />
         <PageHeader title={t('public.draw.title')} actions={backToDraws} />
         <ErrorState
           title={publicErrorMessage(watch.error, t)}
@@ -79,6 +81,13 @@ export function DrawWatch() {
 
   return (
     <div>
+      <PublicBreadcrumb
+        steps={[
+          { label: t('nav.home'), to: '/' },
+          { label: t('public.draw.title'), to: '/draw' },
+          { label: watch.status ? placeName : t('public.draw.title') },
+        ]}
+      />
       <PageHeader
         title={
           watch.status
@@ -111,9 +120,11 @@ export function DrawWatch() {
 
       {published && (
         <div className="mt-4">
-          <Link to={`/results/${drawYear}/${wilayaCode}/${communeCode}`}>
-            <Button variant="secondary">{t('public.draw.viewOfficialResult')}</Button>
-          </Link>
+          <Button asChild variant="secondary">
+            <Link to={`/results/${drawYear}/${wilayaCode}/${communeCode}`}>
+              {t('public.draw.viewOfficialResult')}
+            </Link>
+          </Button>
         </div>
       )}
     </div>

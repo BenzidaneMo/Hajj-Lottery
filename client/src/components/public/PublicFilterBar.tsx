@@ -1,7 +1,8 @@
+import { FilterXIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { PlaceCodeFilters } from '../geo'
-import { Button, Input } from '../ui'
+import { Button, Card, Input } from '../ui'
 import { DRAW_YEAR_MAX, DRAW_YEAR_MIN, EMPTY_FILTERS, type PublicFilterValues } from './filters'
 
 /**
@@ -28,33 +29,36 @@ export function PublicFilterBar({ value, onChange, disabled }: PublicFilterBarPr
       <h2 id="public-filters-heading" className="sr-only">
         {t('public.filters.heading')}
       </h2>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Input
-          label={t('public.results.drawYear')}
-          type="number"
-          inputMode="numeric"
-          min={DRAW_YEAR_MIN}
-          max={DRAW_YEAR_MAX}
-          value={value.drawYear}
-          disabled={disabled}
-          placeholder={t('public.filters.allYears')}
-          onChange={(event) => onChange({ ...value, drawYear: event.target.value })}
-        />
-        <PlaceCodeFilters
-          value={value}
-          disabled={disabled}
-          onChange={(codes) => onChange({ ...value, ...codes })}
-        />
-        <div className="flex items-end">
-          <Button
-            variant="secondary"
-            disabled={disabled || !hasFilters}
-            onClick={() => onChange(EMPTY_FILTERS)}
-          >
-            {t('public.filters.clear')}
-          </Button>
+      <Card className="bg-stone-50/60">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Input
+            label={t('public.results.drawYear')}
+            type="number"
+            inputMode="numeric"
+            min={DRAW_YEAR_MIN}
+            max={DRAW_YEAR_MAX}
+            value={value.drawYear}
+            disabled={disabled}
+            placeholder={t('public.filters.allYears')}
+            onChange={(event) => onChange({ ...value, drawYear: event.target.value })}
+          />
+          <PlaceCodeFilters
+            value={value}
+            disabled={disabled}
+            onChange={(codes) => onChange({ ...value, ...codes })}
+          />
+          <div className="flex items-end">
+            <Button
+              variant="secondary"
+              disabled={disabled || !hasFilters}
+              onClick={() => onChange(EMPTY_FILTERS)}
+            >
+              <FilterXIcon aria-hidden="true" className="size-4" />
+              {t('public.filters.clear')}
+            </Button>
+          </div>
         </div>
-      </div>
+      </Card>
     </section>
   )
 }

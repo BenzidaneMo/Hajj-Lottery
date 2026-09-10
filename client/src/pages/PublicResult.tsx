@@ -2,6 +2,8 @@ import { localizedGeoName, type SupportedLocale } from '@hajj-lottery/shared'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router-dom'
 
+import { Field, StatTile } from '../components/public/DescriptionField'
+import { PublicBreadcrumb } from '../components/public/PublicBreadcrumb'
 import { publicErrorMessage } from '../components/public/publicError'
 import { ReserveList } from '../components/public/ReserveList'
 import { WinnerList } from '../components/public/WinnerList'
@@ -42,9 +44,9 @@ export function PublicResult() {
   )
 
   const backToResults = (
-    <Link to="/winners" className="print:hidden">
-      <Button variant="secondary">{t('public.results.backToList')}</Button>
-    </Link>
+    <Button asChild variant="secondary" className="print:hidden">
+      <Link to="/winners">{t('public.results.backToList')}</Link>
+    </Button>
   )
 
   if (isLoading) return <Loading label={t('common.loading')} />
@@ -56,6 +58,9 @@ export function PublicResult() {
     if (isNotFound(error)) {
       return (
         <div>
+          <PublicBreadcrumb
+            steps={[{ label: t('nav.home'), to: '/' }, { label: t('public.results.title') }]}
+          />
           <PageHeader title={t('public.results.title')} actions={backToResults} />
           <Alert variant="info" title={t('public.results.notPublishedTitle')}>
             {t('public.results.notPublishedBody')}
@@ -66,6 +71,7 @@ export function PublicResult() {
 
     return (
       <div>
+        <PublicBreadcrumb steps={[{ label: t('nav.home'), to: '/' }, { label: t('public.results.title') }]} />
         <PageHeader title={t('public.results.title')} actions={backToResults} />
         <ErrorState title={publicErrorMessage(error, t)} retryLabel={t('common.retry')} onRetry={refetch} />
       </div>
@@ -76,6 +82,13 @@ export function PublicResult() {
 
   return (
     <article>
+      <PublicBreadcrumb
+        steps={[
+          { label: t('nav.home'), to: '/' },
+          { label: t('public.results.title'), to: '/winners' },
+          { label: localizedGeoName(result.commune, locale) },
+        ]}
+      />
       <PageHeader
         title={t('public.results.communeTitle', {
           commune: localizedGeoName(result.commune, locale),
@@ -87,30 +100,32 @@ export function PublicResult() {
 
       <div className="flex flex-col gap-6">
         <Card title={t('public.results.summary')}>
-          <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Figure label={t('public.results.allocatedSpots')}>
+          <dl className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <StatTile label={t('public.results.allocatedSpots')}>
               {formatNumber(result.allocatedSpots, locale)}
-            </Figure>
-            <Figure label={t('public.results.entryCount')}>{formatNumber(result.entryCount, locale)}</Figure>
-            <Figure label={t('public.results.winnerCount')}>
+            </StatTile>
+            <StatTile label={t('public.results.entryCount')}>
+              {formatNumber(result.entryCount, locale)}
+            </StatTile>
+            <StatTile label={t('public.results.winnerCount')}>
               {formatNumber(result.winnerCount, locale)}
-            </Figure>
-            <Figure label={t('public.results.winningParticipantCount')}>
+            </StatTile>
+            <StatTile label={t('public.results.winningParticipantCount')}>
               {formatNumber(result.winningParticipantCount, locale)}
-            </Figure>
+            </StatTile>
             {/*
               Counted from the list the API sent rather than from a separate
               figure, so the number above the table and the rows in it cannot
               disagree. A reserve position is not a place, which is why it is a
               figure of its own rather than added to the winner count.
             */}
-            <Figure label={t('public.results.reserveCount')}>
+            <StatTile label={t('public.results.reserveCount')}>
               {formatNumber(result.reserves.length, locale)}
-            </Figure>
-            <Figure label={t('public.results.drawnAt')}>{formatDateTime(result.drawnAt, locale)}</Figure>
-            <Figure label={t('public.results.publishedAt')}>
+            </StatTile>
+            <Field label={t('public.results.drawnAt')}>{formatDateTime(result.drawnAt, locale)}</Field>
+            <Field label={t('public.results.publishedAt')}>
               {formatDateTime(result.publishedAt, locale)}
-            </Figure>
+            </Field>
           </dl>
         </Card>
 
@@ -148,11 +163,11 @@ export function PublicResult() {
         */}
         <Card title={t('public.results.verification')} description={t('public.results.verificationHint')}>
           <dl className="grid gap-4 sm:grid-cols-2">
-            <Figure label={t('public.results.algorithmVersion')}>
+            <Field label={t('public.results.algorithmVersion')}>
               <span className="font-mono text-sm">{result.algorithmVersion}</span>
-            </Figure>
+            </Field>
             <div>
-              <dt className="text-xs font-medium text-stone-500">{t('public.results.poolHash')}</dt>
+              <dt className="text-xs font-medium text-muted-foreground">{t('public.results.poolHash')}</dt>
               <dd className="mt-1 break-all font-mono text-xs text-stone-700">{result.poolHash}</dd>
             </div>
           </dl>
@@ -165,14 +180,5 @@ export function PublicResult() {
         </div>
       </div>
     </article>
-  )
-}
-
-function Figure({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <dt className="text-xs font-medium text-stone-500">{label}</dt>
-      <dd className="mt-1 text-lg font-semibold text-stone-900">{children}</dd>
-    </div>
   )
 }

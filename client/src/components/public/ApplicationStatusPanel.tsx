@@ -1,9 +1,11 @@
 import { localizedGeoName, type PublicApplicationStatusDto, type SupportedLocale } from '@hajj-lottery/shared'
-import { useState, type ReactNode } from 'react'
+import { CheckIcon, CopyIcon, PrinterIcon } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { formatDateTime, formatYear } from '../../lib/format'
 import { Alert, Button, Card } from '../ui'
+import { Field } from './DescriptionField'
 import { ApplicationStatusBadge, DrawPhaseBadge } from './PublicStatusBadge'
 
 /**
@@ -48,14 +50,24 @@ export function ApplicationStatusPanel({ status }: { status: PublicApplicationSt
         <ApplicationStatusBadge status={status.status} />
       </div>
 
-      <dl className="mt-6 grid gap-4 sm:grid-cols-2">
-        <div className="sm:col-span-2">
-          <dt className="text-xs font-medium text-stone-500">{t('public.results.reference')}</dt>
-          <dd className="mt-1 font-mono text-xl font-bold tracking-wider text-stone-900">
+      <div className="mt-6 flex flex-col items-start gap-3 rounded-xl border border-primary-200 bg-primary-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-medium text-primary-800">{t('public.results.reference')}</p>
+          <p className="mt-1 font-mono text-2xl font-bold tracking-wider text-stone-900 select-all">
             {status.applicationReference}
-          </dd>
+          </p>
         </div>
+        <Button variant="secondary" onClick={copyReference} className="print:hidden">
+          {copied ? (
+            <CheckIcon aria-hidden="true" className="size-4" />
+          ) : (
+            <CopyIcon aria-hidden="true" className="size-4" />
+          )}
+          {copied ? t('register.receipt.copied') : t('register.receipt.copy')}
+        </Button>
+      </div>
 
+      <dl className="mt-6 grid gap-4 sm:grid-cols-2">
         <Field label={t('public.results.drawYear')}>{formatYear(status.drawYear, locale)}</Field>
         <Field label={t('public.results.publishedAt')}>
           {status.resultsPublished
@@ -127,22 +139,11 @@ export function ApplicationStatusPanel({ status }: { status: PublicApplicationSt
       )}
 
       <div className="mt-6 flex flex-wrap gap-3 print:hidden">
-        <Button variant="secondary" onClick={copyReference}>
-          {copied ? t('register.receipt.copied') : t('register.receipt.copy')}
-        </Button>
         <Button variant="secondary" onClick={() => window.print()}>
+          <PrinterIcon aria-hidden="true" className="size-4" />
           {t('register.receipt.print')}
         </Button>
       </div>
     </Card>
-  )
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div>
-      <dt className="text-xs font-medium text-stone-500">{label}</dt>
-      <dd className="mt-1 text-sm text-stone-900">{children}</dd>
-    </div>
   )
 }
