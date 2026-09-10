@@ -1,7 +1,9 @@
 import { localizedGeoName, type ApplicationReceiptDto, type SupportedLocale } from '@hajj-lottery/shared'
+import { CheckIcon, CopyIcon, PrinterIcon } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { Field } from '../public/DescriptionField'
 import { Alert, Button, Card } from '../ui'
 
 export interface ApplicationReceiptProps {
@@ -53,14 +55,24 @@ export function ApplicationReceipt({ receipt, canCheckOnline }: ApplicationRecei
         {t('register.receipt.subtitle')}
       </Alert>
 
-      <dl className="mt-6 grid gap-4 sm:grid-cols-2">
-        <div className="sm:col-span-2">
-          <dt className="text-xs font-medium text-stone-500">{t('register.receipt.reference')}</dt>
-          <dd className="mt-1 font-mono text-xl font-bold tracking-wider text-stone-900">
+      <div className="mt-6 flex flex-col items-start gap-3 rounded-xl border border-primary-200 bg-primary-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-medium text-primary-800">{t('register.receipt.reference')}</p>
+          <p className="mt-1 font-mono text-2xl font-bold tracking-wider text-stone-900 select-all">
             {receipt.applicationReference}
-          </dd>
+          </p>
         </div>
+        <Button onClick={copyReference} className="print:hidden">
+          {copied ? (
+            <CheckIcon aria-hidden="true" className="size-4" />
+          ) : (
+            <CopyIcon aria-hidden="true" className="size-4" />
+          )}
+          {copied ? t('register.receipt.copied') : t('register.receipt.copy')}
+        </Button>
+      </div>
 
+      <dl className="mt-6 grid gap-4 sm:grid-cols-2">
         <Field label={t('register.receipt.drawYear')}>{receipt.drawYear}</Field>
         {/* Keyed by the status the server returned, not by assuming one: the
             citizen sees the verdict their application actually carries. */}
@@ -87,22 +99,11 @@ export function ApplicationReceipt({ receipt, canCheckOnline }: ApplicationRecei
       )}
 
       <div className="mt-6 flex flex-wrap gap-3 print:hidden">
-        <Button onClick={copyReference}>
-          {copied ? t('register.receipt.copied') : t('register.receipt.copy')}
-        </Button>
         <Button variant="secondary" onClick={() => window.print()}>
+          <PrinterIcon aria-hidden="true" className="size-4" />
           {t('register.receipt.print')}
         </Button>
       </div>
     </Card>
-  )
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <dt className="text-xs font-medium text-stone-500">{label}</dt>
-      <dd className="mt-1 text-sm text-stone-900">{children}</dd>
-    </div>
   )
 }

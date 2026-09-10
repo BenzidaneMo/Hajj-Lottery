@@ -36,6 +36,7 @@ export function ApplicantFields({ values, errors, disabled, onChange, idPrefix }
         // under the citizen's cursor in the app's default language.
         onChange={(event) => update('nationalId')(limitToDigits(event.target.value, NATIONAL_ID_LENGTH))}
         error={errors.nationalId}
+        hint={errors.nationalId ? undefined : t('register.fields.nationalIdHint')}
         disabled={disabled}
         required
       />
@@ -69,6 +70,7 @@ export function ApplicantFields({ values, errors, disabled, onChange, idPrefix }
         value={values.phoneNumber}
         onChange={(event) => update('phoneNumber')(event.target.value)}
         error={errors.phoneNumber}
+        hint={errors.phoneNumber ? undefined : t('register.fields.phoneNumberHint')}
         disabled={disabled}
       />
     </div>
