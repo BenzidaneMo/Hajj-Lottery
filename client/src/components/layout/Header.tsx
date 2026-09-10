@@ -2,21 +2,13 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { NavLink, useLocation } from 'react-router-dom'
 
+import { PUBLIC_NAV_ITEMS } from '../../config/nav'
 import { CloseIcon, MenuIcon } from '../icons'
 import { LanguageSwitcher } from '../LanguageSwitcher'
 import { Logo } from '../Logo'
 import { IconButton } from '../ui'
 import { Container } from './Container'
 import { MobileNavSheet } from './MobileNavSheet'
-
-const NAV_ITEMS = [
-  { to: '/', key: 'nav.home' },
-  { to: '/register', key: 'nav.register' },
-  { to: '/application-status', key: 'nav.applicationStatus' },
-  { to: '/winners', key: 'nav.winners' },
-  { to: '/draw', key: 'nav.draw' },
-  { to: '/about', key: 'nav.about' },
-] as const
 
 const navLinkClassName = ({ isActive }: { isActive: boolean }) =>
   `rounded-md px-2 py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-700 ${
@@ -43,7 +35,7 @@ export function Header() {
         <div className="flex items-center justify-between gap-4 py-4">
           <Logo />
           <nav aria-label={t('nav.ariaLabel')} className="hidden items-center gap-1 text-sm md:flex">
-            {NAV_ITEMS.map((item) => (
+            {PUBLIC_NAV_ITEMS.map((item) => (
               <NavLink key={item.to} to={item.to} end={item.to === '/'} className={navLinkClassName}>
                 {t(item.key)}
               </NavLink>
@@ -75,7 +67,7 @@ export function Header() {
       <MobileNavSheet
         open={isMenuOpen}
         onOpenChange={setIsMenuOpen}
-        items={NAV_ITEMS}
+        items={PUBLIC_NAV_ITEMS}
         linkClassName={navLinkClassName}
       />
     </header>
