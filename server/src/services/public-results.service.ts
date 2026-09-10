@@ -1,6 +1,7 @@
 import type {
   PublicDrawStatusDto,
   PublicPageDto,
+  PublicPlatformStatsDto,
   PublicResultDto,
   PublicResultSummaryDto,
 } from '@hajj-lottery/shared'
@@ -276,6 +277,32 @@ export class PublicResultsService {
     })
 
     return toPublicPage(items, total, filters.page, filters.pageSize)
+  }
+
+  /**
+   * Platform-wide scale for the landing page: how many wilayas and communes
+   * the reference dataset covers, and the total Hajj places this platform has
+   * ever configured across every commune draw, any year, any status.
+   *
+   * Three cheap aggregate queries, nothing scoped to a caller and nothing
+   * privacy-adjacent — a wilaya/commune count and a sum of a figure
+   * (`allocated_spots`) that is already public per commune via
+   * `listDrawStatus`. `allocated_spots` is configuration, set once a
+   * `CommuneDraw` is created, so a cancelled or still-open draw counts the
+   * same as a completed one: this is committed capacity, not an outcome.
+   */
+  async getPlatformStats(): Promise<PublicPlatformStatsDto> {
+    const [totalWilayas, totalCommunes, spots] = await Promise.all([
+      this.db.wilaya.count({ where: { isActive: true } }),
+      this.db.commune.count({ where: { isActive: true } }),
+      this.db.communeDraw.aggregate({ _sum: { allocatedSpots: true } }),
+    ])
+
+    return {
+      totalWilayas,
+      totalCommunes,
+      totalAllocatedSpots: spots._sum.allocatedSpots ?? 0,
+    }
   }
 
   /**

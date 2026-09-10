@@ -2,6 +2,7 @@ import { Router } from 'express'
 
 import {
   getPublicResult,
+  getPublicStats,
   listPublicDrawStatus,
   listPublicResults,
   lookupApplicationStatus,
@@ -43,6 +44,10 @@ export function createPublicRouter(): Router {
   router.get('/results/:drawYear/:wilayaCode/:communeCode', asyncHandler(getPublicResult))
 
   router.get('/draw-status', asyncHandler(listPublicDrawStatus))
+
+  // Platform-wide scale for the landing page — wilaya/commune counts and a
+  // sum of allocated spots. No input, so nothing to validate here.
+  router.get('/stats', asyncHandler(getPublicStats))
 
   return router
 }

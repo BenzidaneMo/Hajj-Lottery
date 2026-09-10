@@ -2,6 +2,7 @@ import type {
   PublicApplicationStatusDto,
   PublicDrawStatusDto,
   PublicPageDto,
+  PublicPlatformStatsDto,
   PublicResultDto,
   PublicResultSummaryDto,
 } from '@hajj-lottery/shared'
@@ -130,6 +131,21 @@ export const getPublicResult: RequestHandler = async (req, res) => {
 export const listPublicDrawStatus: RequestHandler = async (req, res) => {
   const filters = listingFilters(req, publicDrawStatusQuerySchema)
   const body: PublicPageDto<PublicDrawStatusDto> = await publicResultsService.listDrawStatus(filters)
+
+  cachePublicListing(res)
+  res.json(body)
+}
+
+/**
+ * `GET /api/public/stats` — platform-wide scale for the landing page.
+ *
+ * Takes no input, so there is nothing to validate and nothing to rate-limit
+ * beyond the usual per-IP shared budget everything else here has. Cached the
+ * same as a listing: the numbers move only as fast as a wilaya/commune
+ * changes or an administrator configures a new commune draw.
+ */
+export const getPublicStats: RequestHandler = async (_req, res) => {
+  const body: PublicPlatformStatsDto = await publicResultsService.getPlatformStats()
 
   cachePublicListing(res)
   res.json(body)

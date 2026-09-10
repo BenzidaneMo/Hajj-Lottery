@@ -915,6 +915,43 @@ async function manyCommunes(count: number): Promise<Commune[]> {
   return communes
 }
 
+describe('platform-wide stats', () => {
+  it('is visible without authentication, cache-friendly, and carries nothing else', async () => {
+    const response = await request(app).get('/api/public/stats')
+
+    expect(response.status).toBe(200)
+    expect(response.headers['cache-control']).toContain('public')
+    // The reference dataset is never truncated between tests, so only its
+    // shape and positivity are asserted — not an exact wilaya/commune count
+    // that some other suite's fixture upsert could change.
+    expect(response.body.totalWilayas).toBeGreaterThan(0)
+    expect(response.body.totalCommunes).toBeGreaterThan(0)
+    expect(response.body.totalAllocatedSpots).toBeGreaterThanOrEqual(0)
+    expect(Object.keys(response.body).sort()).toEqual(
+      ['totalAllocatedSpots', 'totalCommunes', 'totalWilayas'].sort(),
+    )
+  })
+
+  it('sums allocated spots across every commune draw, regardless of status or year', async () => {
+    const before = await request(app).get('/api/public/stats')
+
+    await drawConfigurationService.createCommuneDraw({
+      drawYearId: drawYear.id,
+      communeId: geo.communeA1.id,
+      allocatedSpots: 40,
+    })
+    await drawConfigurationService.createCommuneDraw({
+      drawYearId: drawYear.id,
+      communeId: geo.communeA2.id,
+      allocatedSpots: 25,
+    })
+
+    const after = await request(app).get('/api/public/stats')
+
+    expect(after.body.totalAllocatedSpots).toBe(before.body.totalAllocatedSpots + 65)
+  })
+})
+
 // --- Application status lookup ----------------------------------------------
 
 describe('checking your own application', () => {
