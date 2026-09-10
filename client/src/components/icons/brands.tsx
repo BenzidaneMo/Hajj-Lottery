@@ -6,8 +6,10 @@ import type { SVGProps } from 'react'
  * That module is explicitly a stroke-based line set for functional controls;
  * a brand mark is a solid glyph, not a line drawing, and lucide-react (the
  * icon set the rest of the app uses) dropped brand icons entirely — so these
- * five are hand-drawn rather than installed, to avoid a dependency pulled in
- * for five fixed paths.
+ * four are hand-drawn rather than installed, to avoid a dependency pulled in
+ * for four fixed paths. `config/site.ts`'s other three social entries
+ * (portfolio, email, phone) are generic contact glyphs, not trademarked
+ * platform marks, so they use lucide-react directly instead of living here.
  */
 export type BrandIconProps = SVGProps<SVGSVGElement>
 
@@ -39,14 +41,6 @@ export function XGlyph(props: BrandIconProps) {
   return (
     <BaseBrandIcon {...props}>
       <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-    </BaseBrandIcon>
-  )
-}
-
-export function InstagramGlyph(props: BrandIconProps) {
-  return (
-    <BaseBrandIcon {...props}>
-      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 1.17.054 1.805.249 2.227.415.56.217.96.477 1.382.896.419.42.679.819.896 1.381.164.422.36 1.057.413 2.227.058 1.266.07 1.646.07 4.85s-.012 3.584-.07 4.85c-.054 1.17-.249 1.805-.413 2.227-.217.56-.477.96-.896 1.382-.42.419-.819.679-1.382.896-.422.164-1.057.36-2.227.413-1.266.058-1.646.07-4.85.07s-3.584-.012-4.85-.07c-1.17-.054-1.805-.249-2.227-.413-.56-.217-.96-.477-1.382-.896-.419-.42-.679-.819-.896-1.382-.164-.422-.36-1.057-.413-2.227-.058-1.266-.07-1.646-.07-4.85s.012-3.584.07-4.85c.054-1.17.249-1.805.413-2.227.217-.56.477-.96.896-1.382.42-.419.819-.679 1.382-.896.422-.164 1.057-.36 2.227-.413 1.266-.058 1.646-.07 4.85-.07M12 0C8.741 0 8.332.014 7.052.072 5.775.13 4.905.333 4.14.63a5.9 5.9 0 00-2.126 1.384A5.9 5.9 0 00.63 4.14C.333 4.905.131 5.775.072 7.052.014 8.332 0 8.741 0 12s.014 3.668.072 4.948c.059 1.277.261 2.148.558 2.913a5.9 5.9 0 001.384 2.126 5.9 5.9 0 002.126 1.384c.765.297 1.636.499 2.913.558C8.332 23.986 8.741 24 12 24s3.668-.014 4.948-.072c1.277-.059 2.148-.261 2.913-.558a5.9 5.9 0 002.126-1.384 5.9 5.9 0 001.384-2.126c.297-.765.499-1.636.558-2.913.058-1.28.072-1.689.072-4.947s-.014-3.668-.072-4.948c-.059-1.277-.261-2.148-.558-2.913a5.9 5.9 0 00-1.384-2.126A5.9 5.9 0 0019.86.63c-.765-.297-1.636-.499-2.913-.558C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" />
     </BaseBrandIcon>
   )
 }

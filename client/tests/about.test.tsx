@@ -9,8 +9,8 @@ const SOCIAL_LABELS: Record<(typeof SOCIAL_LINKS)[number]['id'], string> = {
   github: 'GitHub',
   linkedin: 'LinkedIn',
   x: 'X (Twitter)',
-  instagram: 'Instagram',
   facebook: 'Facebook',
+  portfolio: 'Portfolio',
 }
 
 describe('the About page', () => {

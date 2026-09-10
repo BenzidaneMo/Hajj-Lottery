@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 
 import { SOCIAL_LINKS } from '../config/site'
 
-export type SocialLinksVariant = 'circle' | 'inline'
+export type SocialLinksVariant = 'circle' | 'inline' | 'dark'
 
 export interface SocialLinksProps {
   variant?: SocialLinksVariant
@@ -13,6 +13,8 @@ const VARIANT_LINK_CLASSES: Record<SocialLinksVariant, string> = {
   circle:
     'flex size-9 items-center justify-center rounded-full bg-stone-100 text-stone-600 transition-colors hover:bg-primary-100 hover:text-primary-800',
   inline: 'text-stone-500 transition-colors hover:text-primary-800',
+  /** For the footer's dark-green band — `circle`'s stone tones read as a muddy smudge there. */
+  dark: 'flex size-9 items-center justify-center rounded-full bg-white/10 text-primary-50 transition-colors hover:bg-white/20 hover:text-white',
 }
 
 /**
