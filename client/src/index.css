@@ -2,14 +2,30 @@
 
 /* Brand accent used for interactive/primary elements. Status colors (success,
    warning, error, info) intentionally use Tailwind's stock palettes instead —
-   only the brand accent needs a single point of control. */
+   only the brand accent needs a single point of control.
+
+   The ramp is anchored on the project's own mark (`public/image/Logo*`): 700
+   is the Algerian green from that logo, 800 is its darker shade, and 50/100/200
+   are light tints of the same hue for soft section backgrounds rather than a
+   generic emerald. 900 exists only for a hover-darken step (see the result/draw
+   list links) that had nowhere else to go once one was needed. */
 @theme {
-  --color-primary-50: #ecfdf5;
-  --color-primary-100: #d1fae5;
-  --color-primary-200: #a7f3d0;
-  --color-primary-600: #059669;
-  --color-primary-700: #047857;
-  --color-primary-800: #065f46;
+  --color-primary-50: #eaf6f0;
+  --color-primary-100: #d2ebdc;
+  --color-primary-200: #a6d7ba;
+  --color-primary-600: #128049;
+  --color-primary-700: #006233;
+  --color-primary-800: #004d28;
+  --color-primary-900: #00351c;
+
+  /* A restrained accent, not a second primary — used for a single decorative
+     touch (the landing hero's eyebrow rule), never for text needing contrast:
+     gold-500 on a light background reads at roughly 2.3:1, well short of
+     WCAG's 4.5:1 for body text. */
+  --color-gold-50: #fbf6ea;
+  --color-gold-100: #f3e6c4;
+  --color-gold-500: #c9a24a;
+  --color-gold-600: #a9843a;
 }
 
 /* ---------------------------------------------------------------------------
@@ -41,8 +57,8 @@
   --card-foreground: #1c1917;
   --popover: #ffffff;
   --popover-foreground: #1c1917;
-  --primary: #047857;
-  --primary-foreground: #ecfdf5;
+  --primary: #006233;
+  --primary-foreground: #f8faf9;
   --secondary: #f5f5f4;
   --secondary-foreground: #292524;
   --muted: #f5f5f4;
@@ -53,7 +69,7 @@
   --destructive-foreground: #fef2f2;
   --border: #e7e5e4;
   --input: #e7e5e4;
-  --ring: #047857;
+  --ring: #006233;
 }
 
 @theme inline {
@@ -96,15 +112,21 @@
   }
 }
 
-/* Arabic gets a native RTL-friendly stack; Latin scripts fall back normally. */
+/* One typography system, chosen by writing direction rather than by locale
+   name — French and English both read Plus Jakarta Sans, Arabic reads Cairo,
+   and the app never has to ask which of the three languages is active to pick
+   a font. Both are loaded from Google Fonts (index.html); if that request
+   never completes, the fallback stack is a normal system sans-serif in either
+   case, so the app stays readable and never blocks on the font. */
 :root {
   font-family:
-    'Segoe UI',
+    'Plus Jakarta Sans',
+    ui-sans-serif,
     system-ui,
     -apple-system,
     sans-serif;
 }
 
-html[dir='rtl'] body {
-  font-family: 'Segoe UI', Tahoma, system-ui, sans-serif;
+html[dir='rtl'] {
+  font-family: 'Cairo', ui-sans-serif, system-ui, sans-serif;
 }
