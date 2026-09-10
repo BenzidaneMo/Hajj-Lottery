@@ -12,14 +12,47 @@
     "about": "À propos du système"
   },
   "footer": {
-    "rights": "Tous droits réservés"
+    "rights": "Tous droits réservés",
+    "description": "Une plateforme pour organiser la loterie communale du Hadj : inscription, tirages communaux et résultats publiés.",
+    "navHeading": "Navigation",
+    "developerHeading": "Développeur",
+    "developedBy": "Développé par {{name}}"
   },
   "language": {
     "label": "Langue"
   },
   "home": {
     "title": "Plateforme locale de la loterie du Hajj",
-    "subtitle": "Inscription et suivi transparent de la loterie du Hajj au niveau communal."
+    "subtitle": "Inscription et suivi transparent de la loterie du Hajj au niveau communal.",
+    "cta": {
+      "register": "S'inscrire au tirage",
+      "checkStatus": "Vérifier le statut de la demande",
+      "viewResults": "Voir les résultats"
+    },
+    "status": {
+      "open": "Les inscriptions sont ouvertes pour le tirage {{year}}.",
+      "closed": "Les inscriptions ne sont pas ouvertes actuellement."
+    },
+    "howItWorks": {
+      "eyebrow": "Comment ça marche",
+      "title": "Trois étapes, un tirage",
+      "description": "De l'inscription à la consultation du résultat, voici tout le processus.",
+      "step": "Étape {{number}}"
+    },
+    "steps": {
+      "register": {
+        "title": "S'inscrire",
+        "body": "Soumettez vos informations et votre commune une fois, pour le tirage de cette année."
+      },
+      "draw": {
+        "title": "La commune tire au sort",
+        "body": "Chaque commune organise son propre tirage pondéré une fois les inscriptions closes."
+      },
+      "results": {
+        "title": "Consulter le résultat",
+        "body": "Vérifiez le statut de votre demande ou le résultat publié pour votre commune."
+      }
+    }
   },
   "pages": {
     "register": {
@@ -849,7 +882,8 @@
       "label": "Commune",
       "placeholder": "Sélectionner une commune",
       "selectWilayaFirst": "Sélectionnez d'abord une wilaya",
-      "loadError": "Échec du chargement des communes"
+      "loadError": "Échec du chargement des communes",
+      "empty": "Aucune commune disponible pour cette wilaya."
     }
   },
   "common": {
@@ -881,13 +915,19 @@
     "entryType": {
       "SINGLE": "Seul(e)",
       "PAIRED": "En binôme",
-      "hint": "Un binôme participe ensemble et partage un même résultat."
+      "hint": "Un binôme participe ensemble et partage un même résultat.",
+      "descriptions": {
+        "SINGLE": "Postuler en tant que pèlerin individuel.",
+        "PAIRED": "Postuler avec une personne accompagnante (conjoint ou mahram), avec un résultat partagé."
+      }
     },
     "fields": {
       "nationalId": "Numéro d'identification national",
       "fullName": "Nom complet",
       "dob": "Date de naissance",
-      "phoneNumber": "Numéro de mobile (facultatif)"
+      "phoneNumber": "Numéro de mobile (facultatif)",
+      "nationalIdHint": "18 chiffres, exactement comme indiqué sur votre carte d'identité nationale.",
+      "phoneNumberHint": "Utile seulement si vous souhaitez vérifier votre demande en ligne plus tard."
     },
     "closed": {
       "title": "Les inscriptions sont fermées",
@@ -932,6 +972,21 @@
       "copy": "Copier la référence",
       "copied": "Copié",
       "print": "Imprimer"
+    },
+    "steps": {
+      "entryType": "Participation",
+      "location": "Localisation",
+      "primary": "Vos informations",
+      "secondary": "Second candidat",
+      "review": "Vérification"
+    },
+    "wizard": {
+      "back": "Précédent",
+      "next": "Suivant"
+    },
+    "review": {
+      "edit": "Modifier",
+      "editSection": "Modifier : {{section}}"
     }
   },
   "public": {
@@ -1102,5 +1157,101 @@
       "unavailableTitle": "Rien à afficher",
       "unavailableBody": "Il n’y a pas de tirage pour cette commune et cette année, ou il a été annulé. Consultez la page d’état des tirages pour les autres communes."
     }
+  },
+  "about": {
+    "hero": {
+      "eyebrow": "À propos du projet",
+      "intro": "Une plateforme numérique pour organiser la loterie communale du Hadj en Algérie — inscription, tirages pondérés par commune et résultats publiés, disponible en arabe, en français et en anglais."
+    },
+    "introduction": {
+      "title": "Ce qu'est cette plateforme",
+      "body": "قرعة الحج remplace un processus papier par un processus structuré et traçable : les citoyens s'inscrivent une fois par an, chaque commune organise son propre tirage pondéré pour ses places allouées, et les résultats sont publiés une fois vérifiés. C'est un outil pour organiser ce processus de façon claire et cohérente — pas une affirmation d'affiliation gouvernementale ou de statut officiel."
+    },
+    "howItWorks": {
+      "title": "Comment fonctionne la loterie",
+      "description": "De l'inscription à un résultat publié, en six étapes.",
+      "step": "Étape {{number}}",
+      "steps": {
+        "0": {
+          "title": "Inscription",
+          "body": "Un citoyen soumet une candidature par année de tirage, seul ou avec une personne accompagnante, pour une commune précise — aucun compte requis."
+        },
+        "1": {
+          "title": "Éligibilité",
+          "body": "Chaque candidature est vérifiée selon les règles d'éligibilité de la plateforme, par exemple si un candidat a déjà gagné une année précédente."
+        },
+        "2": {
+          "title": "Priorité",
+          "body": "Le poids d'une candidature éligible augmente avec le nombre d'années consécutives de participation sans avoir gagné, afin que l'attente ne soit jamais vaine."
+        },
+        "3": {
+          "title": "Tirage communal",
+          "body": "Chaque commune dispose d'un nombre alloué de places de pèlerinage et organise son propre tirage pondéré une fois les inscriptions de l'année closes."
+        },
+        "4": {
+          "title": "Gagnants et réservistes",
+          "body": "Le tirage sélectionne les gagnants de la commune et, dans le même tirage, une liste ordonnée de réservistes pour ses places."
+        },
+        "5": {
+          "title": "Publication",
+          "body": "Un administrateur national vérifie et publie le résultat de chaque commune — ce n'est qu'alors qu'il devient public."
+        }
+      }
+    },
+    "transparency": {
+      "title": "Conçu pour la traçabilité",
+      "description": "Quelques-unes des propriétés derrière chaque tirage.",
+      "points": {
+        "0": {
+          "title": "Bassins de tirage immuables",
+          "body": "Une fois le tirage d'une commune prêt, sa liste de candidatures est figée et ne peut plus jamais être modifiée."
+        },
+        "1": {
+          "title": "Hasard cryptographiquement sûr",
+          "body": "La sélection utilise le générateur aléatoire cryptographiquement sûr du système d'exploitation — jamais une valeur prévisible ou pré-déterminée."
+        },
+        "2": {
+          "title": "Sélection pondérée et reproductible",
+          "body": "La chance de chaque candidature est proportionnelle à son poids enregistré, selon un processus fixe appliqué de la même façon à chaque fois."
+        },
+        "3": {
+          "title": "Une piste d'audit permanente",
+          "body": "Les actions administratives sont enregistrées — qui, quand et pourquoi — dans un registre qui ne peut jamais être modifié ni supprimé."
+        },
+        "4": {
+          "title": "Le résultat original reste valable",
+          "body": "Un tirage n'est jamais rejoué ni réécrit ; les événements ultérieurs sont enregistrés à côté du résultat original, jamais à sa place."
+        }
+      }
+    },
+    "winnersReserves": {
+      "title": "Gagnants et réservistes",
+      "description": "Une position de réserviste n'est pas une place de Hadj supplémentaire — c'est une place dans la file d'attente.",
+      "points": {
+        "0": "Les gagnants sont sélectionnés en premier, dans l’ordre produit par le tirage.",
+        "1": "Les réservistes sont sélectionnés dans le même tirage, immédiatement après les gagnants.",
+        "2": "L'ordre des réservistes provient de ce même tirage et n'est jamais remanié ni recalculé.",
+        "3": "Si un gagnant ne peut pas voyager, le prochain réserviste éligible dans cet ordre peut être appelé pour prendre sa place — le tirage lui-même n'est jamais rejoué."
+      }
+    },
+    "languages": {
+      "title": "Dans votre langue",
+      "body": "Toute l'expérience citoyenne — inscription, statut de la demande, résultats et cette page — est disponible en العربية (de droite à gauche), en français et en anglais."
+    },
+    "tech": {
+      "title": "Réalisé avec",
+      "description": "Les technologies derrière la plateforme."
+    },
+    "developer": {
+      "title": "À propos du développeur",
+      "body": "قرعة الحج est conçu et développé par Mohamed Benzidane — de l'inscription des citoyens jusqu'à la console administrative."
+    }
+  },
+  "social": {
+    "github": "GitHub",
+    "linkedin": "LinkedIn",
+    "x": "X (Twitter)",
+    "instagram": "Instagram",
+    "facebook": "Facebook"
   }
 }

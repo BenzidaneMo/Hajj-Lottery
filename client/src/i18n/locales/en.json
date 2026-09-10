@@ -12,14 +12,47 @@
     "about": "About the System"
   },
   "footer": {
-    "rights": "All rights reserved"
+    "rights": "All rights reserved",
+    "description": "A platform for organizing the communal Hajj lottery: registration, commune draws and published results.",
+    "navHeading": "Navigation",
+    "developerHeading": "Developer",
+    "developedBy": "Developed by {{name}}"
   },
   "language": {
     "label": "Language"
   },
   "home": {
     "title": "Local Hajj Lottery Platform",
-    "subtitle": "Transparent registration and tracking of the communal Hajj lottery."
+    "subtitle": "Transparent registration and tracking of the communal Hajj lottery.",
+    "cta": {
+      "register": "Register for the draw",
+      "checkStatus": "Check application status",
+      "viewResults": "View results"
+    },
+    "status": {
+      "open": "Registration is open for the {{year}} draw.",
+      "closed": "Registration is not currently open."
+    },
+    "howItWorks": {
+      "eyebrow": "How it works",
+      "title": "Three steps, one draw",
+      "description": "From registering to seeing the result, here is the whole process.",
+      "step": "Step {{number}}"
+    },
+    "steps": {
+      "register": {
+        "title": "Register",
+        "body": "Submit your details and your commune once, for this year's draw."
+      },
+      "draw": {
+        "title": "The commune draws",
+        "body": "Each commune runs its own weighted draw once registration closes."
+      },
+      "results": {
+        "title": "See the outcome",
+        "body": "Check your application status or the published result for your commune."
+      }
+    }
   },
   "pages": {
     "register": {
@@ -849,7 +882,8 @@
       "label": "Commune",
       "placeholder": "Select a commune",
       "selectWilayaFirst": "Select a wilaya first",
-      "loadError": "Failed to load communes"
+      "loadError": "Failed to load communes",
+      "empty": "No communes available for this wilaya."
     }
   },
   "common": {
@@ -881,13 +915,19 @@
     "entryType": {
       "SINGLE": "On my own",
       "PAIRED": "As a pair",
-      "hint": "A pair applies together and shares one result."
+      "hint": "A pair applies together and shares one result.",
+      "descriptions": {
+        "SINGLE": "Apply as an individual pilgrim.",
+        "PAIRED": "Apply together with one accompanying person (spouse or mahram), sharing one result."
+      }
     },
     "fields": {
       "nationalId": "National ID number",
       "fullName": "Full name",
       "dob": "Date of birth",
-      "phoneNumber": "Mobile number (optional)"
+      "phoneNumber": "Mobile number (optional)",
+      "nationalIdHint": "18 digits, exactly as printed on your national ID card.",
+      "phoneNumberHint": "Only needed if you want to check your application online later."
     },
     "closed": {
       "title": "Registration is closed",
@@ -932,6 +972,21 @@
       "copy": "Copy reference",
       "copied": "Copied",
       "print": "Print"
+    },
+    "steps": {
+      "entryType": "Participation",
+      "location": "Location",
+      "primary": "Your details",
+      "secondary": "Second applicant",
+      "review": "Review"
+    },
+    "wizard": {
+      "back": "Back",
+      "next": "Next"
+    },
+    "review": {
+      "edit": "Edit",
+      "editSection": "Edit: {{section}}"
     }
   },
   "public": {
@@ -1102,5 +1157,101 @@
       "unavailableTitle": "Nothing to display",
       "unavailableBody": "There is no draw for this commune and year, or it was cancelled. Check the draw status page for other communes."
     }
+  },
+  "about": {
+    "hero": {
+      "eyebrow": "About the project",
+      "intro": "A digital platform for organizing the communal Hajj lottery in Algeria — registration, per-commune weighted draws, and published results, open in Arabic, French and English."
+    },
+    "introduction": {
+      "title": "What this platform is",
+      "body": "قرعة الحج replaces a paper-based process with a structured, traceable one: citizens register once per year, each commune runs its own weighted draw for its allocated places, and results are published once verified. It is a tool for organizing that process clearly and consistently — not a claim of any government affiliation or official status."
+    },
+    "howItWorks": {
+      "title": "How the lottery works",
+      "description": "From registration to a published result, in six stages.",
+      "step": "Step {{number}}",
+      "steps": {
+        "0": {
+          "title": "Registration",
+          "body": "A citizen submits one application per draw year, alone or paired with one other person, for a specific commune — no account required."
+        },
+        "1": {
+          "title": "Eligibility",
+          "body": "Each application is checked against the platform's eligibility rules, such as whether an applicant has already won in a previous year."
+        },
+        "2": {
+          "title": "Priority",
+          "body": "An eligible application's weight grows with how many consecutive years it has taken part without winning, so waiting is never wasted."
+        },
+        "3": {
+          "title": "Commune draw",
+          "body": "Each commune has its own allocated number of pilgrimage places and runs its own weighted draw once registration for the year closes."
+        },
+        "4": {
+          "title": "Winners and reserves",
+          "body": "The draw selects the commune's winners and, in the same draw, an ordered list of reserves for its places."
+        },
+        "5": {
+          "title": "Publication",
+          "body": "A national administrator reviews and publishes each commune's result — only then does it become public."
+        }
+      }
+    },
+    "transparency": {
+      "title": "Built for traceability",
+      "description": "A few of the properties behind every draw.",
+      "points": {
+        "0": {
+          "title": "Immutable draw pools",
+          "body": "Once a commune's draw is ready, its list of applications is frozen and can never be altered afterwards."
+        },
+        "1": {
+          "title": "Cryptographically secure randomness",
+          "body": "Selection uses the operating system's cryptographically secure random generator — never a predictable or seeded value."
+        },
+        "2": {
+          "title": "Weighted, reproducible selection",
+          "body": "Every application's chance is proportional to its recorded weight, through a fixed process applied the same way every time."
+        },
+        "3": {
+          "title": "A permanent audit trail",
+          "body": "Administrative actions are recorded — who, when, and why — in a record that can never be edited or deleted."
+        },
+        "4": {
+          "title": "The original result stands",
+          "body": "A draw is never rerun or rewritten; later events are recorded alongside the original result, never in place of it."
+        }
+      }
+    },
+    "winnersReserves": {
+      "title": "Winners and reserves",
+      "description": "A reserve position is not an additional Hajj place — it is a place in line.",
+      "points": {
+        "0": "Winners are selected first, in the order the draw produced.",
+        "1": "Reserves are selected in the same draw, immediately after the winners.",
+        "2": "The reserve order comes from that same draw and is never reshuffled or recalculated.",
+        "3": "If a winner is unable to travel, the next eligible reserve in that order may be called to take their place — the draw itself is never rerun."
+      }
+    },
+    "languages": {
+      "title": "In your language",
+      "body": "The whole citizen experience — registration, application status, results and this page — is available in العربية (right-to-left), Français and English."
+    },
+    "tech": {
+      "title": "Built with",
+      "description": "The technologies behind the platform."
+    },
+    "developer": {
+      "title": "About the developer",
+      "body": "قرعة الحج is designed and built by Mohamed Benzidane — from citizen registration through to the administrative console."
+    }
+  },
+  "social": {
+    "github": "GitHub",
+    "linkedin": "LinkedIn",
+    "x": "X (Twitter)",
+    "instagram": "Instagram",
+    "facebook": "Facebook"
   }
 }
