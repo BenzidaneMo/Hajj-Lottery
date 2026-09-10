@@ -10,7 +10,6 @@ import { Draw } from '../pages/Draw'
 import { DrawWatch } from '../pages/DrawWatch'
 import { Home } from '../pages/Home'
 import { PublicResult } from '../pages/PublicResult'
-import { Register } from '../pages/Register'
 import { Winners } from '../pages/Winners'
 
 /**
@@ -80,6 +79,15 @@ const AdminSettings = lazy(() =>
 const AdminWinners = lazy(() =>
   import('../pages/admin/AdminWinners').then((module) => ({ default: module.AdminWinners })),
 )
+
+/**
+ * Registration is the one citizen page built on the same Radix Select the
+ * console uses for its own pickers, and it is the only public page that
+ * needs it. Every other public address — most of all `/results/...` — would
+ * otherwise pay to download it on every visit for a control it never
+ * renders, so it is the one public route split into its own chunk.
+ */
+const Register = lazy(() => import('../pages/Register').then((module) => ({ default: module.Register })))
 
 export const router = createBrowserRouter([
   {
