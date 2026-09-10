@@ -4,6 +4,7 @@ import {
   type PublicApplicationStatusDto,
   type PublicDrawStatusDto,
   type PublicPageDto,
+  type PublicPlatformStatsDto,
   type PublicResultDto,
   type PublicResultSummaryDto,
 } from '@hajj-lottery/shared'
@@ -176,6 +177,11 @@ export function usePublicResult(
   const addressable =
     enabled && drawYear !== undefined && wilayaCode !== undefined && communeCode !== undefined
   return usePublicQuery(addressable ? resultPath(drawYear, wilayaCode, communeCode) : undefined)
+}
+
+/** Platform-wide scale (wilaya/commune counts, total allocated spots) for the landing page. */
+export function usePublicStats(): PublicQueryState<PublicPlatformStatsDto> {
+  return usePublicQuery('/api/public/stats')
 }
 
 /** True when a failure is the API saying "not here", rather than a real fault. */

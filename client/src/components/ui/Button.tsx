@@ -32,7 +32,7 @@ export function Button({
   asChild = false,
   ...props
 }: ButtonProps) {
-  const classes = `inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${VARIANT_CLASSES[variant]} ${className}`
+  const classes = `inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 active:scale-[0.98] ${VARIANT_CLASSES[variant]} ${className}`
 
   if (asChild) {
     return <Slot.Root className={classes} {...props} />
