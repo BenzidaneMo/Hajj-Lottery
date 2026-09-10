@@ -46,6 +46,23 @@ if (!globalThis.ResizeObserver) {
   }
 }
 
+/**
+ * jsdom has no `IntersectionObserver` either, and Framer Motion's
+ * `whileInView` (the landing page's `Reveal`) needs one to mount at all. An
+ * inert stand-in is enough — no test in this suite asserts on the entrance
+ * animation itself, only on the content it wraps.
+ */
+if (!globalThis.IntersectionObserver) {
+  globalThis.IntersectionObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() {
+      return []
+    }
+  } as unknown as typeof IntersectionObserver
+}
+
 if (!Element.prototype.hasPointerCapture) {
   Element.prototype.hasPointerCapture = () => false
   Element.prototype.setPointerCapture = () => {}
