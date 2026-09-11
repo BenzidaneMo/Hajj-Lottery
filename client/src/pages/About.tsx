@@ -168,10 +168,13 @@ export function About() {
       <PageSection id="about-developer" title={t('about.developer.title')} className="border-t pt-10">
         <Card>
           <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-            <div>
-              <p className="text-base font-semibold text-stone-900">{DEVELOPER.name}</p>
-              <p className="text-sm text-stone-500">@{DEVELOPER.handle}</p>
-              <p className="mt-3 max-w-xl text-sm text-stone-600">{t('about.developer.body')}</p>
+            <div className="flex items-center gap-3">
+              <img src={DEVELOPER.avatar} alt={DEVELOPER.name} className="h-16 w-16 rounded-full" />
+              <div>
+                <p className="text-base font-semibold text-stone-900">{DEVELOPER.name}</p>
+                <p className="text-sm text-stone-500">@{DEVELOPER.handle}</p>
+                <p className="mt-3 max-w-xl text-sm text-stone-600">{t('about.developer.body')}</p>
+              </div>
             </div>
             <SocialLinks />
           </div>

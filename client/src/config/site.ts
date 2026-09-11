@@ -14,6 +14,7 @@ import { FacebookGlyph, GitHubGlyph, LinkedInGlyph, XGlyph } from '../components
 export const DEVELOPER = {
   name: 'Mohamed Benzidane',
   handle: 'BenzidaneMo',
+  avatar: '/image/Devoloper.webp',
 } as const
 
 export interface SocialLink {
