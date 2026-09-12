@@ -1,6 +1,8 @@
 import { limitToDigits, NATIONAL_ID_LENGTH } from '@hajj-lottery/shared'
 import { useTranslation } from 'react-i18next'
 
+import { Label } from '../shadcn/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../shadcn/select'
 import { Input } from '../ui'
 import type { ApplicantFieldErrors, ApplicantFormValues } from './applicant'
 
@@ -11,10 +13,19 @@ export interface ApplicantFieldsProps {
   onChange: (values: ApplicantFormValues) => void
   /** Distinguishes the primary and secondary field sets for autofill and ids. */
   idPrefix: string
+  /** The Mahram slot admits a male participant only. */
+  allowedGenders?: readonly ('MALE' | 'FEMALE')[]
 }
 
 /** The identity fields for one applicant, used for both people on a pair. */
-export function ApplicantFields({ values, errors, disabled, onChange, idPrefix }: ApplicantFieldsProps) {
+export function ApplicantFields({
+  values,
+  errors,
+  disabled,
+  onChange,
+  idPrefix,
+  allowedGenders,
+}: ApplicantFieldsProps) {
   const { t } = useTranslation()
 
   const update = (field: keyof ApplicantFormValues) => (value: string) =>
@@ -40,6 +51,36 @@ export function ApplicantFields({ values, errors, disabled, onChange, idPrefix }
         disabled={disabled}
         required
       />
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor={`${idPrefix}-gender`}>
+          {t('register.fields.gender')}
+          <span aria-hidden="true" className="ms-0.5 text-red-600">
+            *
+          </span>
+        </Label>
+        <Select value={values.gender} onValueChange={update('gender')} disabled={disabled} required>
+          <SelectTrigger
+            id={`${idPrefix}-gender`}
+            // Matches `Input`'s own box exactly (border + py-2 + text-sm line
+            // height = 38px) instead of the default `h-9` (36px), so the
+            // gender field lines up with its neighbours in the grid rather
+            // than sitting two pixels short.
+            className="w-full data-[size=default]:h-auto"
+            aria-invalid={Boolean(errors.gender)}
+          >
+            <SelectValue placeholder={t('register.fields.genderPlaceholder')} />
+          </SelectTrigger>
+          <SelectContent>
+            {allowedGenders?.includes('MALE') !== false && (
+              <SelectItem value="MALE">{t('register.fields.genderMale')}</SelectItem>
+            )}
+            {allowedGenders?.includes('FEMALE') !== false && (
+              <SelectItem value="FEMALE">{t('register.fields.genderFemale')}</SelectItem>
+            )}
+          </SelectContent>
+        </Select>
+        {errors.gender && <p className="text-xs text-destructive">{errors.gender}</p>}
+      </div>
       <Input
         id={`${idPrefix}-full-name`}
         label={t('register.fields.fullName')}

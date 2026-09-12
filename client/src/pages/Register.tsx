@@ -1,5 +1,8 @@
 import {
+  calculateAgeAt,
   localizedGeoName,
+  MAHRAM_OPTIONAL_AGE,
+  MINIMUM_APPLICATION_AGE,
   NATIONAL_ID_LENGTH,
   normalizeTypedNumber,
   type ApplicationReceiptDto,
@@ -21,7 +24,9 @@ import { ApplicantFields } from '../components/registration/ApplicantFields'
 import { ApplicationReceipt } from '../components/registration/ApplicationReceipt'
 import { Field } from '../components/public/DescriptionField'
 import { StepIndicator } from '../components/public/StepIndicator'
-import { Alert, Button, Card, Loading, PageHeader, RadioGroup } from '../components/ui'
+import { Label } from '../components/shadcn/label'
+import { RadioGroup, RadioGroupItem } from '../components/shadcn/radio-group'
+import { Alert, Button, Card, Loading, PageHeader } from '../components/ui'
 import { ApiError } from '../lib/api'
 import { submitApplication, useRegistrationWindow } from '../lib/applications'
 import { useCommunesByWilaya, useWilayas } from '../lib/geo'
@@ -66,10 +71,15 @@ export function Register() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [receipt, setReceipt] = useState<ApplicationReceiptDto | undefined>(undefined)
 
+  const primaryAge = primary.dob ? calculateAgeAt(new Date(`${primary.dob}T00:00:00.000Z`), new Date()) : null
+  const primaryNeedsMahram =
+    primary.gender === 'FEMALE' && primaryAge !== null && primaryAge < MAHRAM_OPTIONAL_AGE
+  const entryTypeIsChoice = primary.gender === 'FEMALE' && !primaryNeedsMahram
+
   const stepKeys: StepKey[] = [
-    'entryType',
-    'location',
     'primary',
+    ...(entryTypeIsChoice ? (['entryType'] as const) : []),
+    'location',
     ...(entryType === 'PAIRED' ? (['secondary'] as const) : []),
     'review',
   ]
@@ -101,6 +111,10 @@ export function Register() {
     }
     if (values.fullName.trim().length < 2) found.fullName = t('register.errors.fullName')
     if (!values.dob) found.dob = t('register.errors.dob')
+    else if (calculateAgeAt(new Date(`${values.dob}T00:00:00.000Z`), new Date()) < MINIMUM_APPLICATION_AGE) {
+      found.dob = t('register.errors.underAge')
+    }
+    if (!values.gender) found.gender = t('register.errors.gender')
     return found
   }
 
@@ -108,6 +122,9 @@ export function Register() {
     const found = checkApplicant(secondary)
     if (canonical(primary) === canonical(secondary) && !found.nationalId) {
       found.nationalId = t('register.errors.samePerson')
+    }
+    if (secondary.gender && secondary.gender !== 'MALE' && !found.gender) {
+      found.gender = t('register.errors.mahramMustBeMale')
     }
     return found
   }
@@ -145,6 +162,8 @@ export function Register() {
       const found = checkApplicant(primary)
       setErrors((prev) => ({ ...prev, primary: found }))
       if (Object.keys(found).length > 0) return
+      if (primary.gender === 'MALE') setEntryType('SINGLE')
+      if (primaryNeedsMahram) setEntryType('PAIRED')
     } else if (currentKey === 'secondary') {
       const found = checkSecondary()
       setErrors((prev) => ({ ...prev, secondary: found }))
@@ -177,6 +196,7 @@ export function Register() {
       nationalId: values.nationalId,
       fullName: values.fullName,
       dob: values.dob,
+      gender: values.gender as 'MALE' | 'FEMALE',
       ...(values.phoneNumber.trim() ? { phoneNumber: values.phoneNumber } : {}),
     })
 
@@ -242,23 +262,37 @@ export function Register() {
         {currentKey === 'entryType' && (
           <Card title={t('register.sections.entryType')}>
             <RadioGroup
-              name="entryType"
               value={entryType}
               disabled={isSubmitting}
-              onChange={(value) => setEntryType(value as EntryType)}
-              options={[
-                {
-                  value: 'SINGLE',
-                  label: t('register.entryType.SINGLE'),
-                  description: t('register.entryType.descriptions.SINGLE'),
-                },
-                {
-                  value: 'PAIRED',
-                  label: t('register.entryType.PAIRED'),
-                  description: t('register.entryType.descriptions.PAIRED'),
-                },
-              ]}
-            />
+              onValueChange={(value) => setEntryType(value as EntryType)}
+              className="gap-2"
+            >
+              {(['SINGLE', 'PAIRED'] as const).map((option) => {
+                const optionId = `entry-type-${option}`
+                const isSelected = entryType === option
+                return (
+                  <Label
+                    key={option}
+                    htmlFor={optionId}
+                    className={`items-start rounded-lg border p-3 font-normal transition-colors ${
+                      isSelected
+                        ? 'border-primary-600 bg-primary-50/60'
+                        : 'border-stone-200 hover:bg-stone-50'
+                    } ${isSubmitting ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                  >
+                    <RadioGroupItem value={option} id={optionId} className="mt-0.5" />
+                    <span className="flex flex-col gap-0.5">
+                      <span className="text-sm font-medium text-stone-800">
+                        {t(`register.entryType.${option}`)}
+                      </span>
+                      <span className="text-xs text-stone-500">
+                        {t(`register.entryType.descriptions.${option}`)}
+                      </span>
+                    </span>
+                  </Label>
+                )
+              })}
+            </RadioGroup>
             <p className="mt-3 text-sm text-stone-500">{t('register.entryType.hint')}</p>
           </Card>
         )}
@@ -289,22 +323,40 @@ export function Register() {
         )}
 
         {currentKey === 'secondary' && (
-          <Card title={t('register.sections.secondary')} description={t('register.sections.secondaryHint')}>
+          <Card
+            title={t('register.sections.secondary')}
+            description={
+              primaryNeedsMahram
+                ? t('register.entryType.mahramRequired')
+                : t('register.sections.secondaryHint')
+            }
+          >
             <ApplicantFields
               idPrefix="secondary"
               values={secondary}
               errors={errors.secondary}
               disabled={isSubmitting}
               onChange={setSecondary}
+              allowedGenders={['MALE']}
             />
           </Card>
         )}
 
         {currentKey === 'review' && (
           <div className="flex flex-col gap-4">
-            <ReviewSection title={t('register.sections.entryType')} onEdit={() => goToStep('entryType')}>
-              <Field label={t('register.sections.entryType')}>{t(`register.entryType.${entryType}`)}</Field>
-            </ReviewSection>
+            {entryTypeIsChoice ? (
+              <ReviewSection title={t('register.sections.entryType')} onEdit={() => goToStep('entryType')}>
+                <Field label={t('register.sections.entryType')}>{t(`register.entryType.${entryType}`)}</Field>
+              </ReviewSection>
+            ) : (
+              <ReviewSection title={t('register.sections.entryType')} onEdit={() => goToStep('primary')}>
+                <Field label={t('register.sections.entryType')}>
+                  {primary.gender === 'MALE'
+                    ? t('register.entryType.maleIndividual')
+                    : t('register.entryType.mahramRequired')}
+                </Field>
+              </ReviewSection>
+            )}
 
             <ReviewSection title={t('register.sections.place')} onEdit={() => goToStep('location')}>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -389,6 +441,9 @@ function ApplicantSummary({ values }: { values: ApplicantFormValues }) {
     <dl className="grid gap-4 sm:grid-cols-2">
       <Field label={t('register.fields.nationalId')}>{values.nationalId}</Field>
       <Field label={t('register.fields.fullName')}>{values.fullName}</Field>
+      <Field label={t('register.fields.gender')}>
+        {values.gender ? t(`register.fields.gender${values.gender === 'MALE' ? 'Male' : 'Female'}`) : '—'}
+      </Field>
       <Field label={t('register.fields.dob')}>{values.dob}</Field>
       <Field label={t('register.fields.phoneNumber')}>{values.phoneNumber || '—'}</Field>
     </dl>

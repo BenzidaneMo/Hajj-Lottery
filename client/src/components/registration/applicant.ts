@@ -3,6 +3,7 @@ export interface ApplicantFormValues {
   nationalId: string
   fullName: string
   dob: string
+  gender: 'MALE' | 'FEMALE' | ''
   phoneNumber: string
 }
 
@@ -13,5 +14,6 @@ export const EMPTY_APPLICANT: ApplicantFormValues = {
   nationalId: '',
   fullName: '',
   dob: '',
+  gender: '',
   phoneNumber: '',
 }

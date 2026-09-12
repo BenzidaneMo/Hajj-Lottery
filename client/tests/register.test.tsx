@@ -19,10 +19,19 @@ import {
 /**
  * The registration wizard end to end.
  *
+ * The wizard's step order is decided by the primary applicant, not chosen up
+ * front: `primary` (identity + gender) always comes first, because only once
+ * gender and age are known can the flow decide whether an entry-type choice
+ * exists at all. A male applicant is forced to `SINGLE` and never sees the
+ * choice; a woman under 45 is forced to `PAIRED` (mandatory Mahram) and never
+ * sees it either; only a woman 45 or older is offered a real choice. These
+ * tests default to a male primary — the simplest, choice-free path — except
+ * where a test is specifically about the Mahram rule.
+ *
  * `submitApplication` still posts one `CreateApplicationRequest` exactly as
- * the single-page form did — these tests exercise the wizard's own new
- * surface (steps, per-step validation, the review screen) and then confirm
- * the request it eventually sends is unchanged.
+ * the single-page form did — these tests exercise the wizard's own surface
+ * (steps, per-step validation, the review screen) and then confirm the
+ * request it eventually sends is unchanged.
  */
 
 const WINDOW_OPEN = { body: { drawYear: 2027, isOpen: true } }
@@ -36,10 +45,18 @@ function baseStubs(extra: StubTable = {}) {
   })
 }
 
-async function fillPrimary(name = 'Amine Kaddour', nationalId = '123456789012345678') {
-  await userEvent.type(screen.getByLabelText(/national id number/i), nationalId)
+/** A comfortably-over-19, comfortably-under-45 date of birth by default. */
+async function fillPrimary(
+  name = 'Amine Kaddour',
+  nationalId = '123456789012345678',
+  gender: 'MALE' | 'FEMALE' = 'MALE',
+  dob = '1990-05-12',
+) {
+  await userEvent.type(await screen.findByLabelText(/national id number/i), nationalId)
+  await userEvent.click(screen.getByLabelText(/^gender/i))
+  await userEvent.click(await screen.findByRole('option', { name: gender === 'MALE' ? 'Male' : 'Female' }))
   await userEvent.type(screen.getByLabelText(/full name/i), name)
-  fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: '1990-05-12' } })
+  fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: dob } })
 }
 
 async function chooseLocation() {
@@ -50,14 +67,15 @@ async function chooseLocation() {
 }
 
 describe('the registration wizard', () => {
-  it('starts on the participation step with individual selected', async () => {
+  it('starts on the applicant-details step', async () => {
     await switchLocale('en')
     baseStubs()
 
     renderPage(<Register />)
     await screen.findByRole('heading', { name: 'Register' })
 
-    expect(screen.getByRole('radio', { name: /on my own/i })).toBeChecked()
+    expect(screen.getByLabelText(/national id number/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/^gender/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Back' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument()
   })
@@ -81,6 +99,7 @@ describe('the registration wizard', () => {
     )
 
     renderPage(<Register />)
+    await fillPrimary()
     await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
 
     expect(await screen.findByText('Loading…')).toBeInTheDocument()
@@ -91,6 +110,7 @@ describe('the registration wizard', () => {
     baseStubs()
 
     renderPage(<Register />)
+    await fillPrimary()
     await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
     await screen.findByLabelText(/wilaya/i)
 
@@ -107,6 +127,7 @@ describe('the registration wizard', () => {
     baseStubs()
 
     renderPage(<Register />)
+    await fillPrimary()
     await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
     await screen.findByLabelText(/wilaya/i)
 
@@ -122,9 +143,6 @@ describe('the registration wizard', () => {
     baseStubs()
 
     renderPage(<Register />)
-    await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
-    await chooseLocation()
-    await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
     await screen.findByLabelText(/national id number/i)
 
     await userEvent.type(screen.getByLabelText(/national id number/i), '123')
@@ -133,7 +151,20 @@ describe('the registration wizard', () => {
     expect(screen.getByText('Enter the 18-digit national ID number.')).toBeInTheDocument()
   })
 
-  it('completes a single applicant through review and submits the same request as before', async () => {
+  it('blocks leaving the applicant step under the minimum age', async () => {
+    await switchLocale('en')
+    baseStubs()
+
+    renderPage(<Register />)
+    await fillPrimary('Amine Kaddour', '123456789012345678', 'MALE', '2020-01-01')
+    await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
+
+    expect(
+      screen.getByText("The applicant must have completed 19 years on today's date."),
+    ).toBeInTheDocument()
+  })
+
+  it('completes a single male applicant through review and submits the same request as before', async () => {
     await switchLocale('en')
     baseStubs({
       '/api/applications': (_url: URL, init: RequestInit | undefined) => ({
@@ -154,18 +185,21 @@ describe('the registration wizard', () => {
 
     renderPage(<Register />)
 
+    await fillPrimary()
     await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
     await chooseLocation()
     await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
-    await fillPrimary()
-    await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
 
-    // The review step names every section and lets each be edited.
+    // A male applicant is never offered the entry-type choice or a secondary
+    // step — the review screen follows location directly.
     await screen.findByRole('heading', { name: 'Your details' })
     expect(screen.getAllByRole('button', { name: /^edit:/i }).length).toBeGreaterThan(0)
     expect(screen.getByText('Amine Kaddour')).toBeInTheDocument()
     expect(screen.getByText(WILAYA.nameEn)).toBeInTheDocument()
     expect(screen.getByText(COMMUNE.nameEn)).toBeInTheDocument()
+    expect(
+      screen.getByText('You can register individually. A Mahram is not required for male applicants.'),
+    ).toBeInTheDocument()
 
     await userEvent.click(await screen.findByRole('button', { name: 'Submit application' }))
 
@@ -179,24 +213,52 @@ describe('the registration wizard', () => {
     expect(requestedPaths().every((path) => !path.startsWith('/api/admin'))).toBe(true)
   })
 
-  it('adds a secondary-applicant step only for a paired application, and rejects the same person twice', async () => {
+  it('forces a Mahram on a woman under 45, with no entry-type choice, and rejects the same person twice', async () => {
     await switchLocale('en')
     baseStubs()
 
     renderPage(<Register />)
-    await userEvent.click(await screen.findByRole('radio', { name: /as a pair/i }))
+    // Under 45 — the Mahram flow is mandatory, so the wizard never shows the
+    // entry-type choice at all; it goes straight from the applicant to location.
+    await fillPrimary('Amine Kaddour', '123456789012345678', 'FEMALE', '1990-05-12')
     await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
     await chooseLocation()
     await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
-    await fillPrimary('Amine Kaddour', '123456789012345678')
-    await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
 
-    // The pair's second step, reached only because PAIRED was chosen.
+    // The pair's second step, reached without ever choosing PAIRED explicitly.
     await screen.findByRole('heading', { name: 'Second applicant' })
-    await fillPrimary('Amine Kaddour', '123456789012345678')
+    expect(screen.getByText('A woman under 45 must register with a male Mahram.')).toBeInTheDocument()
+    // Only a male Mahram may be offered here.
+    await userEvent.click(screen.getByLabelText(/^gender/i))
+    expect(screen.getByRole('option', { name: 'Male' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Female' })).not.toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+
+    await fillPrimary('Amine Kaddour', '123456789012345678', 'MALE', '1982-06-30')
     await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
 
     expect(screen.getByText('The two applicants must be different people.')).toBeInTheDocument()
+  })
+
+  it('offers a woman 45 or older the choice, and defaults her out of the Mahram flow', async () => {
+    await switchLocale('en')
+    baseStubs()
+
+    renderPage(<Register />)
+    // 45 comfortably ago — the Mahram flow becomes optional, so the wizard
+    // offers the choice screen next instead of forcing PAIRED.
+    await fillPrimary('Zohra Belkacem', '567856785678567856', 'FEMALE', '1970-01-01')
+    await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
+
+    await screen.findByRole('heading', { name: 'How are you applying?' })
+    expect(screen.getByRole('radio', { name: /on my own/i })).toBeChecked()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
+    await chooseLocation()
+    await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
+
+    // Chose "on my own", so no secondary step — straight to review.
+    await screen.findByRole('heading', { name: 'Your details' })
   })
 
   it('lets the review step jump back to any earlier section to edit it', async () => {
@@ -204,10 +266,9 @@ describe('the registration wizard', () => {
     baseStubs()
 
     renderPage(<Register />)
+    await fillPrimary()
     await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
     await chooseLocation()
-    await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
-    await fillPrimary()
     await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
     await screen.findByRole('heading', { name: 'Your details' })
 
@@ -223,10 +284,9 @@ describe('the registration wizard', () => {
     })
 
     renderPage(<Register />)
+    await fillPrimary()
     await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
     await chooseLocation()
-    await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
-    await fillPrimary()
     await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Submit application' }))
 
@@ -242,11 +302,10 @@ describe('the registration wizard', () => {
     baseStubs()
 
     renderPage(<Register />)
-    await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
-    await chooseLocation()
-    await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
     await fillPrimary()
     await userEvent.type(screen.getByLabelText(/mobile number/i), '0555123456')
+    await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
+    await chooseLocation()
     await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
 
     expect(window.location.pathname + window.location.search).not.toMatch(/123456789012345678|0555123456/)
