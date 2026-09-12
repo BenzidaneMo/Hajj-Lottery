@@ -1,6 +1,4 @@
 import {
-  ADMIN_PAGE_SIZE_DEFAULT,
-  ADMIN_PAGE_SIZE_MAX,
   type AdminScopeKind,
   type DashboardCountsDto,
   type DashboardGovernanceDto,
@@ -26,6 +24,7 @@ import {
 } from '@prisma/client'
 
 import { prisma as defaultPrisma } from '../lib/prisma.js'
+import { boundedPaging, paged, type Page } from '../lib/pagination.js'
 import { communeScopeFilter, resolveScope, intersectFilters } from '../lib/scope.js'
 
 /** An application with everything the console renders alongside it. */
@@ -60,14 +59,6 @@ export interface ParticipantFilters {
   pageSize?: number
 }
 
-export interface Page<T> {
-  items: T[]
-  page: number
-  pageSize: number
-  total: number
-  totalPages: number
-}
-
 export interface DashboardReading {
   scope: AdminScopeKind
   wilaya: Wilaya | null
@@ -93,17 +84,6 @@ const EMPTY_COUNTS: DashboardCountsDto = {
   unpublishedResults: 0,
   withdrawnWinners: 0,
   reservesAwaitingDecision: 0,
-}
-
-/** Clamps a requested page size into the range the API will serve. */
-function boundedPaging(page: number | undefined, pageSize: number | undefined) {
-  const size = Math.min(Math.max(pageSize ?? ADMIN_PAGE_SIZE_DEFAULT, 1), ADMIN_PAGE_SIZE_MAX)
-  const current = Math.max(page ?? 1, 1)
-  return { skip: (current - 1) * size, take: size, page: current, pageSize: size }
-}
-
-function paged<T>(items: T[], total: number, page: number, pageSize: number): Page<T> {
-  return { items, page, pageSize, total, totalPages: Math.max(Math.ceil(total / pageSize), 1) }
 }
 
 /**

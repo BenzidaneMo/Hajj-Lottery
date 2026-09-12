@@ -1,6 +1,6 @@
 import {
   localizedGeoName,
-  type CommuneDrawDto,
+  type CommuneDrawListItemDto,
   type DrawYearDto,
   type SupportedLocale,
 } from '@hajj-lottery/shared'
@@ -8,7 +8,7 @@ import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
-import { AdminPage } from '@/components/admin/AdminPage'
+import { AdminPage, TablePager } from '@/components/admin/AdminPage'
 import { DataTable, type Column } from '@/components/admin/DataTable'
 import { StatusBadge } from '@/components/admin/StatusBadge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/shadcn/alert'
@@ -35,14 +35,24 @@ export function AdminWinners() {
   const { t, i18n } = useTranslation()
   const locale = i18n.language as SupportedLocale
   const [drawYearId, setDrawYearId] = useState<string | undefined>(undefined)
+  const [page, setPage] = useState(1)
 
   const loadYears = useCallback(() => fetchDrawYears(), [])
   const years = useAsync(loadYears)
 
-  const loadDraws = useCallback(() => fetchCommuneDraws({ drawYearId }), [drawYearId])
+  // Filtered server-side to COMPLETED — a concluded draw is the only thing
+  // this screen is for, and filtering here (rather than fetching everything
+  // and narrowing client-side) is what lets it stay paginated correctly:
+  // narrowing after the server's own `take` would silently drop completed
+  // draws sitting past whatever page an unfiltered fetch happened to return.
+  const loadDraws = useCallback(
+    () => fetchCommuneDraws({ drawYearId, status: 'COMPLETED', page, pageSize: 25 }),
+    [drawYearId, page],
+  )
   const { state, reload } = useAsync(loadDraws)
+  const listPage = state.status === 'ready' ? state.data : undefined
 
-  const columns: Column<CommuneDrawDto>[] = [
+  const columns: Column<CommuneDrawListItemDto>[] = [
     {
       key: 'commune',
       header: t('geo.commune.label'),
@@ -82,7 +92,10 @@ export function AdminWinners() {
           <Label htmlFor="winners-year">{t('admin.draws.year')}</Label>
           <Select
             value={drawYearId ?? '__any__'}
-            onValueChange={(value) => setDrawYearId(value === '__any__' ? undefined : value)}
+            onValueChange={(value) => {
+              setDrawYearId(value === '__any__' ? undefined : value)
+              setPage(1)
+            }}
           >
             <SelectTrigger id="winners-year">
               <SelectValue />
@@ -100,7 +113,7 @@ export function AdminWinners() {
       </div>
 
       <DataTable
-        state={mapAsync(state, (rows) => rows.filter((row) => row.status === 'COMPLETED'))}
+        state={mapAsync(state, (result) => result.items)}
         columns={columns}
         getRowKey={(row) => row.id}
         label={t('admin.winners.tableLabel')}
@@ -112,6 +125,10 @@ export function AdminWinners() {
           </Button>
         )}
       />
+
+      {listPage && (
+        <TablePager page={listPage.page} totalPages={listPage.totalPages} onPageChange={setPage} />
+      )}
     </AdminPage>
   )
 }

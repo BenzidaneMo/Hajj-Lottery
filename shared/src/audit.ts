@@ -43,6 +43,10 @@ export const AUDIT_ACTIONS = [
    *  record of both. */
   'DRAW_POOL_FROZEN',
   'COMMUNE_DRAW_EXECUTED',
+  /** One summary event per batch run, in addition to each commune's own
+   *  COMMUNE_DRAW_EXECUTED — filed under the draw year, since a batch spans
+   *  every commune in it rather than one territory. */
+  'COMMUNE_DRAW_BATCH_EXECUTED',
 
   /** Publication, which is a separate act from running the draw: the result
    *  exists from the moment the lottery concludes, and becomes public only when

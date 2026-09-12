@@ -8,12 +8,15 @@ import type {
   ApplicationEligibilityDto,
   ApplicationStatus,
   ApplicationWeightDto,
+  BatchExecutionResultDto,
+  BatchValidationDto,
   ApprovalRequestDto,
   ApprovalStatus,
   AuditAction,
   AuditLogPageDto,
   AuditTargetType,
   CommuneDrawDto,
+  CommuneDrawPageDto,
   CommuneDrawStatus,
   DrawPoolSummaryDto,
   DrawResultDto,
@@ -145,8 +148,12 @@ export function updateDrawYearStatus(id: string, status: DrawYearStatus): Promis
 export function fetchCommuneDraws(query: {
   drawYearId?: string
   communeId?: string
-}): Promise<CommuneDrawDto[]> {
-  return apiGet<CommuneDrawDto[]>(`/api/admin/commune-draws${queryString({ ...query })}`)
+  wilayaId?: string
+  status?: CommuneDrawStatus
+  page?: number
+  pageSize?: number
+}): Promise<CommuneDrawPageDto> {
+  return apiGet<CommuneDrawPageDto>(`/api/admin/commune-draws${queryString({ ...query })}`)
 }
 
 export function fetchCommuneDraw(id: string): Promise<CommuneDrawDto> {
@@ -163,9 +170,27 @@ export function createCommuneDraw(input: {
 
 export function updateCommuneDraw(
   id: string,
-  change: { allocatedSpots?: number; status?: CommuneDrawStatus },
+  change: { allocatedSpots?: number; status?: CommuneDrawStatus; expectedUpdatedAt?: string },
 ): Promise<CommuneDrawDto> {
   return apiPatch<CommuneDrawDto>(`/api/admin/commune-draws/${encodeURIComponent(id)}`, change)
+}
+
+/**
+ * A preview only — nothing runs. `executeBatchDraws` must be sent exactly
+ * the `ready` ids this returns, never a freshly recomputed set.
+ */
+export function validateBatchDraws(drawYearId: string): Promise<BatchValidationDto> {
+  return apiPost<BatchValidationDto>('/api/admin/commune-draws/batch/validate', { drawYearId })
+}
+
+export function executeBatchDraws(
+  drawYearId: string,
+  communeDrawIds: string[],
+): Promise<BatchExecutionResultDto> {
+  return apiPost<BatchExecutionResultDto>('/api/admin/commune-draws/batch/execute', {
+    drawYearId,
+    communeDrawIds,
+  })
 }
 
 // --- Pool, execution, publication --------------------------------------------

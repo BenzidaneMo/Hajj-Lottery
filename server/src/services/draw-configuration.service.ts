@@ -16,7 +16,6 @@ import {
   isAdministrativelySettable,
 } from '../lib/draw-lifecycle.js'
 import { ConflictError, NotFoundError } from '../lib/errors.js'
-import { sortByCode } from '../lib/geo-order.js'
 import { prisma as defaultPrisma } from '../lib/prisma.js'
 import { auditService, AuditService, scopeOfCommune, type AuditActor } from './audit.service.js'
 
@@ -24,6 +23,16 @@ import { auditService, AuditService, scopeOfCommune, type AuditActor } from './a
 export type CommuneDrawWithPlace = CommuneDraw & {
   drawYear: DrawYear
   commune: Commune & { wilaya: Wilaya }
+}
+
+/**
+ * A commune draw as the list endpoint reads it — with just enough of its
+ * pool/result/publication to say whether each has happened, never their
+ * content. The detail page reads those in full through their own endpoints.
+ */
+export type CommuneDrawWithListState = CommuneDrawWithPlace & {
+  pool: { id: string } | null
+  result: { id: string; publication: { id: string } | null } | null
 }
 
 export interface CreateCommuneDrawInput {
@@ -35,6 +44,11 @@ export interface CreateCommuneDrawInput {
 export interface UpdateCommuneDrawInput {
   allocatedSpots?: number
   status?: CommuneDrawStatus
+  /**
+   * The `updatedAt` the caller read before editing. Required by validation
+   * whenever `allocatedSpots` is present — see `updateCommuneDraw` for why.
+   */
+  expectedUpdatedAt?: string
 }
 
 /**
@@ -294,6 +308,16 @@ export class DrawConfigurationService {
       )
     }
 
+    // A programmer contract, not a user-facing outcome: real HTTP requests
+    // already cannot reach here without it (the schema requires it whenever
+    // allocatedSpots is present). Caught here too so a direct caller gets a
+    // clear assertion instead of a Prisma crash on an invalid Date — but only
+    // once the change is already known to be legal, so a locked draw still
+    // reports the business reason first regardless of what else is missing.
+    if (changes.allocatedSpots !== undefined && changes.expectedUpdatedAt === undefined) {
+      throw new Error('updateCommuneDraw: expectedUpdatedAt is required when changing allocatedSpots')
+    }
+
     // COMPLETED belongs to winner processing alone. Setting it here would
     // produce a draw that claims to have concluded with no winners to show, so
     // it is refused before the transition table is even consulted — the
@@ -317,12 +341,36 @@ export class DrawConfigurationService {
     }
 
     return this.db.$transaction(async (tx) => {
-      const updated = await tx.communeDraw.update({
+      const data = {
+        ...(changes.allocatedSpots === undefined ? {} : { allocatedSpots: changes.allocatedSpots }),
+        ...(changes.status === undefined ? {} : { status: changes.status }),
+      }
+
+      if (changes.allocatedSpots !== undefined) {
+        // Optimistic concurrency, required only for an allocation change: the
+        // caller must be editing the record exactly as they read it, not a
+        // stale copy from an earlier list fetch. `updatedAt` is Prisma's own
+        // `@updatedAt` column — no separate version column needed — and this
+        // is the same conditional-claim shape `DrawExecutionService.execute`
+        // already uses for its `LOCKED -> COMPLETED` transition: a write that
+        // does not match the expected row updates nothing, and a `count` of
+        // zero is the signal, not a second read-then-compare.
+        const claimed = await tx.communeDraw.updateMany({
+          where: { id, updatedAt: new Date(changes.expectedUpdatedAt as string) },
+          data,
+        })
+        if (claimed.count !== 1) {
+          throw new ConflictError(
+            'COMMUNE_DRAW_ALREADY_CHANGED',
+            'This commune draw changed since it was loaded. Reload and try again.',
+          )
+        }
+      } else {
+        await tx.communeDraw.update({ where: { id }, data })
+      }
+
+      const updated = await tx.communeDraw.findUniqueOrThrow({
         where: { id },
-        data: {
-          ...(changes.allocatedSpots === undefined ? {} : { allocatedSpots: changes.allocatedSpots }),
-          ...(changes.status === undefined ? {} : { status: changes.status }),
-        },
         include: { drawYear: true, commune: { include: { wilaya: true } } },
       })
 
@@ -352,17 +400,6 @@ export class DrawConfigurationService {
 
       return updated
     })
-  }
-
-  /**
-   * Orders a set of commune draws the way the rest of the application orders
-   * geography — by commune code, numerically. See lib/geo-order.ts for why
-   * that cannot be done in the query.
-   */
-  sortByCommuneCode(draws: CommuneDrawWithPlace[]): CommuneDrawWithPlace[] {
-    const ordered = sortByCode(draws.map((draw) => ({ code: draw.commune.code, draw })))
-
-    return ordered.map((entry) => entry.draw)
   }
 }
 

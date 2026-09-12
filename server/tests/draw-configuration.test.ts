@@ -26,7 +26,13 @@ const OTHER_YEAR = 2151
 const NATIONAL_ID = '611111111111111111'
 
 function applicant(overrides: Record<string, unknown> = {}) {
-  return { nationalId: NATIONAL_ID, fullName: 'Draw Subject', dob: '1980-04-12', ...overrides }
+  return {
+    nationalId: NATIONAL_ID,
+    fullName: 'Draw Subject',
+    dob: '1980-04-12',
+    gender: 'MALE',
+    ...overrides,
+  }
 }
 
 const submit = (body: Record<string, unknown>) => request(app).post('/api/applications').send(body)
@@ -282,12 +288,16 @@ describe('commune draws', () => {
     const year = await draftYear()
     const draw = await configureCommune(year.id, geo.communeA1.id, 12)
 
-    const updated = await drawConfigurationService.updateCommuneDraw(draw.id, { allocatedSpots: 20 })
+    const updated = await drawConfigurationService.updateCommuneDraw(draw.id, {
+      allocatedSpots: 20,
+      expectedUpdatedAt: draw.updatedAt.toISOString(),
+    })
     expect(updated.allocatedSpots).toBe(20)
 
-    await drawConfigurationService.updateCommuneDraw(draw.id, { status: 'READY' })
+    const readied = await drawConfigurationService.updateCommuneDraw(draw.id, { status: 'READY' })
     const stillEditable = await drawConfigurationService.updateCommuneDraw(draw.id, {
       allocatedSpots: 25,
+      expectedUpdatedAt: readied.updatedAt.toISOString(),
     })
     expect(stillEditable.allocatedSpots).toBe(25)
   })
@@ -490,9 +500,71 @@ describe('administrative access', () => {
     const updated = await request(app)
       .patch(`/api/admin/commune-draws/${created.body.id}`)
       .set('Cookie', cookie)
-      .send({ allocatedSpots: 20 })
+      .send({ allocatedSpots: 20, expectedUpdatedAt: created.body.updatedAt })
 
     expect(updated.body.allocatedSpots).toBe(20)
+  })
+
+  it('requires the record version when changing an allocation', async () => {
+    const { cookie } = await superAdmin()
+    const year = await draftYear()
+    const draw = await configureCommune(year.id, geo.communeA1.id, 12)
+
+    const response = await request(app)
+      .patch(`/api/admin/commune-draws/${draw.id}`)
+      .set('Cookie', cookie)
+      .send({ allocatedSpots: 20 })
+
+    expect(response.status).toBe(400)
+  })
+
+  it('refuses an allocation change against a stale version, and accepts a fresh one', async () => {
+    const { cookie } = await superAdmin()
+    const year = await draftYear()
+    const draw = await configureCommune(year.id, geo.communeA1.id, 12)
+    const staleUpdatedAt = draw.updatedAt.toISOString()
+
+    // Someone else's edit lands first.
+    const first = await request(app)
+      .patch(`/api/admin/commune-draws/${draw.id}`)
+      .set('Cookie', cookie)
+      .send({ allocatedSpots: 15, expectedUpdatedAt: staleUpdatedAt })
+    expect(first.status).toBe(200)
+
+    // A second submission still holding the original version is refused —
+    // not because 15 is wrong, but because it can no longer prove it read the
+    // record it is changing.
+    const stale = await request(app)
+      .patch(`/api/admin/commune-draws/${draw.id}`)
+      .set('Cookie', cookie)
+      .send({ allocatedSpots: 20, expectedUpdatedAt: staleUpdatedAt })
+    expect(stale.status).toBe(409)
+    expect(stale.body.code).toBe('COMMUNE_DRAW_ALREADY_CHANGED')
+
+    const stored = await prisma.communeDraw.findUniqueOrThrow({ where: { id: draw.id } })
+    expect(stored.allocatedSpots).toBe(15)
+
+    // Reading the fresh version first lets the edit through.
+    const fresh = await request(app)
+      .patch(`/api/admin/commune-draws/${draw.id}`)
+      .set('Cookie', cookie)
+      .send({ allocatedSpots: 20, expectedUpdatedAt: first.body.updatedAt })
+    expect(fresh.status).toBe(200)
+    expect(fresh.body.allocatedSpots).toBe(20)
+  })
+
+  it('does not require a record version for a status-only transition', async () => {
+    const { cookie } = await superAdmin()
+    const year = await draftYear()
+    const draw = await configureCommune(year.id, geo.communeA1.id, 12)
+
+    const response = await request(app)
+      .patch(`/api/admin/commune-draws/${draw.id}`)
+      .set('Cookie', cookie)
+      .send({ status: 'READY' })
+
+    expect(response.status).toBe(200)
+    expect(response.body.status).toBe('READY')
   })
 
   it('refuses a scoped administrator changing an allocation', async () => {
@@ -538,8 +610,8 @@ describe('administrative access', () => {
     const response = await communeDraws(cookie)
 
     expect(response.status).toBe(200)
-    expect(response.body).toHaveLength(1)
-    expect(response.body[0].commune.id).toBe(geo.communeA1.id)
+    expect(response.body.items).toHaveLength(1)
+    expect(response.body.items[0].commune.id).toBe(geo.communeA1.id)
     expect(JSON.stringify(response.body)).not.toContain(geo.communeB1.code)
   })
 
@@ -551,8 +623,8 @@ describe('administrative access', () => {
     const { cookie } = await communeAdmin(geo.wilayaA.id, geo.communeA1.id)
     const response = await communeDraws(cookie)
 
-    expect(response.body).toHaveLength(1)
-    expect(response.body[0].id).toBe(own.id)
+    expect(response.body.items).toHaveLength(1)
+    expect(response.body.items[0].id).toBe(own.id)
   })
 
   it('hides another territory’s commune draw exactly as if it did not exist', async () => {
@@ -582,7 +654,91 @@ describe('administrative access', () => {
       .set('Cookie', cookie)
 
     // A requested filter intersects the ceiling; it can only ever narrow.
-    expect(response.body).toEqual([])
+    expect(response.body.items).toEqual([])
+    expect(response.body.total).toBe(0)
+  })
+
+  it('pages the commune-draws list rather than returning it unbounded', async () => {
+    const year = await draftYear()
+    // The smallest page size this endpoint accepts is 10 (a closed set —
+    // 10/25/50 — see adminCommuneDrawQuerySchema), so a real two-page test
+    // needs more than 10 communes; the shared fixture only has three, so this
+    // test grows its own under wilaya A.
+    // Geographic reference tables are never truncated between tests (see
+    // tests/setup.ts), so this has to be idempotent across repeated runs,
+    // exactly like ensureTestGeography's own upserts.
+    const communes = await Promise.all(
+      Array.from({ length: 11 }, (_, index) => {
+        const code = `9019${index}`
+        return prisma.commune.upsert({
+          where: { wilayaId_code: { wilayaId: geo.wilayaA.id, code } },
+          update: {},
+          create: {
+            wilayaId: geo.wilayaA.id,
+            code,
+            nameAr: `Page Test ${index}`,
+            nameFr: `Page Test ${index}`,
+            nameEn: `Page Test ${index}`,
+          },
+        })
+      }),
+    )
+    for (const commune of communes) {
+      await configureCommune(year.id, commune.id)
+    }
+
+    const { cookie } = await superAdmin()
+
+    const firstPage = await request(app)
+      .get('/api/admin/commune-draws')
+      .query({ drawYearId: year.id, pageSize: 10, page: 1 })
+      .set('Cookie', cookie)
+
+    expect(firstPage.status).toBe(200)
+    expect(firstPage.body).toMatchObject({ page: 1, pageSize: 10, total: 11, totalPages: 2 })
+    expect(firstPage.body.items).toHaveLength(10)
+
+    const secondPage = await request(app)
+      .get('/api/admin/commune-draws')
+      .query({ drawYearId: year.id, pageSize: 10, page: 2 })
+      .set('Cookie', cookie)
+
+    expect(secondPage.body.items).toHaveLength(1)
+
+    // No overlap between pages.
+    const ids = new Set(
+      [...firstPage.body.items, ...secondPage.body.items].map((row: { id: string }) => row.id),
+    )
+    expect(ids.size).toBe(11)
+  })
+
+  it('rejects a page size outside the fixed 10/25/50 set', async () => {
+    const year = await draftYear()
+    const { cookie } = await superAdmin()
+
+    const response = await request(app)
+      .get('/api/admin/commune-draws')
+      .query({ drawYearId: year.id, pageSize: 15 })
+      .set('Cookie', cookie)
+
+    expect(response.status).toBe(400)
+  })
+
+  it('filters the commune-draws list by wilaya, server-side', async () => {
+    const year = await draftYear()
+    await configureCommune(year.id, geo.communeA1.id)
+    await configureCommune(year.id, geo.communeA2.id)
+    await configureCommune(year.id, geo.communeB1.id)
+
+    const { cookie } = await superAdmin()
+    const response = await request(app)
+      .get('/api/admin/commune-draws')
+      .query({ wilayaId: geo.wilayaA.id })
+      .set('Cookie', cookie)
+
+    expect(response.body.items).toHaveLength(2)
+    expect(response.body.total).toBe(2)
+    expect(JSON.stringify(response.body)).not.toContain(geo.communeB1.code)
   })
 
   it('lets any administrator read the national cycle', async () => {

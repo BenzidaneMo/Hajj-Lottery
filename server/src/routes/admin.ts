@@ -11,6 +11,7 @@ import {
   getApplicationEligibility,
   getApplicationWeight,
 } from '../controllers/admin-application.controller.js'
+import { executeBatchDraw, validateBatchDraw } from '../controllers/admin-batch-draw.controller.js'
 import {
   getApplication,
   getDashboard,
@@ -123,6 +124,20 @@ adminRouter.post('/draw-years', requireRole(AdminRole.SUPER_ADMIN), asyncHandler
 adminRouter.patch('/draw-years/:id', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(updateDrawYear))
 
 adminRouter.get('/commune-draws', asyncHandler(listCommuneDraws))
+// Registered ahead of `/commune-draws/:id` for the same reason as the import
+// template routes above: "batch" would otherwise be swallowed by `:id`.
+// SUPER_ADMIN-only, like executing one commune's own draw — running every
+// ready one in a year is the same authority, not a wider one.
+adminRouter.post(
+  '/commune-draws/batch/validate',
+  requireRole(AdminRole.SUPER_ADMIN),
+  asyncHandler(validateBatchDraw),
+)
+adminRouter.post(
+  '/commune-draws/batch/execute',
+  requireRole(AdminRole.SUPER_ADMIN),
+  asyncHandler(executeBatchDraw),
+)
 adminRouter.get('/commune-draws/:id', asyncHandler(getCommuneDraw))
 adminRouter.post('/commune-draws', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(createCommuneDraw))
 adminRouter.patch('/commune-draws/:id', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(updateCommuneDraw))

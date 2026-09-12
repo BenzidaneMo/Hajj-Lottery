@@ -20,7 +20,7 @@ import { MIN_PASSWORD_LENGTH } from '../lib/password.js'
  * and the operator would have no way to tell.
  */
 
-const pagingFields = {
+export const pagingFields = {
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(ADMIN_PAGE_SIZE_MAX).default(ADMIN_PAGE_SIZE_DEFAULT),
 }

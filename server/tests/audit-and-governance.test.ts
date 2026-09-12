@@ -378,7 +378,7 @@ describe('draw configuration is audited', () => {
     const updated = await request(app)
       .patch(`/api/admin/commune-draws/${communeDraw.id}`)
       .set('Cookie', cookie)
-      .send({ allocatedSpots: 25 })
+      .send({ allocatedSpots: 25, expectedUpdatedAt: communeDraw.updatedAt.toISOString() })
     expect(updated.status).toBe(200)
 
     const entry = await prisma.auditLog.findFirstOrThrow({ where: { action: 'COMMUNE_DRAW_UPDATED' } })

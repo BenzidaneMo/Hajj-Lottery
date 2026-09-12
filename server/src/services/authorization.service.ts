@@ -7,6 +7,7 @@ import {
   type ApprovalStatus,
   type AuditAction,
   type AuditTargetType,
+  type CommuneDrawStatus,
   type ScopePlaceDto,
 } from '@hajj-lottery/shared'
 import type {
@@ -32,9 +33,10 @@ import {
   type AdminScope,
 } from '../lib/scope.js'
 import { sortByCode } from '../lib/geo-order.js'
+import { boundedPaging, paged, type Page } from '../lib/pagination.js'
 import { prisma as defaultPrisma } from '../lib/prisma.js'
 import type { ApprovalRequestWithPlace } from './approval.service.js'
-import type { CommuneDrawWithPlace } from './draw-configuration.service.js'
+import type { CommuneDrawWithListState, CommuneDrawWithPlace } from './draw-configuration.service.js'
 import type { ImportBatchWithUsers } from './legacy-import.service.js'
 import type { HistoryRecordWithPlace } from './participation-history.service.js'
 
@@ -206,27 +208,61 @@ export class AuthorizationService {
   }
 
   /**
-   * Commune draws the caller may see, optionally narrowed by year or commune.
+   * Commune draws the caller may see, optionally narrowed by year, commune,
+   * wilaya or status, and paged.
    *
    * A commune draw has no scope of its own — it inherits its commune's, so the
    * ceiling nests through that relation. Requested filters are intersected
    * with it, so a WILAYA_ADMIN asking for a commune in another wilaya gets
    * nothing rather than another territory's allocation.
+   *
+   * Ordered newest-first with an id tie-break, like every other paginated
+   * admin listing (`AdminConsoleService.listApplications`) — geographic-code
+   * order (`sortByCode`) cannot be expressed in SQL and so cannot compose with
+   * `skip`/`take` without reordering rows within a page.
    */
   async listCommuneDraws(
     user: User,
-    requested: { drawYearId?: string; communeId?: string } = {},
-  ): Promise<CommuneDrawWithPlace[]> {
+    requested: {
+      drawYearId?: string
+      communeId?: string
+      wilayaId?: string
+      status?: CommuneDrawStatus
+      page?: number
+      pageSize?: number
+    } = {},
+  ): Promise<Page<CommuneDrawWithListState>> {
     const ceiling = communeScopeFilter(this.scopeFor(user))
+    const narrowing: { id?: string; wilayaId?: string } = requested.wilayaId
+      ? { wilayaId: requested.wilayaId }
+      : {}
 
-    return this.db.communeDraw.findMany({
-      where: {
-        commune: ceiling,
-        ...(requested.drawYearId ? { drawYearId: requested.drawYearId } : {}),
-        ...(requested.communeId ? { communeId: requested.communeId } : {}),
-      },
-      include: { drawYear: true, commune: { include: { wilaya: true } } },
-    })
+    const where: Prisma.CommuneDrawWhereInput = {
+      commune: intersectFilters(ceiling, narrowing),
+      ...(requested.drawYearId ? { drawYearId: requested.drawYearId } : {}),
+      ...(requested.communeId ? { communeId: requested.communeId } : {}),
+      ...(requested.status ? { status: requested.status } : {}),
+    }
+
+    const { skip, take, page, pageSize } = boundedPaging(requested.page, requested.pageSize)
+
+    const [items, total] = await Promise.all([
+      this.db.communeDraw.findMany({
+        where,
+        include: {
+          drawYear: true,
+          commune: { include: { wilaya: true } },
+          pool: { select: { id: true } },
+          result: { select: { id: true, publication: { select: { id: true } } } },
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take,
+      }),
+      this.db.communeDraw.count({ where }),
+    ])
+
+    return paged(items, total, page, pageSize)
   }
 
   /**

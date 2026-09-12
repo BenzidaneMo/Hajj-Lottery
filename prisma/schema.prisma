@@ -994,6 +994,9 @@ enum AuditAction {
   /// DRAW_POOL_FROZEN is the record of both.
   DRAW_POOL_FROZEN
   COMMUNE_DRAW_EXECUTED
+  /// One summary event per batch run, in addition to each commune's own
+  /// COMMUNE_DRAW_EXECUTED — filed under the draw year.
+  COMMUNE_DRAW_BATCH_EXECUTED
 
   /// Publication, deliberately distinct from execution. A result exists from the
   /// moment the lottery concludes; it becomes public only when a national

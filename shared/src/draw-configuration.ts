@@ -129,6 +129,31 @@ export interface CommuneDrawDto {
   updatedAt: string
 }
 
+/**
+ * One row of the commune-draws list, specifically — not `CommuneDrawDto`
+ * itself, so the single-record read/create/update endpoints keep their exact
+ * existing shape. The three extra flags exist only where a table needs to
+ * show them at a glance; the detail page reads pool/result state from their
+ * own endpoints instead.
+ */
+export interface CommuneDrawListItemDto extends CommuneDrawDto {
+  /** Whether this commune's pool has been frozen (its input is fixed). */
+  poolFrozen: boolean
+  /** Whether the lottery has been run for this commune. */
+  executed: boolean
+  /** Whether the result has been released to the public. */
+  published: boolean
+}
+
+/** A page of the commune-draws list. The whole list is never returned. */
+export interface CommuneDrawPageDto {
+  items: CommuneDrawListItemDto[]
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+}
+
 /** What the registration form is told about the current cycle. */
 export interface RegistrationWindowDto {
   /** Null when no year is open — the form has nothing to apply for. */

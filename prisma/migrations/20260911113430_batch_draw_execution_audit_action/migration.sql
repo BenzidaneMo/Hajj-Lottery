@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "audit_action" ADD VALUE 'COMMUNE_DRAW_BATCH_EXECUTED';

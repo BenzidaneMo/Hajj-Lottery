@@ -1,4 +1,11 @@
-import type { CommuneDrawDto, CommuneDrawStatus, DrawYearDto, DrawYearStatus } from '@hajj-lottery/shared'
+import type {
+  CommuneDrawDto,
+  CommuneDrawListItemDto,
+  CommuneDrawPageDto,
+  CommuneDrawStatus,
+  DrawYearDto,
+  DrawYearStatus,
+} from '@hajj-lottery/shared'
 import type { DrawYear } from '@prisma/client'
 import type { RequestHandler } from 'express'
 
@@ -8,9 +15,11 @@ import { auditActor } from '../services/audit.service.js'
 import { authorizationService } from '../services/authorization.service.js'
 import {
   drawConfigurationService,
+  type CommuneDrawWithListState,
   type CommuneDrawWithPlace,
 } from '../services/draw-configuration.service.js'
 import {
+  adminCommuneDrawQuerySchema,
   createCommuneDrawSchema,
   createDrawYearSchema,
   updateCommuneDrawSchema,
@@ -106,16 +115,24 @@ export const updateDrawYear: RequestHandler = async (req, res) => {
  *
  * Scoped: the caller's ceiling is part of the query, so a commune draw outside
  * their territory is simply not in the result rather than filtered out
- * afterwards. `drawYearId` and `communeId` narrow it further and can only ever
- * remove rows.
+ * afterwards. `drawYearId`, `communeId`, `wilayaId` and `status` narrow it
+ * further and can only ever remove rows. Paged, like every other admin
+ * listing — this used to return the caller's entire scope unbounded.
  */
 export const listCommuneDraws: RequestHandler = async (req, res) => {
-  const draws = await authorizationService.listCommuneDraws(getAuthenticatedUser(req), {
-    drawYearId: queryString(req.query.drawYearId),
-    communeId: queryString(req.query.communeId),
-  })
+  const parsed = adminCommuneDrawQuerySchema.safeParse(req.query)
+  if (!parsed.success) {
+    throw new BadRequestError(
+      'VALIDATION_FAILED',
+      'Please check the requested filters',
+      parsed.error.flatten().fieldErrors,
+    )
+  }
 
-  res.json(drawConfigurationService.sortByCommuneCode(draws).map(toCommuneDrawDto))
+  const page = await authorizationService.listCommuneDraws(getAuthenticatedUser(req), parsed.data)
+
+  const body: CommuneDrawPageDto = { ...page, items: page.items.map(toCommuneDrawListItemDto) }
+  res.json(body)
 }
 
 /** GET /api/admin/commune-draws/:id — 404 for out-of-scope, as for missing. */
@@ -166,6 +183,9 @@ export const updateCommuneDraw: RequestHandler = async (req, res) => {
     {
       ...(parsed.data.allocatedSpots === undefined ? {} : { allocatedSpots: parsed.data.allocatedSpots }),
       ...(parsed.data.status === undefined ? {} : { status: parsed.data.status as CommuneDrawStatus }),
+      ...(parsed.data.expectedUpdatedAt === undefined
+        ? {}
+        : { expectedUpdatedAt: parsed.data.expectedUpdatedAt }),
     },
     auditActor(getAuthenticatedUser(req)),
   )
@@ -211,6 +231,12 @@ function toCommuneDrawDto(draw: CommuneDrawWithPlace): CommuneDrawDto {
   }
 }
 
-function queryString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.length > 0 ? value : undefined
+/** The list row: `toCommuneDrawDto`'s fields plus the three at-a-glance flags. */
+function toCommuneDrawListItemDto(draw: CommuneDrawWithListState): CommuneDrawListItemDto {
+  return {
+    ...toCommuneDrawDto(draw),
+    poolFrozen: draw.pool !== null,
+    executed: draw.result !== null,
+    published: draw.result !== null && draw.result.publication !== null,
+  }
 }
