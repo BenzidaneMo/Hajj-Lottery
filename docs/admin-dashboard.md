@@ -86,6 +86,17 @@ themselves:
 `ConfirmDialog`/`ReasonDialog`/`FactList`, `PlacePicker`,
 `DrawLifecycleStepper`, `PoolPanel`, `ResultPanel`.
 
+**Theme (Step 25).** The console was already built on the shared `primary-*`/
+`gold-*` ramp and typography rules `index.css` defines for the whole
+application (Cairo under `dir="rtl"`, Plus Jakarta Sans otherwise) — a
+targeted review found one real outlier: `AdminLogin.tsx`, the one screen
+outside `AdminLayout`, still used the public portal's older `components/ui/*`
+kit and a literal `bg-stone-50`. It was rebuilt on the same shadcn primitives
+(`Card`, `Button`, `Input`, `Alert`, `Label`) everything else here uses, and
+the literal background became `bg-background`. No token in `index.css`
+changed — the ramp was already right; this was an application-of-existing-
+tokens fix, not a new theme.
+
 ## Status vocabulary
 
 `components/admin/StatusBadge.tsx` holds one table per domain vocabulary. That
@@ -141,6 +152,14 @@ Plus administrator accounts, which had a service (`AdminAccountService`) and no
 routes: `GET /api/admin/admins`, `POST /api/admin/admins`,
 `PATCH /api/admin/admins/:id/scope`, `POST /api/admin/admins/:id/deactivate` —
 all SUPER_ADMIN.
+
+**Step 25** added six more, all covered in their own section below:
+`GET /api/admin/imports/template.csv`, `GET /api/admin/imports/template.xlsx`
+(any administrator — the templates carry no data, only column names),
+`POST /api/admin/commune-draws/batch/validate`,
+`POST /api/admin/commune-draws/batch/execute` (SUPER_ADMIN), and
+`GET /api/admin/commune-draws` gained real pagination and a `wilayaId`/`status`
+filter it did not have before (see _Commune draws_ below).
 
 ### Identity in the console
 
@@ -258,6 +277,211 @@ are promoted together and that it cannot be promoted in part.
 Refusal requires an explanation, and states that the place reopens for the next
 reserve and that this one is not asked again.
 
+## Commune draws: pagination, allocation editing, batch execution (Step 25)
+
+`GET /api/admin/commune-draws` used to return the caller's entire scope,
+unbounded — every commune draw a `WILAYA_ADMIN` or `SUPER_ADMIN` could see, in
+one response. It now returns a `Page<CommuneDrawListItemDto>`
+(`{ items, page, pageSize, total, totalPages }`), filtered server-side by
+`drawYearId`, `communeId`, `wilayaId` and `status` — the same `Page<T>` shape
+`AdminConsoleService` already used for applications and participants
+(`server/src/lib/pagination.ts`, extracted from that service so the two share
+one implementation). Page size is a **closed set** — 10, 25 or 50, whichever
+the console offers — validated with `z.coerce.number()` piped into a refine
+against exactly those three values, not the general 1–100 admin cap: this
+screen has no search box wide enough to justify a bigger page, and a caller
+asking for an arbitrary page size the UI never offered is refused, not
+silently clamped. `TablePager` gained optional `pageSize`/`onPageSizeChange`/
+`total` props for the size selector and the "Showing X–Y of Z" summary; the
+audit log's own three-prop call is unaffected.
+
+The list row also gained three booleans — `poolFrozen`, `executed`,
+`published` — sourced from a `pool`/`result.publication` include already
+folded into the same scoped query, not a second per-row request. They are
+existence checks only (`pool !== null`, `result !== null`,
+`result.publication !== null`); nothing about a pool's or a result's content
+crosses into this list.
+
+### Allocation editing and optimistic concurrency
+
+This editing surface did not exist before Step 25 — there was no dialog
+anywhere that sent `allocatedSpots` to `PATCH /api/admin/commune-draws/:id`,
+even though the service already accepted it. It was built with a real
+concurrency guard from the start rather than added afterward:
+
+- Opening the dialog issues a **fresh** `GET` for that one commune draw. It
+  never trusts the row the list last loaded, which can be stale by the time an
+  operator clicks the button.
+- The allocation input is **disabled**, with the reason stated, whenever the
+  freshly-read status is not `DRAFT`/`READY` — the same rule
+  `allowsSpotChanges` already enforces server-side, surfaced before the
+  request is even attempted rather than after it is refused.
+- Submitting sends `expectedUpdatedAt` — the `updatedAt` the fresh `GET`
+  returned — alongside `allocatedSpots`. `updateCommuneDrawSchema` requires
+  one whenever the other is present. The service does a conditional
+  `updateMany({ where: { id, updatedAt: expectedUpdatedAt } })` instead of the
+  plain `update` it used before; a `count` of zero means the record moved
+  since it was read, and the service throws a dedicated 409
+  `COMMUNE_DRAW_ALREADY_CHANGED` rather than writing over somebody else's
+  change. `updatedAt` was chosen deliberately over a new `version` column —
+  it already existed, was already exposed on the DTO, and mirrors the
+  conditional-claim pattern `DrawExecutionService.execute` already uses for
+  its own `LOCKED → COMPLETED` transition. Status-only transitions (the
+  lifecycle buttons on the detail page) are unaffected and still write
+  unconditionally — only an allocation change now carries the token.
+- On a 409, the console shows the same generic "This has already changed.
+  Reload and try again." text every other conflict already shows — the
+  server's own message is never surfaced, conflict or otherwise — and the
+  retry re-fetches the fresh record into the still-open dialog rather than
+  resubmitting the same stale value.
+- There is no client-side cache to invalidate (this app has none — see
+  _Performance_ below); a successful save just calls the list's own
+  `reload()`.
+
+### Batch draw execution
+
+**Execute All Validated Draws**, SUPER_ADMIN only, scoped to whichever draw
+year the commune-draws screen is currently filtered to. It is an
+orchestration layer over the existing `DrawExecutionService.execute`, not a
+second selection engine — nothing here reads `Math.random`, combines pools
+across communes, or derives a seed from the batch, and each named commune
+still runs through exactly the same atomic transaction it would if run one at
+a time from its own detail page (which keeps its own execute button,
+unchanged).
+
+Two requests, always in that order, never collapsed into one:
+
+1. **`POST /commune-draws/batch/validate`** (`{ drawYearId }`) computes a
+   readiness preview and changes nothing. A commune is `ready` when
+   `status === 'LOCKED'`, a pool exists, and the pool's `entryCount` is at
+   least twice the allocation; otherwise it is `notReady` with a reason
+   (`NOT_LOCKED`, `NO_POOL`, `INSUFFICIENT_ENTRIES`), or `alreadyCompleted`.
+   This check is deliberately coarse — it does not re-verify the pool's hash
+   or re-run eligibility, because that is `execute()`'s job and duplicating it
+   here would be a second verification engine the two could silently
+   disagree with. "Ready" is a preview; `execute()` remains the final word,
+   and a commune that slips out of readiness between the two requests simply
+   reports its own real error rather than being silently dropped.
+2. The console shows the ready/not-ready/already-completed counts and an
+   explicit irreversibility warning, and only an explicit confirmation click
+   sends **`POST /commune-draws/batch/execute`** (`{ drawYearId,
+communeDrawIds }`) — exactly the `ready` ids the first request returned,
+   never a freshly re-discovered or widened set. There is no auto-execute
+   path anywhere between the two calls.
+
+`executeBatch` loops those ids and calls `drawExecutionService.execute(id,
+actor)` **once per commune, each its own independent call** — never one
+shared transaction across communes. If one commune fails, the others already
+committed stay committed, and the failing one stays in whatever state it was
+already in; nothing is rolled back and nothing is retried automatically. Each
+outcome is reported as `completed`, `skipped` (the commune turned out to
+already be `COMPLETED` — not an error, just nothing left to do) or `failed`
+(a real error, with the server's own `ApiErrorCode` attached — e.g.
+`INSUFFICIENT_DRAW_ENTRIES`, `COMMUNE_DRAW_NOT_FOUND`). Because the server
+answers only once the whole batch has finished — this system has no held
+connections or live per-selection events anywhere, on the public side or
+here — the console shows a single bounded loading state while the request is
+in flight and then renders the complete outcome table at once; it does not
+claim to show live per-commune progress a one-shot response cannot provide.
+
+The real concurrency guarantee is unchanged and is **not** re-implemented
+here: `execute()`'s own conditional `LOCKED → COMPLETED` claim is what makes
+two simultaneous attempts at the same commune resolve to exactly one
+success, whether both come from one batch, two batches, or a batch racing a
+lone detail-page click. `BatchDrawExecutionService` keeps a small in-process
+`Set` of commune-draw ids currently mid-call purely to short-circuit an
+obvious double click before it reaches the database — a UX nicety, explicitly
+not the safety mechanism, and it knows nothing about a second server
+process.
+
+One additional audit event, `COMMUNE_DRAW_BATCH_EXECUTED`, is recorded after
+the loop — filed under the draw year (target type `DRAW_YEAR`), carrying the
+actor, the targeted/succeeded/failed/skipped counts, and the **failed**
+commune-draw ids only. The succeeded ids are not repeated here: each one is
+already individually on the trail via that commune's own
+`COMMUNE_DRAW_EXECUTED` event (written inside `execute()` itself, unchanged),
+so the batch event plus the per-commune events together still let the whole
+operation be reconstructed, without a payload that grows without bound for a
+large batch.
+
+## Official applicant eligibility rules (Step 25)
+
+Three rules joined the existing deterministic eligibility pipeline
+(`server/src/lib/eligibility-rules.ts`), evaluated in the same fixed-order,
+pure function every other rule already goes through — there is no separate
+engine for these, client-side or otherwise, and the frontend's own checks in
+`pages/Register.tsx` are a courtesy that spares a round trip, never the
+authority.
+
+- **Minimum age.** An applicant must have completed 19 full years on the
+  server's own registration instant — `application.createdAt` on
+  re-evaluation, "now" at submission — never the browser's clock, a
+  draw-year shortcut, or `drawYear - birthYear`. `calculateAgeAt`/
+  `isAtLeastMinimumAge` (`shared/src/eligibility-age.ts`) are the one shared
+  implementation, imported by the rules, the registration wizard's own
+  immediate feedback, and the legacy-import validator alike — leap days and
+  month/day boundaries are handled by comparing calendar dates directly,
+  never by subtracting years. Reason codes: `UNDER_MINIMUM_AGE` (primary),
+  `SECONDARY_UNDER_MINIMUM_AGE` (paired partner).
+- **Mahram.** A female applicant under 45 must be paired with a male Mahram;
+  45 or older, pairing is optional. A pair is specifically one female primary
+  and one male secondary — male+male and female+female pairs are both
+  refused. Reason codes: `MAHRAM_REQUIRED` (a woman under 45 registered
+  alone), `INVALID_MAHRAM_GENDER` (the secondary is not male),
+  `INVALID_PAIRED_GENDERS` (the pair is not female+male),
+  `GENDER_UNAVAILABLE` (an existing identity record predates gender
+  collection and cannot satisfy the rule until corrected).
+- **Nationality** continues to be established through the existing identity
+  registry / national-ID process — Step 25 added no separate nationality
+  field or check, by design.
+
+`Participant.gender` (a new nullable `Gender` enum column) carries this.
+Nullable because existing records predate its collection; a `null` gender
+cannot satisfy the Mahram rule and reports `GENDER_UNAVAILABLE` rather than
+guessing. A registration for an existing participant whose stored gender is
+still `null` backfills it from the submitted value — the one narrow,
+deliberate exception to "existing participants are reused untouched": gender
+is being recorded for the first time, not corrected, and without it a
+historical participant could never clear the Mahram check in any future
+year's application.
+
+**Registration UI.** `pages/Register.tsx` reorders its wizard so the primary
+applicant's identity (including gender) is filled in **first**, because
+nothing else can be decided before it: a male primary is forced to `SINGLE`
+and never shown an entry-type choice; a female primary under 45 is forced to
+`PAIRED` (the Mahram step is mandatory, not offered); only a female primary
+45 or older sees an actual "on my own or with a Mahram" choice. The secondary
+applicant's own gender field is restricted to male wherever the flow reaches
+it. This is presentation only — the same three server-side rules above run
+again, unconditionally, on submission.
+
+**Legacy import.** The canonical schema
+(`national_id, full_name, dob, commune_code, draw_year, participated, won`,
+plus optional `phone_number, notes`) gained two more **optional** columns:
+`registered_at` (the historical registration date) and `gender`. Neither is
+required, because most real registers will not have them, and the importer
+never invents either:
+
+- If a file names the `registered_at` column at all, an empty cell on a row
+  is `INSUFFICIENT_HISTORICAL_AGE_EVIDENCE` (a warning, not a rejection) — a
+  gap in the evidence, not a claim either way. When both `dob` and
+  `registered_at` are present and valid, the same minimum-age rule runs
+  against them and blocks the row with `UNDER_MINIMUM_AGE_AT_REGISTRATION` if
+  it fails, and — because the canonical schema has no historical companion
+  column — a woman under 45 with no recorded Mahram evidence is flagged
+  `INSUFFICIENT_HISTORICAL_MAHRAM_EVIDENCE` rather than assumed either
+  eligible or ineligible.
+- If a file names the `gender` column, an empty cell is
+  `INSUFFICIENT_HISTORICAL_GENDER_EVIDENCE`; an unrecognised value is
+  `INVALID_GENDER`. A row with no `gender` column at all carries no gender
+  opinion — this is a genuine gap in what the file can attest, never coerced
+  into a value, matching the same "unknown is not false" principle the rest
+  of the import already follows for `participated`/`won`.
+- A column the file never names at all produces no per-row issue: an
+  optional column absent from the header is a schema-level gap the import
+  guide already states, not something every row needs to be told about
+  individually.
+
 ## History, imports, approvals, audit
 
 **History.** Addressed by participant id, reached from an application or the
@@ -274,6 +498,25 @@ control exists. The uploader is not offered a decision on their own batch (the
 service and a CHECK constraint refuse it too). Execution warns that past winners
 are excluded for life and that there is no un-import. Staged rows show only the
 last four digits of a national ID.
+
+**Step 25** added a sample-template pair (`Download Sample CSV`/`Download
+Sample XLSX`) and an inline column guide to the upload card, without touching
+the staged pipeline itself. Both samples are generated on request
+(`server/src/lib/import-sample.ts`) directly from
+`REQUIRED_IMPORT_COLUMNS`/`OPTIONAL_IMPORT_COLUMNS` — the same constants
+`import-validation.ts` enforces against — so they cannot drift from the real
+schema; a server test uploads the generated CSV and XLSX back through the
+real validator and asserts every row comes back `VALID` as the strongest
+guarantee of that. The two download routes
+(`GET /api/admin/imports/template.csv`/`.xlsx`) are registered ahead of
+`GET /api/admin/imports/:id` — Express matches route patterns in registration
+order, and `template.csv` would otherwise be read as an id — and set
+`Content-Disposition: attachment`, since the client and API are different
+origins in every environment and a plain anchor's `download` attribute is
+ignored cross-origin. The column guide (a dialog, not a new page) lists
+required and optional columns, the accepted boolean vocabulary, and states
+the historical-data rule verbatim in every locale: _"Missing values will be
+logged as gaps, not assumed as non-participants."_
 
 **Approvals.** Approving _is_ applying, in one transaction — the dialog says so.
 The author of a request is offered `Withdraw` but not `Approve`/`Reject`. A
@@ -362,7 +605,7 @@ survives in any admin or shadcn module. Directional icons carry
 to the generated component.
 
 Every visible string goes through i18n; there are no hardcoded UI strings, and
-the three locale files are structurally identical (882 keys each, verified).
+the three locale files are structurally identical (1070 keys each, verified).
 Numbers and dates use `lib/format.ts`, which maps `ar` to `ar-DZ` so numerals
 stay Western as Algerian paperwork writes them.
 
@@ -380,7 +623,8 @@ them aligned.
   out over communes.
 - Paging is bounded server-side (`ADMIN_PAGE_SIZE_DEFAULT` 25,
   `ADMIN_PAGE_SIZE_MAX` 100), and an over-large `pageSize` is refused, not
-  clamped.
+  clamped. Commune draws narrow that further to a closed set — 10, 25 or 50
+  only, see _Commune draws_ above.
 - Text search is debounced (`useDebounced`, 350 ms); a request per keystroke
   would be a request storm from one impatient hand.
 - Changing a filter resets to page 1 — page 3 of the previous filter is not
@@ -401,3 +645,27 @@ Deferred, with the reasons unchanged from Step 19:
 - winner-name publication;
 - administrator password reset and account deletion;
 - distributed rate limiting, CDN/WAF and other production infrastructure.
+
+Deferred from Step 25, specifically:
+
+- **Live per-commune batch progress.** The batch-execute response is one-shot,
+  matching this console's existing no-held-connections policy; a progress bar
+  that updates commune-by-commune while the request is still in flight would
+  need a mechanism (polling a batch-status endpoint, SSE) that does not exist
+  anywhere else in this system and was not added for this alone.
+  `completed`/`skipped`/`failed` are reported once the whole batch returns.
+- **Correcting a `null` gender on an existing participant** outside the
+  narrow first-registration backfill described above — there is no admin
+  screen to set or fix gender on a participant record directly. Until one
+  exists, a legacy participant with no recorded gender stays unable to
+  satisfy the Mahram rule (`GENDER_UNAVAILABLE`) until they next register and
+  supply it themselves.
+- **A historical registration-date field on the participation ledger.**
+  `registered_at` exists only as an optional legacy-import column used to
+  evaluate age/Mahram evidence at staging time — it is not stored on
+  `ParticipationHistory` or anywhere else, so it cannot be inspected,
+  corrected or reported on afterward. Re-running the same file re-derives it
+  from the file again.
+- **A version/edit screen for `updatedAt` conflicts.** A 409
+  `COMMUNE_DRAW_ALREADY_CHANGED` is resolved by re-fetching and reapplying the
+  edit by hand; there is no three-way merge or diff view.

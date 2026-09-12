@@ -178,6 +178,24 @@ transparent results, across Arabic (RTL), French, and English.
 > contact — on the brand's own dark green, with two legal-placeholder dialogs replacing dead links. No
 > validation rule, existing server contract or business logic changed.
 
+> **Status:** Step 25 — official eligibility rules, admin theme cleanup, import guidance, and commune-draw
+> operations. Two new domain rules joined the existing deterministic eligibility pipeline: a minimum age of
+> 19 complete years on the server's own registration instant (`shared/src/eligibility-age.ts`), and the
+> Mahram rule (a female applicant under 45 must pair with a male Mahram; 45 or older, pairing is optional;
+> a pair is always one female primary and one male secondary). Both are enforced once, server-side, and
+> reused by registration, re-evaluation and the legacy importer alike — the importer treats a missing
+> historical registration date or gender as a gap to flag, never a fact to invent. The admin console's one
+> real theme outlier (`AdminLogin.tsx`) moved onto the shared shadcn/token system it already used
+> everywhere else. The legacy-import screen gained schema-accurate sample CSV/XLSX downloads and an inline
+> column guide. `GET /api/admin/commune-draws` is now paginated (page sizes 10/25/50) instead of returning
+> a caller's whole scope unbounded, and gained a real allocation-editing dialog built with optimistic
+> concurrency (`expectedUpdatedAt`, a 409 `COMMUNE_DRAW_ALREADY_CHANGED` on a stale write) from the start.
+> A new SUPER_ADMIN-only batch workflow (`POST /api/admin/commune-draws/batch/validate` then `.../execute`)
+> orchestrates the existing per-commune `DrawExecutionService.execute` — validate, review the readiness
+> breakdown, confirm explicitly, then execute exactly the reviewed set — with each commune still running
+> its own independent, atomic transaction and no new randomness anywhere. The lottery engine, weighting,
+> reserve ordering, winner processing, authentication and public API contract are all unchanged.
+
 ## Architecture
 
 ```
