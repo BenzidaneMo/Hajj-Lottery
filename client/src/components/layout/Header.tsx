@@ -6,7 +6,7 @@ import { PUBLIC_NAV_ITEMS } from '../../config/nav'
 import { CloseIcon, MenuIcon } from '../icons'
 import { LanguageSwitcher } from '../LanguageSwitcher'
 import { Logo } from '../Logo'
-import { IconButton } from '../ui'
+import { Button } from '../shadcn/button'
 import { Container } from './Container'
 import { MobileNavSheet } from './MobileNavSheet'
 
@@ -49,10 +49,12 @@ export function Header() {
           <div className="hidden items-center gap-3 md:flex">
             <LanguageSwitcher />
           </div>
-          <IconButton
-            icon={isMenuOpen ? <CloseIcon className="h-5 w-5" /> : <MenuIcon className="h-5 w-5" />}
-            label={isMenuOpen ? t('common.closeMenu') : t('common.openMenu')}
+          <Button
+            type="button"
             variant="ghost"
+            size="icon"
+            aria-label={isMenuOpen ? t('common.closeMenu') : t('common.openMenu')}
+            title={isMenuOpen ? t('common.closeMenu') : t('common.openMenu')}
             aria-expanded={isMenuOpen}
             aria-controls="mobile-nav"
             // Radix locks `pointer-events` on the page body while the Sheet is
@@ -69,7 +71,9 @@ export function Header() {
             className="md:hidden"
             style={{ pointerEvents: 'auto' }}
             onClick={() => setIsMenuOpen((open) => !open)}
-          />
+          >
+            {isMenuOpen ? <CloseIcon className="h-5 w-5" /> : <MenuIcon className="h-5 w-5" />}
+          </Button>
         </div>
       </Container>
       <MobileNavSheet

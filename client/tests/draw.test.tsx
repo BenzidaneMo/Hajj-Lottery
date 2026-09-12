@@ -117,8 +117,10 @@ describe('public draw status page', () => {
     await screen.findByRole('link', { name: 'Hassi Mameche' })
 
     const user = userEvent.setup()
-    await user.selectOptions(screen.getByLabelText('Wilaya'), '27')
-    await user.selectOptions(await screen.findByLabelText('Commune'), '2703')
+    await user.click(screen.getByLabelText('Wilaya'))
+    await user.click(await screen.findByRole('option', { name: 'Mostaganem' }))
+    await user.click(await screen.findByLabelText('Commune'))
+    await user.click(await screen.findByRole('option', { name: 'Hassi Mameche' }))
 
     const last = requestedPaths()
       .filter((path) => path.startsWith(DRAW_STATUS))

@@ -119,7 +119,7 @@ export function Footer() {
               </li>
             </ul>
             <div className="mt-1">
-              <LanguageSwitcher />
+              <LanguageSwitcher variant="dark" />
             </div>
           </div>
         </div>
