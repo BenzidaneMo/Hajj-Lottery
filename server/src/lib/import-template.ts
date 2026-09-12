@@ -184,3 +184,21 @@ function utcDate(year: number, month: number, day: number): Date | null {
 
   return round ? date : null
 }
+
+const IMPORT_MALE_VALUES = ['male', 'm', 'homme', 'h', 'ذكر', 'ذ'] as const
+const IMPORT_FEMALE_VALUES = ['female', 'f', 'femme', 'أنثى', 'انثى', 'ا'] as const
+
+/**
+ * Gender as a register writes it. Empty is unknown — never inferred.
+ * `null` means the cell said something unrecognised.
+ */
+export function parseImportGender(raw: string | undefined): 'MALE' | 'FEMALE' | null | undefined {
+  if (raw === undefined) return undefined
+
+  const value = raw.trim().toLowerCase()
+  if (value.length === 0) return undefined
+  if ((IMPORT_MALE_VALUES as readonly string[]).includes(value)) return 'MALE'
+  if ((IMPORT_FEMALE_VALUES as readonly string[]).includes(value)) return 'FEMALE'
+
+  return null
+}

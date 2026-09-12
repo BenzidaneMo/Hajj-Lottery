@@ -54,6 +54,8 @@ import {
 import { getHistoryRecord, getParticipantHistory } from '../controllers/admin-history.controller.js'
 import {
   approveImport,
+  downloadImportSampleCsv,
+  downloadImportSampleXlsx,
   executeImport,
   getImport,
   getImportSummary,
@@ -218,6 +220,13 @@ adminRouter.patch('/history/:id', requireRole(AdminRole.SUPER_ADMIN), asyncHandl
 // again by a CHECK constraint.
 adminRouter.post('/imports', acceptImportUpload, asyncHandler(uploadImport))
 adminRouter.get('/imports', asyncHandler(listImports))
+// Registered ahead of `/imports/:id` — Express matches route patterns in
+// registration order, and "template.csv"/"template.xlsx" would otherwise be
+// swallowed by the `:id` param. Session-auth only, like every other read
+// here: the template carries no data, just the column names every upload
+// must use.
+adminRouter.get('/imports/template.csv', asyncHandler(downloadImportSampleCsv))
+adminRouter.get('/imports/template.xlsx', asyncHandler(downloadImportSampleXlsx))
 adminRouter.get('/imports/:id', asyncHandler(getImport))
 adminRouter.get('/imports/:id/summary', asyncHandler(getImportSummary))
 adminRouter.get('/imports/:id/rows', asyncHandler(listImportRows))

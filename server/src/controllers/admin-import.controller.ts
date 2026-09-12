@@ -11,6 +11,7 @@ import type { ImportBatch, ImportRow, User } from '@prisma/client'
 import type { Request, RequestHandler } from 'express'
 
 import { BadRequestError, NotFoundError } from '../lib/errors.js'
+import { buildSampleCsv, buildSampleWorkbook } from '../lib/import-sample.js'
 import { storedIssues } from '../services/legacy-import.service.js'
 import { neutralizeOptional, neutralizeSpreadsheetText } from '../lib/spreadsheet-safety.js'
 import { getAuthenticatedUser } from '../middleware/require-authenticated-user.js'
@@ -58,6 +59,28 @@ export const uploadImport: RequestHandler = async (req, res) => {
   })
 
   res.status(201).json(toBatchDto(batch, await rowCount(batch.id)))
+}
+
+/**
+ * GET /api/admin/imports/template.csv and template.xlsx
+ *
+ * A downloadable, always-current template — generated from the same column
+ * constants the validator enforces, never a static file that could drift from
+ * them. `Content-Disposition` is what actually triggers a save dialog here:
+ * the client and API are different origins in every environment, and a plain
+ * anchor's `download` attribute is ignored by browsers for cross-origin URLs.
+ */
+export const downloadImportSampleCsv: RequestHandler = (_req, res) => {
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+  res.setHeader('Content-Disposition', 'attachment; filename="hajj-lottery-import-sample.csv"')
+  res.send(buildSampleCsv())
+}
+
+export const downloadImportSampleXlsx: RequestHandler = async (_req, res) => {
+  const workbook = await buildSampleWorkbook()
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  res.setHeader('Content-Disposition', 'attachment; filename="hajj-lottery-import-sample.xlsx"')
+  res.send(workbook)
 }
 
 /** GET /api/admin/imports — batches touching the caller's territory, newest first. */

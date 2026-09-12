@@ -1,11 +1,15 @@
 import {
   IMPORT_BATCH_STATUSES,
+  IMPORT_FALSE_VALUES,
+  IMPORT_TRUE_VALUES,
   MAX_IMPORT_FILE_BYTES,
+  OPTIONAL_IMPORT_COLUMNS,
+  REQUIRED_IMPORT_COLUMNS,
   type ImportBatchDto,
   type ImportBatchStatus,
   type SupportedLocale,
 } from '@hajj-lottery/shared'
-import { UploadIcon } from 'lucide-react'
+import { BookOpenIcon, DownloadIcon, UploadIcon } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
@@ -18,9 +22,18 @@ import { StatusBadge } from '@/components/admin/StatusBadge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/shadcn/alert'
 import { Button } from '@/components/shadcn/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/shadcn/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/shadcn/dialog'
 import { Input } from '@/components/shadcn/input'
 import { Label } from '@/components/shadcn/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/shadcn/select'
+import { API_BASE_URL } from '@/lib/api'
 import { fetchImports, uploadImport } from '@/lib/admin-api'
 import { formatDateTime, formatNumber } from '@/lib/format'
 import { mapAsync, useAction, useAsync } from '@/lib/use-async'
@@ -150,6 +163,23 @@ function UploadCard({ onUploaded }: { onUploaded: () => void }) {
           <AlertDescription>{t('admin.imports.stagingBody')}</AlertDescription>
         </Alert>
 
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted/30 p-3">
+          <span className="text-sm font-medium">{t('admin.imports.sampleFilesTitle')}</span>
+          <Button asChild variant="outline" size="sm">
+            <a href={`${API_BASE_URL}/api/admin/imports/template.csv`}>
+              <DownloadIcon aria-hidden="true" />
+              {t('admin.imports.sampleCsv')}
+            </a>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <a href={`${API_BASE_URL}/api/admin/imports/template.xlsx`}>
+              <DownloadIcon aria-hidden="true" />
+              {t('admin.imports.sampleXlsx')}
+            </a>
+          </Button>
+          <ImportGuideDialog />
+        </div>
+
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="import-file">{t('admin.imports.file')}</Label>
           <Input
@@ -193,5 +223,72 @@ function UploadCard({ onUploaded }: { onUploaded: () => void }) {
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+/**
+ * What the importer actually requires, read directly from the same column
+ * constants the sample files and the server validator use — this can never
+ * describe a column that isn't real.
+ */
+function ImportGuideDialog() {
+  const { t } = useTranslation()
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button type="button" variant="ghost" size="sm">
+          <BookOpenIcon aria-hidden="true" />
+          {t('admin.imports.guideTrigger')}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{t('admin.imports.guideTitle')}</DialogTitle>
+          <DialogDescription>{t('admin.imports.guideDescription')}</DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-4 text-sm">
+          <Alert>
+            <AlertTitle>{t('admin.imports.guideHistoricalRuleTitle')}</AlertTitle>
+            <AlertDescription>{t('admin.imports.guideHistoricalRule')}</AlertDescription>
+          </Alert>
+
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">{t('admin.imports.guideRequiredHeading')}</h3>
+            <dl className="flex flex-col gap-2">
+              {REQUIRED_IMPORT_COLUMNS.map((column) => (
+                <div key={column}>
+                  <dt className="font-mono text-xs text-muted-foreground">{column}</dt>
+                  <dd>{t(`admin.imports.columns.${column}`)}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">{t('admin.imports.guideOptionalHeading')}</h3>
+            <dl className="flex flex-col gap-2">
+              {OPTIONAL_IMPORT_COLUMNS.map((column) => (
+                <div key={column}>
+                  <dt className="font-mono text-xs text-muted-foreground">{column}</dt>
+                  <dd>{t(`admin.imports.columns.${column}`)}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">{t('admin.imports.guideBooleansHeading')}</h3>
+            <p className="text-muted-foreground">
+              {t('admin.imports.guideBooleansBody', {
+                trueValues: IMPORT_TRUE_VALUES.join(', '),
+                falseValues: IMPORT_FALSE_VALUES.join(', '),
+              })}
+            </p>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
