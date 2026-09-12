@@ -1,4 +1,5 @@
 import type { EligibilityReasonCode, EligibilityResult } from '@hajj-lottery/shared'
+import { calculateAgeAt, MAHRAM_OPTIONAL_AGE, MINIMUM_APPLICATION_AGE } from '@hajj-lottery/shared'
 
 /**
  * The eligibility rules themselves — a pure function of a snapshot.
@@ -25,6 +26,9 @@ const MAX_DRAW_YEAR = 2200
 export interface ApplicantState {
   participantId: string
   hasWonHajj: boolean
+  /** Absent only in legacy pure-rule fixtures; service-built subjects always carry it. */
+  dob?: Date
+  gender?: 'MALE' | 'FEMALE' | null
   /**
    * Ids of the applications this person already occupies in the subject's draw
    * year — every slot, primary or secondary alike. The subject's own id
@@ -74,6 +78,8 @@ export interface EligibilitySubject {
   primary: ApplicantState | null
   /** Null for a SINGLE application, or when a paired partner is missing. */
   secondary: ApplicantState | null
+  /** Server-derived registration instant; never supplied by a browser. */
+  registrationDate?: Date
 }
 
 /**
@@ -142,6 +148,42 @@ export function evaluateEligibility(subject: EligibilitySubject): EligibilityRes
   }
   if (subject.secondary && occupiesAnotherApplication(subject.secondary, subject.applicationId)) {
     add('SECONDARY_ALREADY_REGISTERED')
+  }
+
+  // --- Official applicant rules ---
+  // The reference is the server's actual registration date (the stored
+  // application timestamp during re-evaluation), never a draw-year shortcut.
+  const primaryAge =
+    subject.primary?.dob && subject.registrationDate
+      ? calculateAgeAt(subject.primary.dob, subject.registrationDate)
+      : null
+  const secondaryAge =
+    subject.secondary?.dob && subject.registrationDate
+      ? calculateAgeAt(subject.secondary.dob, subject.registrationDate)
+      : null
+  if (primaryAge !== null && primaryAge !== undefined && primaryAge < MINIMUM_APPLICATION_AGE) {
+    add('UNDER_MINIMUM_AGE')
+  }
+  if (secondaryAge !== null && secondaryAge !== undefined && secondaryAge < MINIMUM_APPLICATION_AGE) {
+    add('SECONDARY_UNDER_MINIMUM_AGE')
+  }
+
+  if (subject.primary && subject.primary.gender === null) add('GENDER_UNAVAILABLE')
+  if (subject.secondary && subject.secondary.gender === null) add('GENDER_UNAVAILABLE')
+
+  if (subject.entryType === 'PAIRED' && subject.primary && subject.secondary) {
+    // A pair is specifically a woman and her male Mahram. The generic
+    // companion model is not an eligible alternative.
+    if (subject.primary.gender !== undefined && subject.primary.gender !== 'FEMALE')
+      add('INVALID_PAIRED_GENDERS')
+    if (subject.secondary.gender !== undefined && subject.secondary.gender !== 'MALE') {
+      add('INVALID_MAHRAM_GENDER')
+      add('INVALID_PAIRED_GENDERS')
+    }
+  }
+
+  if (subject.entryType === 'SINGLE' && subject.primary?.gender === 'FEMALE' && primaryAge !== null) {
+    if (primaryAge < MAHRAM_OPTIONAL_AGE) add('MAHRAM_REQUIRED')
   }
 
   return {

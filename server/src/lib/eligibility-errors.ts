@@ -36,6 +36,12 @@ const REASON_PRECEDENCE: readonly EligibilityReasonCode[] = [
   'SECONDARY_PARTICIPANT_HAS_ALREADY_WON',
   'DUPLICATE_ANNUAL_APPLICATION',
   'SECONDARY_ALREADY_REGISTERED',
+  'UNDER_MINIMUM_AGE',
+  'SECONDARY_UNDER_MINIMUM_AGE',
+  'GENDER_UNAVAILABLE',
+  'MAHRAM_REQUIRED',
+  'INVALID_MAHRAM_GENDER',
+  'INVALID_PAIRED_GENDERS',
 ]
 
 /**
@@ -60,6 +66,18 @@ export function registrationErrorFor(result: EligibilityResult): ApiError {
     case 'SECONDARY_PARTICIPANT_HAS_ALREADY_WON':
       // Names neither applicant nor the reason. A citizen knows their own
       // history; nobody else learns anything from this.
+      return new ApiError(
+        422,
+        'APPLICANT_NOT_ELIGIBLE',
+        'This application cannot be accepted because an applicant is not eligible to take part',
+      )
+
+    case 'UNDER_MINIMUM_AGE':
+    case 'SECONDARY_UNDER_MINIMUM_AGE':
+    case 'GENDER_UNAVAILABLE':
+    case 'MAHRAM_REQUIRED':
+    case 'INVALID_MAHRAM_GENDER':
+    case 'INVALID_PAIRED_GENDERS':
       return new ApiError(
         422,
         'APPLICANT_NOT_ELIGIBLE',

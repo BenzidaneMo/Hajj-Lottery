@@ -95,7 +95,7 @@ async function registerAndWeigh(
       entryType: 'SINGLE',
       wilayaId,
       communeId,
-      primary: { nationalId: id, fullName: 'Draw Subject', dob: '1980-04-12' },
+      primary: { nationalId: id, fullName: 'Draw Subject', dob: '1980-04-12', gender: 'MALE' },
     })
   if (response.status !== 201) {
     throw new Error(`Registration failed: ${response.status} ${JSON.stringify(response.body)}`)

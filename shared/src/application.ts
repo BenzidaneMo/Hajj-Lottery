@@ -2,6 +2,9 @@
 export const ENTRY_TYPES = ['SINGLE', 'PAIRED'] as const
 export type EntryType = (typeof ENTRY_TYPES)[number]
 
+export const APPLICANT_GENDERS = ['MALE', 'FEMALE'] as const
+export type ApplicantGender = (typeof APPLICANT_GENDERS)[number]
+
 /**
  * Lifecycle states an application can be in.
  *
@@ -37,6 +40,8 @@ export interface ApplicantInput {
   fullName: string
   /** Calendar date, `YYYY-MM-DD`. */
   dob: string
+  /** Recorded by the identity-registry intake and enforced by the server. */
+  gender: ApplicantGender
   phoneNumber?: string
 }
 

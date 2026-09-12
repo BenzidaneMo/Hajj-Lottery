@@ -40,6 +40,14 @@ export const ELIGIBILITY_REASON_CODES = [
   'INVALID_COMMUNE',
   /** Not a plausible draw year, or not the year currently being registered. */
   'DRAW_YEAR_INVALID',
+  /** An applicant had not completed 19 full years at server registration time. */
+  'UNDER_MINIMUM_AGE',
+  'SECONDARY_UNDER_MINIMUM_AGE',
+  /** Existing identity data cannot establish the gender required by the rule. */
+  'GENDER_UNAVAILABLE',
+  'MAHRAM_REQUIRED',
+  'INVALID_MAHRAM_GENDER',
+  'INVALID_PAIRED_GENDERS',
 ] as const
 
 export type EligibilityReasonCode = (typeof ELIGIBILITY_REASON_CODES)[number]

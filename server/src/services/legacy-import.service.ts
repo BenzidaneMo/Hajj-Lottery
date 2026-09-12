@@ -1,4 +1,4 @@
-import type { ImportBatchStatus, ImportExecutionDto } from '@hajj-lottery/shared'
+import type { ImportBatchStatus, ImportColumn, ImportExecutionDto } from '@hajj-lottery/shared'
 import { Prisma, type ImportBatch, type ImportRow, type PrismaClient, type User } from '@prisma/client'
 
 import { normalizeAuditReason } from '../lib/audit-payload.js'
@@ -194,7 +194,7 @@ export class LegacyImportService {
       throw new BadRequestError('MALFORMED_IMPORT_FILE', 'The file has a header but no rows')
     }
 
-    const context = await this.stagingContext(user)
+    const context = await this.stagingContext(user, mapping)
     const rows = raw.map((line) => stageRow(line, context))
 
     detectFileConflicts(rows)
@@ -220,6 +220,7 @@ export class LegacyImportService {
           participated: row.values.participated,
           won: row.values.won,
           notes: row.values.notes,
+          gender: row.values.gender,
           status: resolveRowStatus(row.issues),
           issues: row.issues as unknown as Prisma.InputJsonValue,
         })),
@@ -250,7 +251,7 @@ export class LegacyImportService {
    * register, and a row naming anywhere else is refused rather than silently
    * dropped, so the reviewer sees that the file overreached.
    */
-  private async stagingContext(user: User): Promise<StagingContext> {
+  private async stagingContext(user: User, mapping: ReturnType<typeof mapHeaders>): Promise<StagingContext> {
     const communes = await this.db.commune.findMany({ select: { id: true, code: true, wilayaId: true } })
     const communeIdByCode = new Map(
       communes.map((commune) => [normalizeCommuneCode(commune.code), commune.id]),
@@ -274,6 +275,11 @@ export class LegacyImportService {
       communeIdByCode,
       referenceDrawYear: await this.configuration.referenceDrawYear(),
       allowedCommuneIds,
+      presentColumns: new Set(
+        (Object.keys(mapping.columns) as ImportColumn[]).filter(
+          (column) => mapping.columns[column] !== undefined,
+        ),
+      ),
     }
   }
 
@@ -711,7 +717,10 @@ export class LegacyImportService {
     tx: Prisma.TransactionClient,
     rows: readonly { row: ImportRow }[],
   ): Promise<{ idByNationalId: Map<string, string>; created: number; reused: number }> {
-    const identities = new Map<string, { fullName: string; dob: Date; phoneNumber: string | null }>()
+    const identities = new Map<
+      string,
+      { fullName: string; dob: Date; phoneNumber: string | null; gender: 'MALE' | 'FEMALE' | null }
+    >()
 
     for (const { row } of rows) {
       if (!row.nationalId || !row.fullName || !row.dob) continue
@@ -720,6 +729,7 @@ export class LegacyImportService {
           fullName: row.fullName,
           dob: row.dob,
           phoneNumber: row.phoneNumber,
+          gender: row.gender,
         })
       }
     }
@@ -745,11 +755,13 @@ export class LegacyImportService {
             fullName: string
             dob: Date
             phoneNumber: string | null
+            gender: 'MALE' | 'FEMALE' | null
           }
           return {
             nationalId,
             fullName: identity.fullName,
             dob: identity.dob,
+            gender: identity.gender,
             // Recorded because it is contact information the register carried.
             // `phone_verified_at` stays null: nobody verified anything, and a
             // number transcribed from paper is not evidence of a working phone.
@@ -1063,6 +1075,7 @@ function toStagedRow(row: ImportRow): StagedRow {
       participated: row.participated,
       won: row.won,
       notes: row.notes,
+      gender: row.gender,
     },
     issues: [],
   }

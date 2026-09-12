@@ -31,6 +31,7 @@ function applicant(nationalId: string, overrides: Record<string, unknown> = {}) 
     nationalId,
     fullName: 'Test Applicant',
     dob: '1985-04-12',
+    gender: 'MALE',
     phoneNumber: '0555123456',
     ...overrides,
   }
@@ -51,8 +52,8 @@ function pairedBody(overrides: Record<string, unknown> = {}) {
     entryType: 'PAIRED',
     wilayaId: geo.wilayaA.id,
     communeId: geo.communeA1.id,
-    primary: applicant(NATIONAL_IDS.ahmed),
-    secondary: applicant(NATIONAL_IDS.fatima, { fullName: 'Second Applicant' }),
+    primary: applicant(NATIONAL_IDS.ahmed, { gender: 'FEMALE' }),
+    secondary: applicant(NATIONAL_IDS.fatima, { fullName: 'Second Applicant', gender: 'MALE' }),
     ...overrides,
   }
 }
@@ -423,8 +424,8 @@ describe('concurrency', () => {
   it('lets only one paired registration claim a shared secondary applicant', async () => {
     const results = await Promise.all([
       submit(pairedBody()),
-      submit(pairedBody({ primary: applicant(NATIONAL_IDS.karim) })),
-      submit(pairedBody({ primary: applicant(NATIONAL_IDS.leila) })),
+      submit(pairedBody({ primary: applicant(NATIONAL_IDS.karim, { gender: 'FEMALE' }) })),
+      submit(pairedBody({ primary: applicant(NATIONAL_IDS.leila, { gender: 'FEMALE' }) })),
     ])
 
     expect(results.filter((r) => r.status === 201)).toHaveLength(1)

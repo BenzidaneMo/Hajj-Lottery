@@ -30,7 +30,7 @@ const NATIONAL_IDS = {
 }
 
 function applicant(nationalId: string, overrides: Record<string, unknown> = {}) {
-  return { nationalId, fullName: 'Weight Subject', dob: '1980-04-12', ...overrides }
+  return { nationalId, fullName: 'Weight Subject', dob: '1980-04-12', gender: 'MALE', ...overrides }
 }
 
 const submit = (body: Record<string, unknown>) => request(app).post('/api/applications').send(body)
@@ -50,8 +50,8 @@ function pairedBody(overrides: Record<string, unknown> = {}) {
     entryType: 'PAIRED',
     wilayaId: geo.wilayaA.id,
     communeId: geo.communeA1.id,
-    primary: applicant(NATIONAL_IDS.ahmed),
-    secondary: applicant(NATIONAL_IDS.fatima, { fullName: 'Second Applicant' }),
+    primary: applicant(NATIONAL_IDS.ahmed, { gender: 'FEMALE' }),
+    secondary: applicant(NATIONAL_IDS.fatima, { fullName: 'Second Applicant', gender: 'MALE' }),
     ...overrides,
   }
 }

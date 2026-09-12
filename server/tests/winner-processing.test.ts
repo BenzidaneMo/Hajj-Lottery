@@ -43,10 +43,23 @@ async function register(
     entryType: options.paired ? 'PAIRED' : 'SINGLE',
     wilayaId,
     communeId,
-    primary: { nationalId: primaryId, fullName: 'Winner Subject', dob: '1980-04-12' },
+    // A pair is specifically a female primary and her male Mahram; a single
+    // entry stays male so the (optional-above-45, required-below) Mahram rule
+    // never enters into it.
+    primary: {
+      nationalId: primaryId,
+      fullName: 'Winner Subject',
+      dob: '1980-04-12',
+      gender: options.paired ? 'FEMALE' : 'MALE',
+    },
   }
   if (options.paired) {
-    body.secondary = { nationalId: nationalId(), fullName: 'Winner Partner', dob: '1982-06-30' }
+    body.secondary = {
+      nationalId: nationalId(),
+      fullName: 'Winner Partner',
+      dob: '1982-06-30',
+      gender: 'MALE',
+    }
   }
 
   const response = await request(app).post('/api/applications').send(body)
@@ -462,7 +475,12 @@ describe('lifetime exclusion', () => {
         entryType: 'SINGLE',
         wilayaId: geo.wilayaA.id,
         communeId: geo.communeA1.id,
-        primary: { nationalId: participant.nationalId, fullName: participant.fullName, dob: '1980-04-12' },
+        primary: {
+          nationalId: participant.nationalId,
+          fullName: participant.fullName,
+          dob: '1980-04-12',
+          gender: 'MALE',
+        },
       })
 
     expect(response.status).toBe(422)

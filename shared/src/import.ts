@@ -83,7 +83,7 @@ export const REQUIRED_IMPORT_COLUMNS = [
   'won',
 ] as const
 
-export const OPTIONAL_IMPORT_COLUMNS = ['phone_number', 'notes'] as const
+export const OPTIONAL_IMPORT_COLUMNS = ['phone_number', 'notes', 'registered_at', 'gender'] as const
 
 export type RequiredImportColumn = (typeof REQUIRED_IMPORT_COLUMNS)[number]
 export type OptionalImportColumn = (typeof OPTIONAL_IMPORT_COLUMNS)[number]
@@ -108,6 +108,14 @@ export const IMPORT_COLUMN_ALIASES: Record<ImportColumn, readonly string[]> = {
   won: ['won', 'winner', 'gagnant', 'laureat', 'lauréat', 'فائز', 'فاز'],
   phone_number: ['phone_number', 'phone', 'telephone', 'téléphone', 'tel', 'الهاتف', 'رقم_الهاتف'],
   notes: ['notes', 'note', 'remarque', 'remarques', 'observation', 'ملاحظات', 'ملاحظة'],
+  registered_at: [
+    'registered_at',
+    'registration_date',
+    'date_inscription',
+    'date_enregistrement',
+    'تاريخ_التسجيل',
+  ],
+  gender: ['gender', 'sexe', 'sex', 'الجنس'],
 }
 
 /**
@@ -188,6 +196,18 @@ export const IMPORT_ISSUE_CODES = [
   // Contact details, which are never load-bearing.
   'INVALID_PHONE_NUMBER',
   'PHONE_NUMBER_DIFFERS',
+
+  /**
+   * The file named a historical registration date (or gender) column but this
+   * row left it empty — a gap, not a verdict. Age and Mahram are never inferred
+   * from the draw year.
+   */
+  'INSUFFICIENT_HISTORICAL_AGE_EVIDENCE',
+  'INSUFFICIENT_HISTORICAL_GENDER_EVIDENCE',
+  'INSUFFICIENT_HISTORICAL_MAHRAM_EVIDENCE',
+  'INVALID_REGISTERED_AT',
+  'UNDER_MINIMUM_AGE_AT_REGISTRATION',
+  'INVALID_GENDER',
 ] as const
 
 export type ImportIssueCode = (typeof IMPORT_ISSUE_CODES)[number]
@@ -206,6 +226,9 @@ export const IMPORT_WARNING_CODES: readonly ImportIssueCode[] = [
   'PHONE_NUMBER_DIFFERS',
   'DUPLICATE_ROW_IN_FILE',
   'ALREADY_RECORDED',
+  'INSUFFICIENT_HISTORICAL_AGE_EVIDENCE',
+  'INSUFFICIENT_HISTORICAL_GENDER_EVIDENCE',
+  'INSUFFICIENT_HISTORICAL_MAHRAM_EVIDENCE',
 ]
 
 export function isImportWarning(code: ImportIssueCode): boolean {

@@ -85,10 +85,20 @@ async function register(
       nationalId: primaryNationalId,
       fullName: 'Public Subject',
       dob,
+      // A pair is a female primary and her male Mahram; single stays male so
+      // the Mahram rule never enters into it.
+      gender: options.paired ? 'FEMALE' : 'MALE',
       ...(options.withoutPhone ? {} : { phoneNumber: phone }),
     },
     ...(secondaryNationalId
-      ? { secondary: { nationalId: secondaryNationalId, fullName: 'Public Partner', dob: '1981-11-02' } }
+      ? {
+          secondary: {
+            nationalId: secondaryNationalId,
+            fullName: 'Public Partner',
+            dob: '1981-11-02',
+            gender: 'MALE',
+          },
+        }
       : {}),
   }
 

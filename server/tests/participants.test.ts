@@ -355,6 +355,7 @@ describe('identity is independent of geography and applications', () => {
       'created_at',
       'dob',
       'full_name',
+      'gender',
       'has_won_hajj',
       'id',
       'national_id',

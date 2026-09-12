@@ -27,7 +27,7 @@ const NATIONAL_IDS = {
 }
 
 function applicant(nationalId: string, overrides: Record<string, unknown> = {}) {
-  return { nationalId, fullName: 'Test Applicant', dob: '1985-04-12', ...overrides }
+  return { nationalId, fullName: 'Test Applicant', dob: '1985-04-12', gender: 'MALE', ...overrides }
 }
 
 function singleBody(overrides: Record<string, unknown> = {}) {
@@ -45,8 +45,8 @@ function pairedBody(overrides: Record<string, unknown> = {}) {
     entryType: 'PAIRED',
     wilayaId: geo.wilayaA.id,
     communeId: geo.communeA1.id,
-    primary: applicant(NATIONAL_IDS.ahmed),
-    secondary: applicant(NATIONAL_IDS.fatima, { fullName: 'Second Applicant' }),
+    primary: applicant(NATIONAL_IDS.ahmed, { gender: 'FEMALE' }),
+    secondary: applicant(NATIONAL_IDS.fatima, { fullName: 'Second Applicant', gender: 'MALE' }),
     ...overrides,
   }
 }
@@ -448,7 +448,9 @@ describe('administrative review', () => {
   })
 
   it('exposes no participant identity', async () => {
-    await submit(pairedBody({ primary: applicant(NATIONAL_IDS.ahmed, { phoneNumber: '0555123456' }) }))
+    await submit(
+      pairedBody({ primary: applicant(NATIONAL_IDS.ahmed, { phoneNumber: '0555123456', gender: 'FEMALE' }) }),
+    )
     const application = await prisma.application.findFirstOrThrow()
     const { cookie } = await createAdminAndSignIn(app, prisma, { role: AdminRole.SUPER_ADMIN })
 

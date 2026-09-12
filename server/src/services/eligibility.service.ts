@@ -59,6 +59,7 @@ export class EligibilityService {
       claimedWilayaId: null,
       primary: applicantState(application.primaryParticipant, participation),
       secondary: applicantState(application.secondaryParticipant, participation),
+      registrationDate: application.createdAt,
     })
   }
 
@@ -81,6 +82,7 @@ export class EligibilityService {
       claimedWilayaId: string
       primary: Participant
       secondary?: Participant | undefined
+      registrationDate: Date
     },
   ): Promise<EligibilityResult> {
     const participation = await this.participationByParticipant(
@@ -98,6 +100,7 @@ export class EligibilityService {
       claimedWilayaId: proposal.claimedWilayaId,
       primary: applicantState(proposal.primary, participation),
       secondary: applicantState(proposal.secondary ?? null, participation),
+      registrationDate: proposal.registrationDate,
     })
   }
 
@@ -166,6 +169,8 @@ function applicantState(
   return {
     participantId: participant.id,
     hasWonHajj: participant.hasWonHajj,
+    dob: participant.dob,
+    gender: participant.gender,
     applicationIdsThisYear: participation.get(participant.id) ?? [],
   }
 }

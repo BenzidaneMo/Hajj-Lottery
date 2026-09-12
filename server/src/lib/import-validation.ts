@@ -1,7 +1,10 @@
 import {
+  calculateAgeAt,
   isImportWarning,
+  MAHRAM_OPTIONAL_AGE,
   MAX_IMPORT_CELL_CHARACTERS,
   MAX_IMPORT_NOTE_CHARACTERS,
+  MINIMUM_APPLICATION_AGE,
   type ImportColumn,
   type ImportIssueCode,
   type ImportRowStatus,
@@ -12,6 +15,7 @@ import { isValidPhoneNumber, normalizePhoneNumber } from './phone.js'
 import {
   parseImportBoolean,
   parseImportDate,
+  parseImportGender,
   parseImportInteger,
   type RawImportRow,
 } from './import-template.js'
@@ -62,6 +66,7 @@ export interface StagedValues {
   participated: boolean | null
   won: boolean | null
   notes: string | null
+  gender: 'MALE' | 'FEMALE' | null
 }
 
 export interface StagedRow {
@@ -81,6 +86,13 @@ export interface StagingContext {
    * A scoped administrator's file may only speak about their own territory.
    */
   allowedCommuneIds: ReadonlySet<string> | null
+  /**
+   * Columns the file actually carried. An optional column that is absent from
+   * the header is a schema-level gap (documented in the import guide), not a
+   * per-row warning. The same column present but empty on a row *is* a gap on
+   * that row.
+   */
+  presentColumns: ReadonlySet<ImportColumn>
 }
 
 /** One year of one person's existing ledger. */
@@ -136,6 +148,24 @@ export function stageRow(raw: RawImportRow, context: StagingContext): StagedRow 
   const { communeCode, communeId } = stageCommune(cells.commune_code, issues, context)
   const drawYear = stageDrawYear(cells.draw_year, issues, context.referenceDrawYear)
   const { participated, won } = stageOutcome(cells.participated, cells.won, issues)
+  const gender = stageGender(cells.gender, issues, context)
+  const registeredAt = stageRegisteredAt(cells.registered_at, issues, context)
+
+  if (dob && registeredAt) {
+    if (calculateAgeAt(dob, registeredAt) < MINIMUM_APPLICATION_AGE) {
+      issues.push(
+        issue(
+          'UNDER_MINIMUM_AGE_AT_REGISTRATION',
+          'registered_at',
+          `younger than ${MINIMUM_APPLICATION_AGE} on the stated registration date`,
+        ),
+      )
+    } else if (gender === 'FEMALE' && calculateAgeAt(dob, registeredAt) < MAHRAM_OPTIONAL_AGE) {
+      // The canonical schema has no companion. A woman under 45 at the stated
+      // date cannot be shown to have had a Mahram, and inventing one is refused.
+      issues.push(issue('INSUFFICIENT_HISTORICAL_MAHRAM_EVIDENCE', 'gender'))
+    }
+  }
 
   const notes = cells.notes?.slice(0, MAX_IMPORT_NOTE_CHARACTERS) ?? null
 
@@ -152,9 +182,46 @@ export function stageRow(raw: RawImportRow, context: StagingContext): StagedRow 
       participated,
       won,
       notes,
+      gender,
     },
     issues,
   }
+}
+
+function stageRegisteredAt(
+  raw: string | undefined,
+  issues: ImportIssue[],
+  context: StagingContext,
+): Date | null {
+  if (!context.presentColumns.has('registered_at')) return null
+  if (raw === undefined) {
+    issues.push(issue('INSUFFICIENT_HISTORICAL_AGE_EVIDENCE', 'registered_at'))
+    return null
+  }
+  const parsed = parseImportDate(raw)
+  if (!parsed) {
+    issues.push(issue('INVALID_REGISTERED_AT', 'registered_at', 'expected YYYY-MM-DD or DD/MM/YYYY'))
+    return null
+  }
+  return parsed
+}
+
+function stageGender(
+  raw: string | undefined,
+  issues: ImportIssue[],
+  context: StagingContext,
+): 'MALE' | 'FEMALE' | null {
+  if (!context.presentColumns.has('gender')) return null
+  if (raw === undefined) {
+    issues.push(issue('INSUFFICIENT_HISTORICAL_GENDER_EVIDENCE', 'gender'))
+    return null
+  }
+  const parsed = parseImportGender(raw)
+  if (parsed === undefined || parsed === null) {
+    issues.push(issue('INVALID_GENDER', 'gender', raw))
+    return null
+  }
+  return parsed
 }
 
 function stageNationalId(raw: string | undefined, issues: ImportIssue[]): string | null {

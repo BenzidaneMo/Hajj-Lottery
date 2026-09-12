@@ -89,6 +89,11 @@ model Participant {
   /// Date only; no time component, no timezone shifting.
   dob      DateTime @db.Date
 
+  /// Collected at authoritative identity intake. Nullable only so existing
+  /// historical records are not fabricated during this migration; such a
+  /// record cannot satisfy a gender-dependent new application until corrected.
+  gender Gender? @map("gender")
+
   /// Contact information, never a credential. Stored in the canonical
   /// +213XXXXXXXXX form produced by normalizePhoneNumber(), so one person
   /// cannot become two identities by typing 0555… one year and +213555…
@@ -123,6 +128,13 @@ model Participant {
   importRows             ImportRow[]
 
   @@map("participants")
+}
+
+enum Gender {
+  MALE
+  FEMALE
+
+  @@map("gender")
 }
 
 /// Administrative hierarchy. Kept as a database enum so a role can only ever
@@ -1443,6 +1455,9 @@ model ImportRow {
   won          Boolean?
 
   notes String?
+
+  /// Present only when the source named a gender column. Never inferred.
+  gender Gender? @map("gender")
 
   status ImportRowStatus @default(VALID)
   /// Every issue found, as `{ code, column, detail }` — codes from

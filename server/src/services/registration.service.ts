@@ -26,6 +26,7 @@ interface ApplicantData {
   fullName: string
   dob: Date
   phoneNumber?: string | undefined
+  gender: 'MALE' | 'FEMALE'
 }
 
 /**
@@ -155,6 +156,7 @@ export class RegistrationService {
             claimedWilayaId,
             primary: primaryParticipant,
             secondary: secondaryParticipant,
+            registrationDate: new Date(),
           })
 
           if (!verdict.eligible) throw registrationErrorFor(verdict)
@@ -237,13 +239,22 @@ async function findOrCreateParticipant(
   const existing = await tx.participant.findUnique({
     where: { nationalId: applicant.nationalId },
   })
-  if (existing) return existing
+  if (existing) {
+    if (existing.gender === null) {
+      return tx.participant.update({
+        where: { id: existing.id },
+        data: { gender: applicant.gender },
+      })
+    }
+    return existing
+  }
 
   return tx.participant.create({
     data: {
       nationalId: applicant.nationalId,
       fullName: applicant.fullName,
       dob: applicant.dob,
+      gender: applicant.gender,
       phoneNumber: applicant.phoneNumber ?? null,
       // hasWonHajj and phoneVerifiedAt keep their defaults. Neither is
       // settable from a public form.

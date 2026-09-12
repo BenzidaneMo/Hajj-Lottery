@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { APPLICANT_GENDERS } from '@hajj-lottery/shared'
 
 import { isValidPhoneNumber, normalizePhoneNumber } from '../lib/phone.js'
 import { dobSchema, fullNameSchema, nationalIdSchema } from './participant.js'
@@ -22,6 +23,7 @@ const applicantSchema = z
     nationalId: nationalIdSchema,
     fullName: fullNameSchema,
     dob: dobSchema,
+    gender: z.enum(APPLICANT_GENDERS),
     phoneNumber: phoneNumberSchema.optional(),
   })
   .strict()

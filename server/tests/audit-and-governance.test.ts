@@ -427,7 +427,7 @@ describe('the lottery is audited', () => {
           entryType: 'SINGLE',
           wilayaId: geo.wilayaA.id,
           communeId: geo.communeA1.id,
-          primary: { nationalId: nationalId(), fullName: 'Draw Subject', dob: '1980-04-12' },
+          primary: { nationalId: nationalId(), fullName: 'Draw Subject', dob: '1980-04-12', gender: 'MALE' },
         })
       if (response.status !== 201) throw new Error(`Registration failed: ${response.status}`)
 
