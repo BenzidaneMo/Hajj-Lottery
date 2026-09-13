@@ -81,9 +81,7 @@ export function ApplicantFields({
         </Select>
         {errors.gender && <p className="text-xs text-destructive">{errors.gender}</p>}
       </div>
-      <p className="col-span-full -mb-2 text-sm font-medium text-stone-600">
-        {t('register.fields.arabicNameSection')}
-      </p>
+      
       <Input
         id={`${idPrefix}-first-name-ar`}
         label={t('register.fields.firstNameAr')}
@@ -108,9 +106,7 @@ export function ApplicantFields({
         disabled={disabled}
         required
       />
-      <p className="col-span-full -mb-2 text-sm font-medium text-stone-600">
-        {t('register.fields.latinNameSection')}
-      </p>
+
       <Input
         id={`${idPrefix}-first-name-latin`}
         label={t('register.fields.firstNameLatin')}
