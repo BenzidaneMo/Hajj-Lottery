@@ -1,9 +1,13 @@
 import {
   calculateAgeAt,
+  isValidArabicName,
+  isValidLatinName,
+  isValidPhoneNumber,
   localizedGeoName,
   MAHRAM_OPTIONAL_AGE,
   MINIMUM_APPLICATION_AGE,
   NATIONAL_ID_LENGTH,
+  normalizePhoneNumber,
   normalizeTypedNumber,
   type ApplicationReceiptDto,
   type CreateApplicationRequest,
@@ -109,12 +113,18 @@ export function Register() {
     if (canonical(values).length !== NATIONAL_ID_LENGTH) {
       found.nationalId = t('register.errors.nationalId')
     }
-    if (values.fullName.trim().length < 2) found.fullName = t('register.errors.fullName')
+    if (!isValidArabicName(values.firstNameAr)) found.firstNameAr = t('register.errors.firstNameAr')
+    if (!isValidArabicName(values.lastNameAr)) found.lastNameAr = t('register.errors.lastNameAr')
+    if (!isValidLatinName(values.firstNameLatin)) found.firstNameLatin = t('register.errors.firstNameLatin')
+    if (!isValidLatinName(values.lastNameLatin)) found.lastNameLatin = t('register.errors.lastNameLatin')
     if (!values.dob) found.dob = t('register.errors.dob')
     else if (calculateAgeAt(new Date(`${values.dob}T00:00:00.000Z`), new Date()) < MINIMUM_APPLICATION_AGE) {
       found.dob = t('register.errors.underAge')
     }
     if (!values.gender) found.gender = t('register.errors.gender')
+    if (!isValidPhoneNumber(normalizePhoneNumber(values.phoneNumber))) {
+      found.phoneNumber = t('register.errors.phoneNumber')
+    }
     return found
   }
 
@@ -194,10 +204,13 @@ export function Register() {
 
     const toApplicant = (values: ApplicantFormValues) => ({
       nationalId: values.nationalId,
-      fullName: values.fullName,
+      firstNameAr: values.firstNameAr,
+      lastNameAr: values.lastNameAr,
+      firstNameLatin: values.firstNameLatin,
+      lastNameLatin: values.lastNameLatin,
       dob: values.dob,
       gender: values.gender as 'MALE' | 'FEMALE',
-      ...(values.phoneNumber.trim() ? { phoneNumber: values.phoneNumber } : {}),
+      phoneNumber: values.phoneNumber,
     })
 
     const request: CreateApplicationRequest = {
@@ -222,10 +235,7 @@ export function Register() {
     return (
       <div>
         <PageHeader title={t('register.receipt.pageTitle')} />
-        {/* The status lookup verifies a reference against the primary
-            applicant's number, so an application submitted without one can
-            never be checked online. Said here rather than discovered later. */}
-        <ApplicationReceipt receipt={receipt} canCheckOnline={primary.phoneNumber.trim().length > 0} />
+        <ApplicationReceipt receipt={receipt} />
       </div>
     )
   }
@@ -440,12 +450,15 @@ function ApplicantSummary({ values }: { values: ApplicantFormValues }) {
   return (
     <dl className="grid gap-4 sm:grid-cols-2">
       <Field label={t('register.fields.nationalId')}>{values.nationalId}</Field>
-      <Field label={t('register.fields.fullName')}>{values.fullName}</Field>
       <Field label={t('register.fields.gender')}>
         {values.gender ? t(`register.fields.gender${values.gender === 'MALE' ? 'Male' : 'Female'}`) : '—'}
       </Field>
+      <Field label={t('register.fields.firstNameAr')}>{values.firstNameAr}</Field>
+      <Field label={t('register.fields.lastNameAr')}>{values.lastNameAr}</Field>
+      <Field label={t('register.fields.firstNameLatin')}>{values.firstNameLatin}</Field>
+      <Field label={t('register.fields.lastNameLatin')}>{values.lastNameLatin}</Field>
       <Field label={t('register.fields.dob')}>{values.dob}</Field>
-      <Field label={t('register.fields.phoneNumber')}>{values.phoneNumber || '—'}</Field>
+      <Field label={t('register.fields.phoneNumber')}>{values.phoneNumber}</Field>
     </dl>
   )
 }

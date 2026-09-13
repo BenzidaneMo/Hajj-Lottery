@@ -45,18 +45,45 @@ function baseStubs(extra: StubTable = {}) {
   })
 }
 
-/** A comfortably-over-19, comfortably-under-45 date of birth by default. */
-async function fillPrimary(
-  name = 'Amine Kaddour',
-  nationalId = '123456789012345678',
-  gender: 'MALE' | 'FEMALE' = 'MALE',
-  dob = '1990-05-12',
-) {
+interface ApplicantFill {
+  firstNameLatin?: string
+  lastNameLatin?: string
+  firstNameAr?: string
+  lastNameAr?: string
+  nationalId?: string
+  gender?: 'MALE' | 'FEMALE'
+  /** A comfortably-over-19, comfortably-under-45 date of birth by default. */
+  dob?: string
+  phoneNumber?: string
+}
+
+/**
+ * Fills whichever `ApplicantFields` instance is currently on screen — the
+ * primary step's or, called again after advancing, the secondary/Mahram
+ * step's, since the two share one labeled field set and only one is ever
+ * mounted at a time.
+ */
+async function fillPrimary(overrides: ApplicantFill = {}) {
+  const {
+    firstNameLatin = 'Amine',
+    lastNameLatin = 'Kaddour',
+    firstNameAr = 'أمين',
+    lastNameAr = 'قدور',
+    nationalId = '123456789012345678',
+    gender = 'MALE',
+    dob = '1990-05-12',
+    phoneNumber = '0555123456',
+  } = overrides
+
   await userEvent.type(await screen.findByLabelText(/national id number/i), nationalId)
   await userEvent.click(screen.getByLabelText(/^gender/i))
   await userEvent.click(await screen.findByRole('option', { name: gender === 'MALE' ? 'Male' : 'Female' }))
-  await userEvent.type(screen.getByLabelText(/full name/i), name)
+  await userEvent.type(screen.getByLabelText(/first name \(arabic\)/i), firstNameAr)
+  await userEvent.type(screen.getByLabelText(/last name \(arabic\)/i), lastNameAr)
+  await userEvent.type(screen.getByLabelText(/first name \(latin\)/i), firstNameLatin)
+  await userEvent.type(screen.getByLabelText(/last name \(latin\)/i), lastNameLatin)
   fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: dob } })
+  await userEvent.type(screen.getByLabelText(/mobile number/i), phoneNumber)
 }
 
 async function chooseLocation() {
@@ -156,7 +183,7 @@ describe('the registration wizard', () => {
     baseStubs()
 
     renderPage(<Register />)
-    await fillPrimary('Amine Kaddour', '123456789012345678', 'MALE', '2020-01-01')
+    await fillPrimary({ dob: '2020-01-01' })
     await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
 
     expect(
@@ -194,7 +221,8 @@ describe('the registration wizard', () => {
     // step — the review screen follows location directly.
     await screen.findByRole('heading', { name: 'Your details' })
     expect(screen.getAllByRole('button', { name: /^edit:/i }).length).toBeGreaterThan(0)
-    expect(screen.getByText('Amine Kaddour')).toBeInTheDocument()
+    expect(screen.getByText('Amine')).toBeInTheDocument()
+    expect(screen.getByText('Kaddour')).toBeInTheDocument()
     expect(screen.getByText(WILAYA.nameEn)).toBeInTheDocument()
     expect(screen.getByText(COMMUNE.nameEn)).toBeInTheDocument()
     expect(
@@ -220,7 +248,7 @@ describe('the registration wizard', () => {
     renderPage(<Register />)
     // Under 45 — the Mahram flow is mandatory, so the wizard never shows the
     // entry-type choice at all; it goes straight from the applicant to location.
-    await fillPrimary('Amine Kaddour', '123456789012345678', 'FEMALE', '1990-05-12')
+    await fillPrimary({ gender: 'FEMALE', dob: '1990-05-12' })
     await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
     await chooseLocation()
     await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
@@ -234,7 +262,7 @@ describe('the registration wizard', () => {
     expect(screen.queryByRole('option', { name: 'Female' })).not.toBeInTheDocument()
     await userEvent.keyboard('{Escape}')
 
-    await fillPrimary('Amine Kaddour', '123456789012345678', 'MALE', '1982-06-30')
+    await fillPrimary({ dob: '1982-06-30' })
     await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
 
     expect(screen.getByText('The two applicants must be different people.')).toBeInTheDocument()
@@ -247,7 +275,13 @@ describe('the registration wizard', () => {
     renderPage(<Register />)
     // 45 comfortably ago — the Mahram flow becomes optional, so the wizard
     // offers the choice screen next instead of forcing PAIRED.
-    await fillPrimary('Zohra Belkacem', '567856785678567856', 'FEMALE', '1970-01-01')
+    await fillPrimary({
+      firstNameLatin: 'Zohra',
+      lastNameLatin: 'Belkacem',
+      nationalId: '567856785678567856',
+      gender: 'FEMALE',
+      dob: '1970-01-01',
+    })
     await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
 
     await screen.findByRole('heading', { name: 'How are you applying?' })
@@ -303,7 +337,6 @@ describe('the registration wizard', () => {
 
     renderPage(<Register />)
     await fillPrimary()
-    await userEvent.type(screen.getByLabelText(/mobile number/i), '0555123456')
     await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
     await chooseLocation()
     await userEvent.click(await screen.findByRole('button', { name: 'Next' }))

@@ -81,13 +81,55 @@ export function ApplicantFields({
         </Select>
         {errors.gender && <p className="text-xs text-destructive">{errors.gender}</p>}
       </div>
+      <p className="col-span-full -mb-2 text-sm font-medium text-stone-600">
+        {t('register.fields.arabicNameSection')}
+      </p>
       <Input
-        id={`${idPrefix}-full-name`}
-        label={t('register.fields.fullName')}
+        id={`${idPrefix}-first-name-ar`}
+        label={t('register.fields.firstNameAr')}
         autoComplete="off"
-        value={values.fullName}
-        onChange={(event) => update('fullName')(event.target.value)}
-        error={errors.fullName}
+        dir="rtl"
+        lang="ar"
+        value={values.firstNameAr}
+        onChange={(event) => update('firstNameAr')(event.target.value)}
+        error={errors.firstNameAr}
+        disabled={disabled}
+        required
+      />
+      <Input
+        id={`${idPrefix}-last-name-ar`}
+        label={t('register.fields.lastNameAr')}
+        autoComplete="off"
+        dir="rtl"
+        lang="ar"
+        value={values.lastNameAr}
+        onChange={(event) => update('lastNameAr')(event.target.value)}
+        error={errors.lastNameAr}
+        disabled={disabled}
+        required
+      />
+      <p className="col-span-full -mb-2 text-sm font-medium text-stone-600">
+        {t('register.fields.latinNameSection')}
+      </p>
+      <Input
+        id={`${idPrefix}-first-name-latin`}
+        label={t('register.fields.firstNameLatin')}
+        autoComplete="off"
+        dir="ltr"
+        value={values.firstNameLatin}
+        onChange={(event) => update('firstNameLatin')(event.target.value)}
+        error={errors.firstNameLatin}
+        disabled={disabled}
+        required
+      />
+      <Input
+        id={`${idPrefix}-last-name-latin`}
+        label={t('register.fields.lastNameLatin')}
+        autoComplete="off"
+        dir="ltr"
+        value={values.lastNameLatin}
+        onChange={(event) => update('lastNameLatin')(event.target.value)}
+        error={errors.lastNameLatin}
         disabled={disabled}
         required
       />
@@ -113,6 +155,7 @@ export function ApplicantFields({
         error={errors.phoneNumber}
         hint={errors.phoneNumber ? undefined : t('register.fields.phoneNumberHint')}
         disabled={disabled}
+        required
       />
     </div>
   )

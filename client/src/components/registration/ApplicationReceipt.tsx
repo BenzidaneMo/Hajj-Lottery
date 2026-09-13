@@ -8,16 +8,6 @@ import { Alert, Button, Card } from '../ui'
 
 export interface ApplicationReceiptProps {
   receipt: ApplicationReceiptDto
-  /**
-   * Whether a mobile number was submitted, and therefore whether the status
-   * lookup can ever work for this application.
-   *
-   * A prop rather than a field on the receipt: the server deliberately does not
-   * echo anything about the phone number back, and the form already knows
-   * whether one was typed. Telling somebody at the counter that they will not be
-   * able to check online is worth far more than discovering it in three months.
-   */
-  canCheckOnline: boolean
 }
 
 /**
@@ -32,7 +22,7 @@ export interface ApplicationReceiptProps {
  * only moment anybody explains how to check an application, so the two values
  * the lookup needs are named here explicitly.
  */
-export function ApplicationReceipt({ receipt, canCheckOnline }: ApplicationReceiptProps) {
+export function ApplicationReceipt({ receipt }: ApplicationReceiptProps) {
   const { t, i18n } = useTranslation()
   const locale = i18n.language as SupportedLocale
   const [copied, setCopied] = useState(false)
@@ -91,12 +81,6 @@ export function ApplicationReceipt({ receipt, canCheckOnline }: ApplicationRecei
         <h2 className="font-medium text-stone-900">{t('register.receipt.checkStatus')}</h2>
         <p className="mt-1">{t('register.receipt.checkStatusHint')}</p>
       </section>
-
-      {!canCheckOnline && (
-        <div className="mt-4">
-          <Alert variant="warning">{t('register.receipt.noPhoneWarning')}</Alert>
-        </div>
-      )}
 
       <div className="mt-6 flex flex-wrap gap-3 print:hidden">
         <Button variant="secondary" onClick={() => window.print()}>
