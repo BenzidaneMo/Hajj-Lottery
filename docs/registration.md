@@ -13,6 +13,29 @@ Identity is never copied onto an application. There is no `secondary_name` or
 points at. A test asserts the `applications` table has no identity columns, so
 this cannot drift.
 
+## Structured identity
+
+A participant's name is four required fields, not one: `first_name_ar` /
+`last_name_ar` (Arabic script) and `first_name_latin` / `last_name_latin`
+(Latin script, with diacritics). Both scripts are collected regardless of the
+interface language — an Algerian legal name has both forms, and the UI locale
+never decides which one a citizen must provide. `shared/src/name.ts`'s
+`isValidArabicName`/`isValidLatinName` (Unicode-aware, script-specific,
+digits/emoji/markup rejected) validate each field identically on the client
+and the server; `national_id` remains the only identity/uniqueness key — a
+name is never used to look up or distinguish a person.
+
+`gender` and `phone_number` are also required for every participant created
+from here on (both were nullable/optional before this model existed). Gender
+is never inferred — from name, interface language, or the Mahram
+relationship — and feeds the Mahram pairing rule directly (see
+[eligibility](eligibility.md)). This is preparation for a future
+authoritative identity lookup (NIN → official data → confirm → complete the
+application) — that integration does not exist yet; today the form still
+collects everything manually, and participant creation stays centralized on
+the server so a future lookup can populate these same fields without another
+schema redesign.
+
 ## The flow
 
 1. Validate the body's shape (Zod, `.strict()`).
@@ -76,6 +99,13 @@ administrative workflow, and does not exist yet.
 
 Contact information, never a credential. Nothing authenticates on a phone
 number and `phone_verified_at` is never set — there is no OTP in this system.
+
+Required for both the primary and the secondary/Mahram applicant, since
+`Participant.phone_number` is a NOT NULL column with no role concept —
+whichever slot creates a new participant must supply one. An existing
+participant found by national ID keeps whatever number the registry already
+holds (see Participant reuse); the number typed on this submission is
+discarded, never stored over it.
 
 `normalizePhoneNumber` canonicalizes to `+213XXXXXXXXX`, accepting `0555…`,
 `+213555…`, `00213555…` and a bare `213555…`, grouped with spaces or dashes,

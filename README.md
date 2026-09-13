@@ -196,6 +196,23 @@ transparent results, across Arabic (RTL), French, and English.
 > its own independent, atomic transaction and no new randomness anywhere. The lottery engine, weighting,
 > reserve ordering, winner processing, authentication and public API contract are all unchanged.
 
+> **Status:** Step 26 — structured participant identity. `Participant.full_name` (one free-text column) is
+> replaced by four required fields — `first_name_ar`/`last_name_ar` (Arabic script) and
+> `first_name_latin`/`last_name_latin` (Latin script, with diacritics) — collected in every interface
+> language, never chosen by it. A new `shared/src/name.ts` validates each script with Unicode-aware,
+> script-specific rules (digits, emoji, control characters and markup all rejected), reused identically by
+> registration, the participant API and the legacy importer — no second set of name rules anywhere.
+> `gender` and `phone_number`, both added in Step 25, are now required for every participant a request can
+> create (`NOT NULL` at the database), preparing the model for a future NIN-first authoritative identity
+> lookup without another schema redesign; `national_id` remains the sole identity key throughout — names
+> are never used to look someone up. The legacy import's canonical schema gained the same four name columns
+> in place of `full_name` and two new conditional checks (`MISSING_GENDER_FOR_NEW_PARTICIPANT` /
+> `MISSING_PHONE_NUMBER_FOR_NEW_PARTICIPANT`) that block only when a row would create a brand-new
+> participant lacking either — an existing participant's row still tolerates a blank paper register exactly
+> as before. The Mahram/age eligibility rules, weighting, draw/lottery/reserve engines and public API
+> contract are all unchanged. Database is test/dev data only for this step; no production migration
+> strategy was needed.
+
 ## Architecture
 
 ```

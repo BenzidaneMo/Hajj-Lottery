@@ -53,17 +53,30 @@ CSV (UTF-8) and XLSX. Nothing else, and neither is trusted by its name.
 
 Required columns:
 
-| Column         | Meaning                                    |
-| -------------- | ------------------------------------------ |
-| `national_id`  | The person. 18 digits, any digit script    |
-| `full_name`    | Corroborating, never identifying           |
-| `dob`          | `YYYY-MM-DD` or `DD/MM/YYYY`               |
-| `commune_code` | Official commune code — never a name       |
-| `draw_year`    | The year of that draw                      |
-| `participated` | Whether they entered. Never inferred       |
-| `won`          | Whether they were selected. Never inferred |
+| Column             | Meaning                                                    |
+| ------------------ | ---------------------------------------------------------- |
+| `national_id`      | The person. 18 digits, any digit script                    |
+| `first_name_ar`    | Arabic-script first name. Corroborating, never identifying |
+| `last_name_ar`     | Arabic-script last name                                    |
+| `first_name_latin` | Latin-script (transliterated) first name                   |
+| `last_name_latin`  | Latin-script last name                                     |
+| `dob`              | `YYYY-MM-DD` or `DD/MM/YYYY`                               |
+| `commune_code`     | Official commune code — never a name                       |
+| `draw_year`        | The year of that draw                                      |
+| `participated`     | Whether they entered. Never inferred                       |
+| `won`              | Whether they were selected. Never inferred                 |
 
-Optional: `phone_number`, `notes`.
+All four name fields are validated the same way normal registration validates
+them — `shared/src/name.ts`'s Unicode-aware, script-specific
+`isValidArabicName`/`isValidLatinName` — the same functions, not a second set
+of rules for the import path.
+
+Optional: `phone_number`, `notes`, `registered_at`, `gender`. A paper register
+frequently lacks a phone number or a recorded gender, so — unlike the name
+fields — these stay optional and their absence is never an error on its own.
+`registered_at` (when present) lets the age/Mahram-evidence checks below run
+against the date the register says somebody actually registered, rather than
+being silently skipped.
 
 Headers are matched against an explicit alias table (`shared/src/import.ts`) after
 being lowercased, having runs of spaces/dashes/underscores collapsed, and having
@@ -218,6 +231,16 @@ is resolved by preferring one source over the other.
   warning, and the row writes nothing. A differing one is
   `CONFLICTS_WITH_EXISTING_HISTORY` and blocks; the authoritative row is never
   overwritten.
+- **A new participant needs a gender and a phone number.** When a row's
+  national ID matches nobody the registry already knows, importing it creates
+  a new `Participant` — and every participant creation path requires a
+  gender and a phone number (both are `NOT NULL` columns; neither is ever
+  inferred). A row that would create a new participant but leaves either
+  blank is blocked (`MISSING_GENDER_FOR_NEW_PARTICIPANT` /
+  `MISSING_PHONE_NUMBER_FOR_NEW_PARTICIPANT`), even though both columns stay
+  optional for a row that only corroborates an _existing_ participant. This
+  reuses the same `known`-participants lookup `checkIdentity` already needs —
+  no second database round trip.
 - **Lifetime exclusion.** If the person has already won:
   - the file records a _second_ win → `ALREADY_A_WINNER`, blocked. One person, one
     Hajj.
@@ -237,10 +260,16 @@ conflict.
 1. Normalize the national ID with `lib/national-id.ts` — Arabic-Indic and Persian
    digits folded, separators stripped, canonical 18 ASCII digits.
 2. Look the person up by that.
-3. Found → reuse them, **untouched**. Their name, date of birth and phone number
-   are whatever the registry says. Any disagreement was raised as a conflict, not
-   resolved here.
-4. Absent → create them, but only during the final import.
+3. Found → reuse them, **untouched**. Their names (all four fields), date of
+   birth and phone number are whatever the registry says. Any disagreement was
+   raised as a conflict, not resolved here — case and spacing differences in a
+   name are transcription noise and do not conflict, but the comparison is
+   otherwise per field: an Arabic first name, an Arabic last name, a Latin
+   first name and a Latin last name can each independently disagree, and
+   `IDENTITY_CONFLICT` names whichever of them (plus date of birth) actually
+   differs.
+4. Absent → create them, but only during the final import, and only once
+   gender and phone are known (see above).
 
 A register written in Arabic-Indic digits resolves to the person already known by
 the ASCII form. That is the whole reason normalization is centralised.
