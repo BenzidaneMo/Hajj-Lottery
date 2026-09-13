@@ -61,7 +61,20 @@ export function AdminParticipants() {
   const { state, reload } = useAsync(load)
 
   const columns: Column<AdminParticipantSummaryDto>[] = [
-    { key: 'name', header: t('admin.participants.fullName'), render: (row) => row.fullName },
+    {
+      key: 'nameAr',
+      header: t('admin.participants.nameAr'),
+      render: (row) => (
+        <span dir="rtl" lang="ar">
+          {row.firstNameAr} {row.lastNameAr}
+        </span>
+      ),
+    },
+    {
+      key: 'nameLatin',
+      header: t('admin.participants.nameLatin'),
+      render: (row) => `${row.firstNameLatin} ${row.lastNameLatin}`,
+    },
     {
       key: 'nationalId',
       header: t('admin.participants.nationalId'),
@@ -73,9 +86,14 @@ export function AdminParticipants() {
       render: (row) => formatDate(row.dob, locale),
     },
     {
+      key: 'gender',
+      header: t('admin.participants.gender'),
+      render: (row) => t(`register.fields.gender${row.gender === 'MALE' ? 'Male' : 'Female'}`),
+    },
+    {
       key: 'phone',
       header: t('admin.participants.phone'),
-      render: (row) => <span className="font-mono text-sm">{row.phoneNumber ?? '—'}</span>,
+      render: (row) => <span className="font-mono text-sm">{row.phoneNumber}</span>,
     },
     {
       key: 'hasWonHajj',
@@ -112,7 +130,7 @@ export function AdminParticipants() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="participant-name">{t('admin.participants.fullName')}</Label>
+          <Label htmlFor="participant-name">{t('admin.participants.name')}</Label>
           <Input
             id="participant-name"
             value={filters.name}

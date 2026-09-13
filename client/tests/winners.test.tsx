@@ -254,7 +254,10 @@ describe('one commune’s official result', () => {
               participantCount: 1,
               // None of this is in the DTO. If a future column arrives, the
               // page must still not render it.
-              fullName: FORBIDDEN_VALUES.fullName,
+              firstNameAr: FORBIDDEN_VALUES.firstNameAr,
+              lastNameAr: FORBIDDEN_VALUES.lastNameAr,
+              firstNameLatin: FORBIDDEN_VALUES.firstNameLatin,
+              lastNameLatin: FORBIDDEN_VALUES.lastNameLatin,
               nationalId: FORBIDDEN_VALUES.nationalId,
               phoneNumber: FORBIDDEN_VALUES.phoneNumber,
               dob: FORBIDDEN_VALUES.dob,

@@ -282,7 +282,20 @@ function RowTable({ batchId, conflictsOnly }: { batchId: string; conflictsOnly: 
       numeric: true,
       render: (row) => formatNumber(row.rowNumber, locale),
     },
-    { key: 'name', header: t('admin.participants.fullName'), render: (row) => row.fullName },
+    {
+      key: 'nameAr',
+      header: t('admin.participants.nameAr'),
+      render: (row) => (
+        <span dir="rtl" lang="ar">
+          {row.firstNameAr} {row.lastNameAr}
+        </span>
+      ),
+    },
+    {
+      key: 'nameLatin',
+      header: t('admin.participants.nameLatin'),
+      render: (row) => `${row.firstNameLatin} ${row.lastNameLatin}`,
+    },
     {
       key: 'nationalId',
       header: t('admin.participants.nationalId'),

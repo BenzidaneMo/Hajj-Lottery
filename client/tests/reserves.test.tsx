@@ -267,7 +267,10 @@ describe('the reserve list on a published result', () => {
             index === 0
               ? ({
                   ...reserve,
-                  fullName: FORBIDDEN_VALUES.fullName,
+                  firstNameAr: FORBIDDEN_VALUES.firstNameAr,
+                  lastNameAr: FORBIDDEN_VALUES.lastNameAr,
+                  firstNameLatin: FORBIDDEN_VALUES.firstNameLatin,
+                  lastNameLatin: FORBIDDEN_VALUES.lastNameLatin,
                   nationalId: FORBIDDEN_VALUES.nationalId,
                   phoneNumber: FORBIDDEN_VALUES.phoneNumber,
                   dob: FORBIDDEN_VALUES.dob,

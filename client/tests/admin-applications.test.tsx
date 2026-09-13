@@ -129,7 +129,7 @@ describe('one application', () => {
     expect(screen.getByText('Primary applicant')).toBeInTheDocument()
   })
 
-  it('shows only the last four digits of a national ID, and no phone number', async () => {
+  it('shows only the last four digits of a national ID, but does show gender and phone', async () => {
     await switchLocale('en')
     stubApi({ '/api/admin/applications/app-1': { body: applicationDetail() } })
 
@@ -138,11 +138,14 @@ describe('one application', () => {
 
     expect(screen.getByText('••••7391')).toBeInTheDocument()
 
-    // The full ID is never sent to this screen, so it cannot be rendered — and
-    // no administrative flow here contacts anybody, so there is no phone.
+    // The full ID is never sent to this screen, so it cannot be rendered — but
+    // gender and phone support the Mahram rule and future contact workflows,
+    // so they are shown here.
     const text = document.body.textContent ?? ''
     expect(text).not.toMatch(/\d{18}/)
-    expect(screen.queryByText('Phone')).not.toBeInTheDocument()
+    expect(screen.getByText('Phone')).toBeInTheDocument()
+    expect(screen.getByText('+213555000000')).toBeInTheDocument()
+    expect(screen.getByText('Female')).toBeInTheDocument()
   })
 
   it('never puts a national ID in the address', async () => {
@@ -266,9 +269,13 @@ describe('the identity registry', () => {
           items: [
             {
               id: 'p-1',
-              fullName: 'Amina Belkacem',
+              firstNameAr: 'أمينة',
+              lastNameAr: 'بلقاسم',
+              firstNameLatin: 'Amina',
+              lastNameLatin: 'Belkacem',
               nationalId: '109876543210987391',
               dob: '1968-04-02',
+              gender: 'FEMALE',
               phoneNumber: '+213555123456',
               hasWonHajj: false,
               createdAt: '2027-01-02T09:00:00.000Z',

@@ -1,4 +1,4 @@
-import { localizedGeoName, type SupportedLocale } from '@hajj-lottery/shared'
+import { formatParticipantName, localizedGeoName, type SupportedLocale } from '@hajj-lottery/shared'
 import { ArrowLeftIcon } from 'lucide-react'
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -27,9 +27,10 @@ import { useAsync } from '@/lib/use-async'
  * verdict, re-evaluated on request and never stored here; the weight is the
  * priority engine's, and reading it deliberately does not freeze it.
  *
- * The applicants carry a name, a date of birth and the last four digits of a
- * national ID — enough to confirm the person at the counter is the person on
- * the application. The unabridged identity is a separate, national screen.
+ * The applicants carry a name in both scripts, gender, a phone number, a date
+ * of birth and the last four digits of a national ID — enough to confirm the
+ * person at the counter, explain a Mahram pairing, and reach them about the
+ * application. The unabridged national ID is a separate, national screen.
  */
 export function AdminApplicationDetail() {
   const { t, i18n } = useTranslation()
@@ -101,7 +102,7 @@ export function AdminApplicationDetail() {
               <Card key={applicant.participantId}>
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center justify-between gap-2 text-base">
-                    <span>{applicant.fullName}</span>
+                    <span>{formatParticipantName(applicant, locale)}</span>
                     <Badge variant="outline">{t(`admin.applicantRole.${applicant.role}`)}</Badge>
                   </CardTitle>
                 </CardHeader>
@@ -114,6 +115,16 @@ export function AdminApplicationDetail() {
                   <div className="flex justify-between gap-4">
                     <span className="text-muted-foreground">{t('admin.applications.dob')}</span>
                     <span>{formatDate(applicant.dob, locale)}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-muted-foreground">{t('admin.applications.gender')}</span>
+                    <span>
+                      {t(`register.fields.gender${applicant.gender === 'MALE' ? 'Male' : 'Female'}`)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-muted-foreground">{t('admin.applications.phone')}</span>
+                    <span className="font-mono">{applicant.phoneNumber}</span>
                   </div>
                   <Separator />
                   <div className="flex justify-between gap-4">
