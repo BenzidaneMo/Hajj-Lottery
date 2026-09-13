@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { createApp } from '../src/app.js'
 import { ParticipantService } from '../src/services/participant.service.js'
 import { createAdminAndSignIn, ensureTestGeography } from './helpers/admins.js'
+import { participantFixture } from './helpers/participants.js'
 
 const app = createApp()
 const prisma = new PrismaClient()
@@ -14,8 +15,13 @@ const service = new ParticipantService(prisma)
 function body(overrides: Record<string, unknown> = {}) {
   return {
     nationalId: '112233445566778899',
-    fullName: 'Test Participant',
+    firstNameAr: 'ياسين',
+    lastNameAr: 'بلقاسم',
+    firstNameLatin: 'Yanis',
+    lastNameLatin: 'Belkacem',
     dob: '1985-04-12',
+    gender: 'MALE',
+    phoneNumber: '0555123456',
     ...overrides,
   }
 }
@@ -51,8 +57,13 @@ describe('POST /api/participants', () => {
     expect(response.status).toBe(201)
     expect(response.body).toMatchObject({
       nationalId: '112233445566778899',
-      fullName: 'Test Participant',
+      firstNameAr: 'ياسين',
+      lastNameAr: 'بلقاسم',
+      firstNameLatin: 'Yanis',
+      lastNameLatin: 'Belkacem',
       dob: '1985-04-12',
+      gender: 'MALE',
+      phoneNumber: '+213555123456',
       hasWonHajj: false,
     })
     expect(response.body.id).toEqual(expect.any(String))
@@ -144,21 +155,29 @@ describe('POST /api/participants', () => {
     })
   })
 
-  it('rejects a missing or over-long full name', async () => {
-    const missing = await post(body({ fullName: '   ' }))
+  it('rejects a missing, over-long or wrong-script name field', async () => {
+    const missing = await post(body({ firstNameAr: '   ' }))
     expect(missing.status).toBe(400)
-    expect(missing.body.details).toHaveProperty('fullName')
+    expect(missing.body.details).toHaveProperty('firstNameAr')
 
-    const tooLong = await post(body({ fullName: 'x'.repeat(151) }))
+    const tooLong = await post(body({ lastNameLatin: 'x'.repeat(101) }))
     expect(tooLong.status).toBe(400)
-    expect(tooLong.body.details).toHaveProperty('fullName')
+    expect(tooLong.body.details).toHaveProperty('lastNameLatin')
+
+    const wrongScript = await post(body({ firstNameAr: 'Yanis' }))
+    expect(wrongScript.status).toBe(400)
+    expect(wrongScript.body.details).toHaveProperty('firstNameAr')
+
+    const digits = await post(body({ firstNameLatin: '12345' }))
+    expect(digits.status).toBe(400)
+    expect(digits.body.details).toHaveProperty('firstNameLatin')
   })
 
   it('rejects a duplicate national ID with 409', async () => {
     const first = await post(body())
     expect(first.status).toBe(201)
 
-    const duplicate = await post(body({ fullName: 'Someone Else' }))
+    const duplicate = await post(body({ lastNameLatin: 'Someone Else' }))
 
     expect(duplicate.status).toBe(409)
     expect(duplicate.body.code).toBe('DUPLICATE_NATIONAL_ID')
@@ -201,7 +220,7 @@ describe('GET /api/participants/by-national-id/:nationalId', () => {
 
     expect(response.status).toBe(200)
     expect(response.body.id).toBe(created.body.id)
-    expect(response.body.fullName).toBe('Test Participant')
+    expect(response.body.firstNameLatin).toBe('Yanis')
   })
 
   it('finds the participant regardless of how the ID is formatted', async () => {
@@ -277,11 +296,12 @@ describe('access control', () => {
 
 describe('ParticipantService', () => {
   it('finds an existing participant by national ID', async () => {
-    const created = await service.create({
-      nationalId: '112233445566778899',
-      fullName: 'Service Lookup',
-      dob: new Date('1970-02-03T00:00:00.000Z'),
-    })
+    const created = await service.create(
+      participantFixture('112233445566778899', {
+        lastNameLatin: 'Service Lookup',
+        dob: new Date('1970-02-03T00:00:00.000Z'),
+      }),
+    )
 
     const found = await service.findByNationalId('1122 3344 5566 7788 99')
 
@@ -294,30 +314,28 @@ describe('ParticipantService', () => {
   })
 
   it('findOrCreate creates when absent and reuses when present', async () => {
-    const input = {
-      nationalId: '112233445566778899',
-      fullName: 'Find Or Create',
+    const input = participantFixture('112233445566778899', {
+      lastNameLatin: 'Find Or Create',
       dob: new Date('1988-08-08T00:00:00.000Z'),
-    }
+    })
 
     const first = await service.findOrCreate(input)
     expect(first.created).toBe(true)
 
-    const second = await service.findOrCreate({ ...input, fullName: 'Different Name' })
+    const second = await service.findOrCreate({ ...input, lastNameLatin: 'Different Name' })
 
     expect(second.created).toBe(false)
     expect(second.participant.id).toBe(first.participant.id)
     // The existing identity wins; findOrCreate never rewrites a known person.
-    expect(second.participant.fullName).toBe('Find Or Create')
+    expect(second.participant.lastNameLatin).toBe('Find Or Create')
     expect(await prisma.participant.count()).toBe(1)
   })
 
   it('never creates two records for the same ID under concurrent calls', async () => {
-    const input = {
-      nationalId: '112233445566778899',
-      fullName: 'Concurrent',
+    const input = participantFixture('112233445566778899', {
+      lastNameLatin: 'Concurrent',
       dob: new Date('1991-01-01T00:00:00.000Z'),
-    }
+    })
 
     const results = await Promise.all([
       service.findOrCreate(input),
@@ -354,10 +372,13 @@ describe('identity is independent of geography and applications', () => {
     expect(names).toEqual([
       'created_at',
       'dob',
-      'full_name',
+      'first_name_ar',
+      'first_name_latin',
       'gender',
       'has_won_hajj',
       'id',
+      'last_name_ar',
+      'last_name_latin',
       'national_id',
       'phone_number',
       'phone_verified_at',
@@ -369,10 +390,15 @@ describe('identity is independent of geography and applications', () => {
     await post(body())
 
     // Bypasses the service entirely: the constraint must live in the database.
+    // Every NOT NULL column is supplied so the insert fails for the reason
+    // this test is about — the unique index — and not some other one.
     await expect(
       prisma.$executeRaw`
-        INSERT INTO "participants" ("id", "national_id", "full_name", "dob", "updated_at")
-        VALUES ('raw-duplicate', '112233445566778899', 'Raw Insert', DATE '1985-04-12', NOW())
+        INSERT INTO "participants"
+          ("id", "national_id", "first_name_ar", "last_name_ar", "first_name_latin",
+           "last_name_latin", "dob", "gender", "phone_number", "updated_at")
+        VALUES ('raw-duplicate', '112233445566778899', 'ياسين', 'بلقاسم', 'Raw', 'Insert',
+                DATE '1985-04-12', 'MALE', '+213555000000', NOW())
       `,
     ).rejects.toThrow()
 

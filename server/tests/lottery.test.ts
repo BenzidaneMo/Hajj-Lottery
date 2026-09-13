@@ -20,6 +20,7 @@ import { LotteryService } from '../src/services/lottery.service.js'
 import { participationHistoryService } from '../src/services/participation-history.service.js'
 import { weightService } from '../src/services/weight.service.js'
 import { AdminRole, createAdminAndSignIn, ensureTestGeography, type TestGeography } from './helpers/admins.js'
+import { buildApplicant } from './helpers/participants.js'
 
 const prisma = new PrismaClient()
 
@@ -95,7 +96,7 @@ async function registerAndWeigh(
       entryType: 'SINGLE',
       wilayaId,
       communeId,
-      primary: { nationalId: id, fullName: 'Draw Subject', dob: '1980-04-12', gender: 'MALE' },
+      primary: buildApplicant(id, { dob: '1980-04-12', gender: 'MALE' }),
     })
   if (response.status !== 201) {
     throw new Error(`Registration failed: ${response.status} ${JSON.stringify(response.body)}`)

@@ -298,8 +298,20 @@ export class AdminConsoleService {
    * would let somebody discover which IDs exist by typing digits.
    */
   async listParticipants(filters: ParticipantFilters = {}): Promise<Page<Participant>> {
+    // A name has four columns now, not one: match any of them rather than
+    // asking the operator to know which script or which half of the name
+    // they remember.
     const where: Prisma.ParticipantWhereInput = {
-      ...(filters.name ? { fullName: { contains: filters.name, mode: 'insensitive' } } : {}),
+      ...(filters.name
+        ? {
+            OR: [
+              { firstNameAr: { contains: filters.name, mode: 'insensitive' } },
+              { lastNameAr: { contains: filters.name, mode: 'insensitive' } },
+              { firstNameLatin: { contains: filters.name, mode: 'insensitive' } },
+              { lastNameLatin: { contains: filters.name, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
       ...(filters.nationalId ? { nationalId: filters.nationalId } : {}),
       ...(filters.hasWonHajj === undefined ? {} : { hasWonHajj: filters.hasWonHajj }),
     }

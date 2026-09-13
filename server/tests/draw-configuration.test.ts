@@ -10,6 +10,7 @@ import {
 } from '../src/lib/draw-lifecycle.js'
 import { drawConfigurationService } from '../src/services/draw-configuration.service.js'
 import { AdminRole, createAdminAndSignIn, ensureTestGeography, type TestGeography } from './helpers/admins.js'
+import { buildApplicant } from './helpers/participants.js'
 
 const prisma = new PrismaClient()
 
@@ -26,13 +27,7 @@ const OTHER_YEAR = 2151
 const NATIONAL_ID = '611111111111111111'
 
 function applicant(overrides: Record<string, unknown> = {}) {
-  return {
-    nationalId: NATIONAL_ID,
-    fullName: 'Draw Subject',
-    dob: '1980-04-12',
-    gender: 'MALE',
-    ...overrides,
-  }
+  return buildApplicant(NATIONAL_ID, { dob: '1980-04-12', gender: 'MALE', ...overrides })
 }
 
 const submit = (body: Record<string, unknown>) => request(app).post('/api/applications').send(body)

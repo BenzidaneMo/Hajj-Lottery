@@ -1,10 +1,14 @@
 import {
   calculateAgeAt,
   isImportWarning,
+  isValidArabicName,
+  isValidLatinName,
   MAHRAM_OPTIONAL_AGE,
   MAX_IMPORT_CELL_CHARACTERS,
   MAX_IMPORT_NOTE_CHARACTERS,
   MINIMUM_APPLICATION_AGE,
+  normalizeArabicName,
+  normalizeLatinName,
   type ImportColumn,
   type ImportIssueCode,
   type ImportRowStatus,
@@ -57,7 +61,10 @@ export interface ImportIssue {
 /** One row's values, normalized by the same utilities the rest of the API uses. */
 export interface StagedValues {
   nationalId: string | null
-  fullName: string | null
+  firstNameAr: string | null
+  lastNameAr: string | null
+  firstNameLatin: string | null
+  lastNameLatin: string | null
   dob: Date | null
   phoneNumber: string | null
   communeCode: string
@@ -105,7 +112,10 @@ export interface KnownHistoryYear {
 /** A person the registry already knows, and everything the checks need about them. */
 export interface KnownParticipant {
   id: string
-  fullName: string
+  firstNameAr: string
+  lastNameAr: string
+  firstNameLatin: string
+  lastNameLatin: string
   dob: Date
   phoneNumber: string | null
   hasWonHajj: boolean
@@ -142,7 +152,10 @@ export function stageRow(raw: RawImportRow, context: StagingContext): StagedRow 
   }
 
   const nationalId = stageNationalId(cells.national_id, issues)
-  const fullName = stageFullName(cells.full_name, issues)
+  const firstNameAr = stageArabicName(cells.first_name_ar, 'first_name_ar', issues)
+  const lastNameAr = stageArabicName(cells.last_name_ar, 'last_name_ar', issues)
+  const firstNameLatin = stageLatinName(cells.first_name_latin, 'first_name_latin', issues)
+  const lastNameLatin = stageLatinName(cells.last_name_latin, 'last_name_latin', issues)
   const dob = stageDob(cells.dob, issues, context.referenceDrawYear)
   const phoneNumber = stagePhone(cells.phone_number, issues)
   const { communeCode, communeId } = stageCommune(cells.commune_code, issues, context)
@@ -173,7 +186,10 @@ export function stageRow(raw: RawImportRow, context: StagingContext): StagedRow 
     rowNumber: raw.rowNumber,
     values: {
       nationalId,
-      fullName,
+      firstNameAr,
+      lastNameAr,
+      firstNameLatin,
+      lastNameLatin,
       dob,
       phoneNumber,
       communeCode,
@@ -244,13 +260,63 @@ function stageNationalId(raw: string | undefined, issues: ImportIssue[]): string
   return normalized
 }
 
-function stageFullName(raw: string | undefined, issues: ImportIssue[]): string | null {
+const ARABIC_NAME_ISSUE_CODES = {
+  first_name_ar: { missing: 'MISSING_FIRST_NAME_AR', invalid: 'INVALID_FIRST_NAME_AR' },
+  last_name_ar: { missing: 'MISSING_LAST_NAME_AR', invalid: 'INVALID_LAST_NAME_AR' },
+} as const satisfies Record<
+  'first_name_ar' | 'last_name_ar',
+  { missing: ImportIssueCode; invalid: ImportIssueCode }
+>
+
+const LATIN_NAME_ISSUE_CODES = {
+  first_name_latin: { missing: 'MISSING_FIRST_NAME_LATIN', invalid: 'INVALID_FIRST_NAME_LATIN' },
+  last_name_latin: { missing: 'MISSING_LAST_NAME_LATIN', invalid: 'INVALID_LAST_NAME_LATIN' },
+} as const satisfies Record<
+  'first_name_latin' | 'last_name_latin',
+  { missing: ImportIssueCode; invalid: ImportIssueCode }
+>
+
+function stageArabicName(
+  raw: string | undefined,
+  column: 'first_name_ar' | 'last_name_ar',
+  issues: ImportIssue[],
+): string | null {
+  const codes = ARABIC_NAME_ISSUE_CODES[column]
   const value = raw?.trim()
   if (!value) {
-    issues.push(issue('MISSING_FULL_NAME', 'full_name'))
+    issues.push(issue(codes.missing, column))
     return null
   }
-  return value
+  // A formula is already flagged FORMULA_CELL by the caller; script validation
+  // would only add a confusing second issue to the same cell, and a reviewer
+  // needs to see what the formula actually said, neutralized, not nothing.
+  if (value.startsWith('=')) return value
+  const normalized = normalizeArabicName(value)
+  if (!isValidArabicName(normalized)) {
+    issues.push(issue(codes.invalid, column, 'expected Arabic-script letters'))
+    return null
+  }
+  return normalized
+}
+
+function stageLatinName(
+  raw: string | undefined,
+  column: 'first_name_latin' | 'last_name_latin',
+  issues: ImportIssue[],
+): string | null {
+  const codes = LATIN_NAME_ISSUE_CODES[column]
+  const value = raw?.trim()
+  if (!value) {
+    issues.push(issue(codes.missing, column))
+    return null
+  }
+  if (value.startsWith('=')) return value
+  const normalized = normalizeLatinName(value)
+  if (!isValidLatinName(normalized)) {
+    issues.push(issue(codes.invalid, column, 'expected Latin-script letters'))
+    return null
+  }
+  return normalized
 }
 
 function stageDob(raw: string | undefined, issues: ImportIssue[], referenceYear: number): Date | null {
@@ -518,11 +584,30 @@ export function detectDatabaseConflicts(
     if (!nationalId) continue
 
     const participant = known.get(nationalId)
-    if (!participant) continue
+    if (!participant) {
+      checkNewParticipantRequirements(row)
+      continue
+    }
 
     checkIdentity(row, participant)
     checkExistingHistory(row, participant)
     checkWinnerCoherence(row, participant)
+  }
+}
+
+/**
+ * A national ID matching nobody the registry already knows is about to
+ * create a new participant, and every new participant needs a gender and a
+ * phone number — neither of which a paper register always carries. Blocked
+ * here rather than inferred, exactly as a fresh registration would refuse to
+ * save without them.
+ */
+function checkNewParticipantRequirements(row: StagedRow): void {
+  if (row.values.gender === null) {
+    row.issues.push(issue('MISSING_GENDER_FOR_NEW_PARTICIPANT', 'gender'))
+  }
+  if (row.values.phoneNumber === null) {
+    row.issues.push(issue('MISSING_PHONE_NUMBER_FOR_NEW_PARTICIPANT', 'phone_number'))
   }
 }
 
@@ -535,25 +620,41 @@ export function detectDatabaseConflicts(
  * and never a quiet update of the registry from a spreadsheet somebody uploaded.
  */
 function checkIdentity(row: StagedRow, participant: KnownParticipant): void {
-  const name = row.values.fullName
+  const differing: ImportColumn[] = []
+
+  const nameDiffers = (a: string, b: string) => normalizeForComparison(a) !== normalizeForComparison(b)
+
+  if (row.values.firstNameAr !== null && nameDiffers(row.values.firstNameAr, participant.firstNameAr)) {
+    differing.push('first_name_ar')
+  }
+  if (row.values.lastNameAr !== null && nameDiffers(row.values.lastNameAr, participant.lastNameAr)) {
+    differing.push('last_name_ar')
+  }
+  if (
+    row.values.firstNameLatin !== null &&
+    nameDiffers(row.values.firstNameLatin, participant.firstNameLatin)
+  ) {
+    differing.push('first_name_latin')
+  }
+  if (row.values.lastNameLatin !== null && nameDiffers(row.values.lastNameLatin, participant.lastNameLatin)) {
+    differing.push('last_name_latin')
+  }
+
   const dob = row.values.dob
+  if (dob !== null && !sameDay(dob, participant.dob)) differing.push('dob')
 
-  const nameDiffers = name !== null && normalizeName(name) !== normalizeName(participant.fullName)
-  const dobDiffers = dob !== null && !sameDay(dob, participant.dob)
-
-  if (nameDiffers || dobDiffers) {
+  if (differing.length > 0) {
     // The differing values are deliberately not repeated in the detail: a
     // reviewer sees both records side by side, and the issue list is rendered in
     // places the registry's own values do not belong.
+    const first = differing[0] ?? null
     row.issues.push(
       issue(
         'IDENTITY_CONFLICT',
-        nameDiffers ? 'full_name' : 'dob',
-        nameDiffers && dobDiffers
-          ? 'the name and date of birth differ from the identity registry'
-          : nameDiffers
-            ? 'the name differs from the identity registry'
-            : 'the date of birth differs from the identity registry',
+        first,
+        differing.length === 1
+          ? `${first} differs from the identity registry`
+          : `${differing.join(', ')} differ from the identity registry`,
       ),
     )
   }
@@ -665,8 +766,14 @@ export function isAlreadyRecorded(issues: readonly ImportIssue[]): boolean {
   return issues.some((found) => found.code === 'ALREADY_RECORDED')
 }
 
-/** Case and spacing are transcription noise; anything else is a different name. */
-function normalizeName(value: string): string {
+/**
+ * Case and spacing are transcription noise; anything else is a different
+ * name. Deliberately separate from `normalizeArabicName`/`normalizeLatinName`
+ * (shared/src/name.ts): those preserve casing because it is meaningful in a
+ * *stored* name ("McDonald"), but two transcriptions of the same person
+ * should not conflict merely because one typed it in capitals.
+ */
+function normalizeForComparison(value: string): string {
   return value.normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' ')
 }
 

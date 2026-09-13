@@ -6,6 +6,7 @@ import { createApp } from '../src/app.js'
 import { calculateStreak, type HistoryYear } from '../src/lib/participation-streak.js'
 import { participationHistoryService } from '../src/services/participation-history.service.js'
 import { AdminRole, createAdminAndSignIn, ensureTestGeography, type TestGeography } from './helpers/admins.js'
+import { participantFixture } from './helpers/participants.js'
 
 const prisma = new PrismaClient()
 
@@ -20,12 +21,11 @@ const PAST = CURRENT_YEAR - 1
 
 async function makeParticipant(nationalId: string, overrides: Record<string, unknown> = {}) {
   return prisma.participant.create({
-    data: {
-      nationalId,
-      fullName: 'History Subject',
+    data: participantFixture(nationalId, {
+      lastNameLatin: 'History Subject',
       dob: new Date('1980-01-01T00:00:00.000Z'),
       ...overrides,
-    },
+    }),
   })
 }
 

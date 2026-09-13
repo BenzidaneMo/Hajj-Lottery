@@ -1,4 +1,4 @@
-import type { ApplicationStatus, EntryType } from './application.js'
+import type { ApplicantGender, ApplicationStatus, EntryType } from './application.js'
 import type { DrawYearStatus } from './draw-configuration.js'
 import type { AdminRole } from './roles.js'
 import type { ScopePlaceDto } from './scope.js'
@@ -113,16 +113,21 @@ export interface AdminApplicationPageDto {
  * confirm you are looking at the person in front of you and not enough to
  * copy an identity out of the screen. `ImportRowDto.nationalIdSuffix` made the
  * same choice for the same reason; the unabridged registry stays SUPER_ADMIN
- * work. Phone numbers are absent entirely — no administrative flow here
- * contacts anybody, so carrying one would be exposure without a use.
+ * work. Gender and phone are included now that they support the Mahram
+ * pairing rule and future contact workflows respectively.
  */
 export interface AdminApplicantDto {
   participantId: string
   role: 'PRIMARY' | 'SECONDARY'
-  fullName: string
+  firstNameAr: string
+  lastNameAr: string
+  firstNameLatin: string
+  lastNameLatin: string
   nationalIdSuffix: string
   /** Calendar date, `YYYY-MM-DD`. */
   dob: string
+  gender: ApplicantGender
+  phoneNumber: string
   hasWonHajj: boolean
 }
 
@@ -134,10 +139,14 @@ export interface AdminApplicationDetailDto extends AdminApplicationSummaryDto {
 /** One row of the national identity registry. SUPER_ADMIN only. */
 export interface AdminParticipantSummaryDto {
   id: string
-  fullName: string
+  firstNameAr: string
+  lastNameAr: string
+  firstNameLatin: string
+  lastNameLatin: string
   nationalId: string
   dob: string
-  phoneNumber: string | null
+  gender: ApplicantGender
+  phoneNumber: string
   hasWonHajj: boolean
   createdAt: string
 }

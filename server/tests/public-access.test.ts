@@ -12,6 +12,7 @@ import { drawExecutionService } from '../src/services/draw-execution.service.js'
 import { drawPoolService } from '../src/services/draw-pool.service.js'
 import { weightService } from '../src/services/weight.service.js'
 import { AdminRole, createAdminAndSignIn, ensureTestGeography, type TestGeography } from './helpers/admins.js'
+import { buildApplicant } from './helpers/participants.js'
 
 const prisma = new PrismaClient()
 
@@ -48,8 +49,6 @@ interface RegisteredApplication {
 
 interface RegisterOptions {
   paired?: boolean
-  /** Omit the phone number entirely, as the form permits. */
-  withoutPhone?: boolean
 }
 
 /**
@@ -81,23 +80,20 @@ async function register(
     entryType: options.paired ? 'PAIRED' : 'SINGLE',
     wilayaId: commune.wilayaId,
     communeId: commune.id,
-    primary: {
-      nationalId: primaryNationalId,
-      fullName: 'Public Subject',
+    primary: buildApplicant(primaryNationalId, {
       dob,
       // A pair is a female primary and her male Mahram; single stays male so
       // the Mahram rule never enters into it.
       gender: options.paired ? 'FEMALE' : 'MALE',
-      ...(options.withoutPhone ? {} : { phoneNumber: phone }),
-    },
+      phoneNumber: phone,
+    }),
     ...(secondaryNationalId
       ? {
-          secondary: {
-            nationalId: secondaryNationalId,
-            fullName: 'Public Partner',
+          secondary: buildApplicant(secondaryNationalId, {
             dob: '1981-11-02',
             gender: 'MALE',
-          },
+            phoneNumber: phone,
+          }),
         }
       : {}),
   }
@@ -1041,22 +1037,6 @@ describe('checking your own application', () => {
     expect(malformedReference.body).toEqual(wrongNumber.body)
     expect(unknownReference.text).toBe(wrongNumber.text)
     expect(malformedReference.text).toBe(wrongNumber.text)
-  })
-
-  it('refuses an applicant who registered without a number, without saying so', async () => {
-    const registered = await register(geo.communeA1, { withoutPhone: true })
-
-    const response = await lookup({
-      applicationReference: registered.application.applicationReference,
-      phoneNumber: registered.phoneNumber,
-    })
-    const unknown = await lookup({
-      applicationReference: 'HZ-2146-ZZZ-000000',
-      phoneNumber: registered.phoneNumber,
-    })
-
-    expect(response.status).toBe(404)
-    expect(response.body).toEqual(unknown.body)
   })
 
   it('never returns a national ID, a phone number, a date of birth or an internal id', async () => {

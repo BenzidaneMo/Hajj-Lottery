@@ -54,6 +54,8 @@ const FORBIDDEN_KEY_PATTERNS = [
   /\bdob\b/i,
   /date.?of.?birth/i,
   /full.?name/i,
+  /first.?name/i,
+  /last.?name/i,
 ]
 
 /**

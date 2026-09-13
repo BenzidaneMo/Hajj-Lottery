@@ -19,6 +19,7 @@ import { drawPoolService } from '../src/services/draw-pool.service.js'
 import { ReserveService } from '../src/services/reserve.service.js'
 import { weightService } from '../src/services/weight.service.js'
 import { AdminRole, createAdminAndSignIn, ensureTestGeography, type TestGeography } from './helpers/admins.js'
+import { buildApplicant } from './helpers/participants.js'
 
 /**
  * Reserves, abandonment and replacement.
@@ -71,23 +72,20 @@ async function register(
     communeId: commune.id,
     // A number, because the public status lookup verifies against one and this
     // suite has to be able to ask what a reserve is told about themselves.
-    primary: {
-      nationalId: nationalId(),
-      fullName: 'Reserve Subject',
+    primary: buildApplicant(nationalId(), {
       dob: '1980-04-12',
       // A pair is a female primary and her male Mahram; single stays male so
       // the Mahram rule never enters into it.
       gender: options.paired ? 'FEMALE' : 'MALE',
       phoneNumber: PHONE,
-    },
+    }),
   }
   if (options.paired) {
-    body.secondary = {
-      nationalId: nationalId(),
-      fullName: 'Reserve Partner',
+    body.secondary = buildApplicant(nationalId(), {
       dob: '1982-06-30',
       gender: 'MALE',
-    }
+      phoneNumber: PHONE,
+    })
   }
 
   const response = await request(app).post('/api/applications').send(body)

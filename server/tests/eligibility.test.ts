@@ -12,6 +12,7 @@ import {
   ensureTestGeography,
   type TestGeography,
 } from './helpers/admins.js'
+import { buildApplicant, participantFixture } from './helpers/participants.js'
 
 const prisma = new PrismaClient()
 
@@ -27,7 +28,7 @@ const NATIONAL_IDS = {
 }
 
 function applicant(nationalId: string, overrides: Record<string, unknown> = {}) {
-  return { nationalId, fullName: 'Test Applicant', dob: '1985-04-12', gender: 'MALE', ...overrides }
+  return buildApplicant(nationalId, { dob: '1985-04-12', gender: 'MALE', ...overrides })
 }
 
 function singleBody(overrides: Record<string, unknown> = {}) {
@@ -46,7 +47,7 @@ function pairedBody(overrides: Record<string, unknown> = {}) {
     wilayaId: geo.wilayaA.id,
     communeId: geo.communeA1.id,
     primary: applicant(NATIONAL_IDS.ahmed, { gender: 'FEMALE' }),
-    secondary: applicant(NATIONAL_IDS.fatima, { fullName: 'Second Applicant', gender: 'MALE' }),
+    secondary: applicant(NATIONAL_IDS.fatima, { gender: 'MALE' }),
     ...overrides,
   }
 }
@@ -349,12 +350,11 @@ describe('registration applies the same rules', () => {
 
   it('refuses to create anything for an ineligible applicant', async () => {
     await prisma.participant.create({
-      data: {
-        nationalId: NATIONAL_IDS.ahmed,
-        fullName: 'Past Winner',
+      data: participantFixture(NATIONAL_IDS.ahmed, {
+        lastNameLatin: 'Past Winner',
         dob: new Date('1970-01-01T00:00:00.000Z'),
         hasWonHajj: true,
-      },
+      }),
     })
 
     const response = await submit(singleBody())
@@ -365,12 +365,11 @@ describe('registration applies the same rules', () => {
 
   it('tells the citizen a code it can translate, never the internal reason', async () => {
     await prisma.participant.create({
-      data: {
-        nationalId: NATIONAL_IDS.fatima,
-        fullName: 'Past Winner',
+      data: participantFixture(NATIONAL_IDS.fatima, {
+        lastNameLatin: 'Past Winner',
         dob: new Date('1970-01-01T00:00:00.000Z'),
         hasWonHajj: true,
-      },
+      }),
     })
 
     const response = await submit(pairedBody())

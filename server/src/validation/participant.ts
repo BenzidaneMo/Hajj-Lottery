@@ -1,9 +1,14 @@
 import { z } from 'zod'
+import {
+  APPLICANT_GENDERS,
+  isValidArabicName,
+  isValidLatinName,
+  normalizeArabicName,
+  normalizeLatinName,
+} from '@hajj-lottery/shared'
 
 import { isValidNationalId, NATIONAL_ID_LENGTH, normalizeNationalId } from '../lib/national-id.js'
-
-export const FULL_NAME_MIN_LENGTH = 2
-export const FULL_NAME_MAX_LENGTH = 150
+import { isValidPhoneNumber, normalizePhoneNumber } from '../lib/phone.js'
 
 /**
  * Sanity floor for a date of birth. This is a typo guard, not an eligibility
@@ -54,22 +59,45 @@ function isRealCalendarDate(value: string): boolean {
   return date.toISOString().startsWith(value)
 }
 
-export const fullNameSchema = z
-  .string({ required_error: 'Full name is required' })
-  .transform((value) => value.trim().replace(/\s+/g, ' '))
-  .refine((value) => value.length >= FULL_NAME_MIN_LENGTH, {
-    message: `Full name must be at least ${FULL_NAME_MIN_LENGTH} characters`,
+/** An Arabic-script name field (first or last), collected regardless of interface language. */
+export const arabicNameSchema = z
+  .string({ required_error: 'Arabic name is required' })
+  .transform(normalizeArabicName)
+  .refine(isValidArabicName, {
+    message: 'Enter the name in Arabic letters only',
   })
-  .refine((value) => value.length <= FULL_NAME_MAX_LENGTH, {
-    message: `Full name must be at most ${FULL_NAME_MAX_LENGTH} characters`,
+
+/** A Latin-script name field (first or last), collected regardless of interface language. */
+export const latinNameSchema = z
+  .string({ required_error: 'Latin name is required' })
+  .transform(normalizeLatinName)
+  .refine(isValidLatinName, {
+    message: 'Enter the name in Latin letters only',
+  })
+
+/**
+ * Contact number, normalized to `+213XXXXXXXXX`. Required for every
+ * participant created from here on — see docs/registration.md.
+ */
+export const phoneNumberSchema = z
+  .string({ required_error: 'Phone number is required' })
+  .transform((value) => value.trim())
+  .transform(normalizePhoneNumber)
+  .refine(isValidPhoneNumber, {
+    message: 'Enter an Algerian mobile number, for example 0555 12 34 56',
   })
 
 /** Body of POST /api/participants. */
 export const createParticipantSchema = z
   .object({
     nationalId: nationalIdSchema,
-    fullName: fullNameSchema,
+    firstNameAr: arabicNameSchema,
+    lastNameAr: arabicNameSchema,
+    firstNameLatin: latinNameSchema,
+    lastNameLatin: latinNameSchema,
     dob: dobSchema,
+    gender: z.enum(APPLICANT_GENDERS),
+    phoneNumber: phoneNumberSchema,
   })
   .strict()
 

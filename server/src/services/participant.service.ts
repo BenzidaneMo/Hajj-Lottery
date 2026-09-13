@@ -8,8 +8,13 @@ import { prisma as defaultPrisma } from '../lib/prisma.js'
 export interface CreateParticipantData {
   /** Canonical national ID — already normalized by the validation schema. */
   nationalId: string
-  fullName: string
+  firstNameAr: string
+  lastNameAr: string
+  firstNameLatin: string
+  lastNameLatin: string
   dob: Date
+  gender: 'MALE' | 'FEMALE'
+  phoneNumber: string
 }
 
 /**
@@ -101,8 +106,13 @@ export function toParticipantDto(participant: Participant): ParticipantDto {
   return {
     id: participant.id,
     nationalId: participant.nationalId,
-    fullName: participant.fullName,
+    firstNameAr: participant.firstNameAr,
+    lastNameAr: participant.lastNameAr,
+    firstNameLatin: participant.firstNameLatin,
+    lastNameLatin: participant.lastNameLatin,
     dob: participant.dob.toISOString().slice(0, 10),
+    gender: participant.gender,
+    phoneNumber: participant.phoneNumber,
     hasWonHajj: participant.hasWonHajj,
     createdAt: participant.createdAt.toISOString(),
     updatedAt: participant.updatedAt.toISOString(),

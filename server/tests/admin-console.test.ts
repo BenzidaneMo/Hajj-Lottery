@@ -12,6 +12,7 @@ import {
   ensureTestGeography,
   type TestGeography,
 } from './helpers/admins.js'
+import { participantFixture } from './helpers/participants.js'
 import { resolveTestDatabaseUrl } from './test-database.js'
 
 const app = createApp()
@@ -63,11 +64,10 @@ async function seedApplication(communeId: string, year: number, status = 'ELIGIB
   const suffix = String(participantCounter).padStart(6, '0')
 
   const participant = await prisma.participant.create({
-    data: {
-      nationalId: `10987654321${suffix}0`.slice(0, 18),
-      fullName: `Applicant ${participantCounter}`,
+    data: participantFixture(`10987654321${suffix}0`.slice(0, 18), {
+      lastNameLatin: `Applicant ${participantCounter}`,
       dob: new Date('1970-01-01'),
-    },
+    }),
   })
 
   return prisma.application.create({
@@ -263,7 +263,7 @@ describe('GET /api/admin/applications', () => {
 })
 
 describe('GET /api/admin/applications/:id', () => {
-  it('carries only the last four digits of a national ID, and no phone number', async () => {
+  it('carries only the last four digits of a national ID, but does carry gender and phone', async () => {
     const { drawYear } = await seedYear()
     const application = await seedApplication(geo.communeA1.id, drawYear.year)
     const participant = await prisma.participant.findUniqueOrThrow({
@@ -280,11 +280,13 @@ describe('GET /api/admin/applications/:id', () => {
     expect(response.status).toBe(200)
     const applicant = response.body.applicants[0]
     expect(applicant.nationalIdSuffix).toBe(participant.nationalId.slice(-4))
+    // Gender and phone support the Mahram rule and future contact workflows,
+    // so they are surfaced here — only the unabridged national ID is not.
+    expect(applicant.phoneNumber).toBe('+213555123456')
+    expect(applicant.gender).toBe(participant.gender)
 
     const serialized = JSON.stringify(response.body)
     expect(serialized).not.toContain(participant.nationalId)
-    expect(serialized).not.toContain('555123456')
-    expect(serialized).not.toContain('phoneNumber')
   })
 
   it('is a 404 out of scope, identical to one that never existed', async () => {

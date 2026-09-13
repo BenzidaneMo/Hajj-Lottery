@@ -6,6 +6,7 @@ import { createApp } from '../src/app.js'
 import { communeToken, generateApplicationReference } from '../src/lib/application-reference.js'
 import { isValidPhoneNumber, normalizePhoneNumber } from '../src/lib/phone.js'
 import { ensureOpenDrawYear, ensureTestGeography, type TestGeography } from './helpers/admins.js'
+import { buildApplicant, participantFixture } from './helpers/participants.js'
 
 const prisma = new PrismaClient()
 
@@ -27,14 +28,7 @@ const NATIONAL_IDS = {
 }
 
 function applicant(nationalId: string, overrides: Record<string, unknown> = {}) {
-  return {
-    nationalId,
-    fullName: 'Test Applicant',
-    dob: '1985-04-12',
-    gender: 'MALE',
-    phoneNumber: '0555123456',
-    ...overrides,
-  }
+  return buildApplicant(nationalId, overrides)
 }
 
 function singleBody(overrides: Record<string, unknown> = {}) {
@@ -53,7 +47,7 @@ function pairedBody(overrides: Record<string, unknown> = {}) {
     wilayaId: geo.wilayaA.id,
     communeId: geo.communeA1.id,
     primary: applicant(NATIONAL_IDS.ahmed, { gender: 'FEMALE' }),
-    secondary: applicant(NATIONAL_IDS.fatima, { fullName: 'Second Applicant', gender: 'MALE' }),
+    secondary: applicant(NATIONAL_IDS.fatima, { gender: 'MALE' }),
     ...overrides,
   }
 }
@@ -136,9 +130,7 @@ describe('POST /api/applications — paired', () => {
   })
 
   it('rejects a pair of the same person', async () => {
-    const response = await submit(
-      pairedBody({ secondary: applicant(NATIONAL_IDS.ahmed, { fullName: 'Same Person' }) }),
-    )
+    const response = await submit(pairedBody({ secondary: applicant(NATIONAL_IDS.ahmed) }))
 
     expect(response.status).toBe(400)
     expect(await prisma.application.count()).toBe(0)
@@ -158,12 +150,11 @@ describe('POST /api/applications — paired', () => {
 describe('participant identity', () => {
   it('reuses an existing participant rather than creating a second record', async () => {
     const existing = await prisma.participant.create({
-      data: {
-        nationalId: NATIONAL_IDS.ahmed,
-        fullName: 'Original Name',
+      data: participantFixture(NATIONAL_IDS.ahmed, {
+        lastNameLatin: 'Original Name',
         dob: new Date('1970-01-01T00:00:00.000Z'),
         phoneNumber: '+213555000111',
-      },
+      }),
     })
 
     const response = await submit(singleBody())
@@ -176,18 +167,17 @@ describe('participant identity', () => {
 
   it('never overwrites an existing participant, even when details differ', async () => {
     await prisma.participant.create({
-      data: {
-        nationalId: NATIONAL_IDS.ahmed,
-        fullName: 'Original Name',
+      data: participantFixture(NATIONAL_IDS.ahmed, {
+        lastNameLatin: 'Original Name',
         dob: new Date('1970-01-01T00:00:00.000Z'),
         phoneNumber: '+213555000111',
-      },
+      }),
     })
 
     await submit(
       singleBody({
         primary: applicant(NATIONAL_IDS.ahmed, {
-          fullName: 'Completely Different',
+          lastNameLatin: 'Completely Different',
           dob: '1999-09-09',
           phoneNumber: '0666999888',
         }),
@@ -197,7 +187,7 @@ describe('participant identity', () => {
     const stored = await prisma.participant.findUniqueOrThrow({
       where: { nationalId: NATIONAL_IDS.ahmed },
     })
-    expect(stored.fullName).toBe('Original Name')
+    expect(stored.lastNameLatin).toBe('Original Name')
     expect(stored.dob.toISOString().slice(0, 10)).toBe('1970-01-01')
     expect(stored.phoneNumber).toBe('+213555000111')
   })
@@ -220,7 +210,10 @@ describe('participant identity', () => {
     const names = columns.map((c) => c.column_name)
 
     for (const leaked of [
-      'full_name',
+      'first_name_ar',
+      'last_name_ar',
+      'first_name_latin',
+      'last_name_latin',
       'national_id',
       'dob',
       'phone_number',
@@ -297,12 +290,11 @@ describe('one application per person per draw year', () => {
 describe('lifetime winner exclusion', () => {
   it('rejects a primary applicant who has already won', async () => {
     await prisma.participant.create({
-      data: {
-        nationalId: NATIONAL_IDS.ahmed,
-        fullName: 'Past Winner',
+      data: participantFixture(NATIONAL_IDS.ahmed, {
+        lastNameLatin: 'Past Winner',
         dob: new Date('1970-01-01T00:00:00.000Z'),
         hasWonHajj: true,
-      },
+      }),
     })
 
     const response = await submit(singleBody())
@@ -314,12 +306,11 @@ describe('lifetime winner exclusion', () => {
 
   it('rejects a paired application whose secondary has already won', async () => {
     await prisma.participant.create({
-      data: {
-        nationalId: NATIONAL_IDS.fatima,
-        fullName: 'Past Winner',
+      data: participantFixture(NATIONAL_IDS.fatima, {
+        lastNameLatin: 'Past Winner',
         dob: new Date('1970-01-01T00:00:00.000Z'),
         hasWonHajj: true,
-      },
+      }),
     })
 
     const response = await submit(pairedBody())
@@ -335,12 +326,11 @@ describe('lifetime winner exclusion', () => {
 
   it('leaves no participant created when the application is refused', async () => {
     await prisma.participant.create({
-      data: {
-        nationalId: NATIONAL_IDS.ahmed,
-        fullName: 'Past Winner',
+      data: participantFixture(NATIONAL_IDS.ahmed, {
+        lastNameLatin: 'Past Winner',
         dob: new Date('1970-01-01T00:00:00.000Z'),
         hasWonHajj: true,
-      },
+      }),
     })
 
     await submit(pairedBody())
@@ -448,14 +438,20 @@ describe('concurrency', () => {
 
 describe('the public response exposes nothing sensitive', () => {
   it('returns a receipt with no identity or database ids', async () => {
-    const response = await submit(pairedBody())
+    const primary = applicant(NATIONAL_IDS.ahmed, { gender: 'FEMALE' }) as Record<string, string>
+    const secondary = applicant(NATIONAL_IDS.fatima, { gender: 'MALE' }) as Record<string, string>
+    const response = await submit(pairedBody({ primary, secondary }))
     const body = JSON.stringify(response.body)
 
     for (const forbidden of [
       NATIONAL_IDS.ahmed,
       NATIONAL_IDS.fatima,
-      'Test Applicant',
-      'Second Applicant',
+      primary.firstNameAr,
+      primary.lastNameAr,
+      primary.firstNameLatin,
+      primary.lastNameLatin,
+      secondary.firstNameLatin,
+      secondary.lastNameLatin,
       '0555123456',
       '+213555123456',
       '1985-04-12',
@@ -566,14 +562,12 @@ describe('phone numbers', () => {
     expect(participant.phoneVerifiedAt).toBeNull()
   })
 
-  it('accepts an application with no phone number at all', async () => {
+  it('rejects an application with no phone number at all', async () => {
     const response = await submit(singleBody({ primary: applicant(NATIONAL_IDS.ahmed, { phoneNumber: '' }) }))
 
-    expect(response.status).toBe(201)
-    const participant = await prisma.participant.findUniqueOrThrow({
-      where: { nationalId: NATIONAL_IDS.ahmed },
-    })
-    expect(participant.phoneNumber).toBeNull()
+    expect(response.status).toBe(400)
+    expect(response.body.code).toBe('VALIDATION_FAILED')
+    expect(await prisma.participant.count()).toBe(0)
   })
 
   it('rejects a malformed phone number with a readable message', async () => {
@@ -586,11 +580,59 @@ describe('phone numbers', () => {
   })
 })
 
+describe('structured name fields', () => {
+  it('requires all four name fields', async () => {
+    for (const field of ['firstNameAr', 'lastNameAr', 'firstNameLatin', 'lastNameLatin']) {
+      const response = await submit(singleBody({ primary: applicant(NATIONAL_IDS.ahmed, { [field]: '' }) }))
+      expect(response.status, `accepted a blank ${field}`).toBe(400)
+    }
+    expect(await prisma.participant.count()).toBe(0)
+  })
+
+  it('rejects Latin letters in an Arabic name field, and vice versa', async () => {
+    const wrongScriptAr = await submit(
+      singleBody({ primary: applicant(NATIONAL_IDS.ahmed, { firstNameAr: 'Ahmed' }) }),
+    )
+    expect(wrongScriptAr.status).toBe(400)
+
+    const wrongScriptLatin = await submit(
+      singleBody({ primary: applicant(NATIONAL_IDS.fatima, { firstNameLatin: 'أحمد' }) }),
+    )
+    expect(wrongScriptLatin.status).toBe(400)
+  })
+
+  it('rejects digits and emoji in a name field', async () => {
+    const digits = await submit(
+      singleBody({ primary: applicant(NATIONAL_IDS.ahmed, { firstNameLatin: '12345' }) }),
+    )
+    expect(digits.status).toBe(400)
+
+    const emoji = await submit(
+      singleBody({ primary: applicant(NATIONAL_IDS.fatima, { lastNameLatin: '😀😀😀' }) }),
+    )
+    expect(emoji.status).toBe(400)
+  })
+
+  it('accepts Latin names with diacritics and Arabic names with normal punctuation', async () => {
+    const response = await submit(
+      singleBody({
+        primary: applicant(NATIONAL_IDS.ahmed, {
+          firstNameLatin: 'René',
+          lastNameLatin: "O'Brien-Smith",
+          firstNameAr: 'محمد',
+          lastNameAr: 'بن-عثمان',
+        }),
+      }),
+    )
+    expect(response.status).toBe(201)
+  })
+})
+
 describe('request hygiene', () => {
   it('rejects an oversized body without reaching the handler', async () => {
     const response = await submit({
       ...singleBody(),
-      primary: applicant(NATIONAL_IDS.ahmed, { fullName: 'x'.repeat(64 * 1024) }),
+      primary: applicant(NATIONAL_IDS.ahmed, { firstNameLatin: 'x'.repeat(64 * 1024) }),
     })
 
     expect(response.status).toBe(413)

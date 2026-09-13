@@ -85,20 +85,30 @@ model Participant {
   /// not only by application code.
   nationalId String @unique @map("national_id")
 
-  fullName String   @map("full_name")
-  /// Date only; no time component, no timezone shifting.
-  dob      DateTime @db.Date
+  /// Arabic-script legal name, both required. Validated against the Arabic
+  /// script by isValidArabicName() (shared/src/name.ts) before this is ever
+  /// written — never inferred, never left for the other script to cover.
+  firstNameAr String @map("first_name_ar")
+  lastNameAr  String @map("last_name_ar")
 
-  /// Collected at authoritative identity intake. Nullable only so existing
-  /// historical records are not fabricated during this migration; such a
-  /// record cannot satisfy a gender-dependent new application until corrected.
-  gender Gender? @map("gender")
+  /// Latin-script (transliterated) legal name, both required. Collected
+  /// regardless of interface language — an Algerian legal name has both
+  /// forms, and the UI locale is not a choice between them.
+  firstNameLatin String @map("first_name_latin")
+  lastNameLatin  String @map("last_name_latin")
+
+  /// Date only; no time component, no timezone shifting.
+  dob DateTime @db.Date
+
+  /// Collected at authoritative identity intake. Required for every
+  /// participant created from here on — see docs/registration.md.
+  gender Gender @map("gender")
 
   /// Contact information, never a credential. Stored in the canonical
   /// +213XXXXXXXXX form produced by normalizePhoneNumber(), so one person
   /// cannot become two identities by typing 0555… one year and +213555…
-  /// the next.
-  phoneNumber String? @map("phone_number")
+  /// the next. Required for every participant created from here on.
+  phoneNumber String @map("phone_number")
 
   /// Reserved for a future verification flow. Nothing sets it yet — there is
   /// no OTP in this system, and a phone number is not proof of identity.
@@ -1436,11 +1446,18 @@ model ImportRow {
   /// second identity for somebody already known.
   nationalId String? @map("national_id")
 
-  fullName    String?   @map("full_name")
-  dob         DateTime? @db.Date
+  /// Staged the same way the live registry is, but nullable throughout: a
+  /// paper register may transcribe only one script, or misspell a header, and
+  /// staging must still hold what the file actually said.
+  firstNameAr    String? @map("first_name_ar")
+  lastNameAr     String? @map("last_name_ar")
+  firstNameLatin String? @map("first_name_latin")
+  lastNameLatin  String? @map("last_name_latin")
+
+  dob DateTime? @db.Date
   /// Canonical +213XXXXXXXXX, or null. Optional throughout: a paper register
   /// from 2009 has no phone number, and nothing here depends on one.
-  phoneNumber String?   @map("phone_number")
+  phoneNumber String? @map("phone_number")
 
   /// The commune code as written, kept alongside the commune it resolved to so a
   /// reviewer can see what the register actually said.

@@ -1,30 +1,25 @@
 import { z } from 'zod'
 import { APPLICANT_GENDERS } from '@hajj-lottery/shared'
 
-import { isValidPhoneNumber, normalizePhoneNumber } from '../lib/phone.js'
-import { dobSchema, fullNameSchema, nationalIdSchema } from './participant.js'
-
-/**
- * Optional contact number, normalized to `+213XXXXXXXXX`. An empty string is
- * treated as "not supplied" rather than rejected, because a blank optional
- * input is what a browser sends for an untouched field.
- */
-export const phoneNumberSchema = z
-  .string()
-  .transform((value) => value.trim())
-  .transform((value) => (value === '' ? undefined : normalizePhoneNumber(value)))
-  .refine((value) => value === undefined || isValidPhoneNumber(value), {
-    message: 'Enter an Algerian mobile number, for example 0555 12 34 56',
-  })
+import {
+  arabicNameSchema,
+  dobSchema,
+  latinNameSchema,
+  nationalIdSchema,
+  phoneNumberSchema,
+} from './participant.js'
 
 /** One applicant's identity, shared by the primary and secondary slots. */
 const applicantSchema = z
   .object({
     nationalId: nationalIdSchema,
-    fullName: fullNameSchema,
+    firstNameAr: arabicNameSchema,
+    lastNameAr: arabicNameSchema,
+    firstNameLatin: latinNameSchema,
+    lastNameLatin: latinNameSchema,
     dob: dobSchema,
     gender: z.enum(APPLICANT_GENDERS),
-    phoneNumber: phoneNumberSchema.optional(),
+    phoneNumber: phoneNumberSchema,
   })
   .strict()
 

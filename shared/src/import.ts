@@ -75,7 +75,10 @@ export function blocksImport(status: ImportRowStatus): boolean {
  */
 export const REQUIRED_IMPORT_COLUMNS = [
   'national_id',
-  'full_name',
+  'first_name_ar',
+  'last_name_ar',
+  'first_name_latin',
+  'last_name_latin',
   'dob',
   'commune_code',
   'draw_year',
@@ -100,7 +103,10 @@ export type ImportColumn = RequiredImportColumn | OptionalImportColumn
  */
 export const IMPORT_COLUMN_ALIASES: Record<ImportColumn, readonly string[]> = {
   national_id: ['national_id', 'nin', 'nni', 'numero_national', 'رقم_التعريف_الوطني', 'رقم_وطني'],
-  full_name: ['full_name', 'name', 'nom', 'nom_complet', 'nom_et_prenom', 'الاسم', 'الاسم_الكامل'],
+  first_name_ar: ['first_name_ar', 'prenom_ar', 'الاسم_الأول', 'الاسم_بالعربية'],
+  last_name_ar: ['last_name_ar', 'nom_ar', 'اللقب', 'اللقب_بالعربية', 'اسم_العائلة'],
+  first_name_latin: ['first_name_latin', 'first_name', 'prenom', 'prénom', 'given_name'],
+  last_name_latin: ['last_name_latin', 'last_name', 'nom', 'surname', 'family_name'],
   dob: ['dob', 'date_of_birth', 'date_naissance', 'date_de_naissance', 'تاريخ_الميلاد'],
   commune_code: ['commune_code', 'code_commune', 'commune', 'رمز_البلدية', 'البلدية'],
   draw_year: ['draw_year', 'year', 'annee', 'année', 'annee_tirage', 'السنة', 'سنة_القرعة'],
@@ -161,7 +167,14 @@ export const IMPORT_ISSUE_CODES = [
   // The row does not say something it must.
   'MISSING_NATIONAL_ID',
   'INVALID_NATIONAL_ID',
-  'MISSING_FULL_NAME',
+  'MISSING_FIRST_NAME_AR',
+  'MISSING_LAST_NAME_AR',
+  'MISSING_FIRST_NAME_LATIN',
+  'MISSING_LAST_NAME_LATIN',
+  'INVALID_FIRST_NAME_AR',
+  'INVALID_LAST_NAME_AR',
+  'INVALID_FIRST_NAME_LATIN',
+  'INVALID_LAST_NAME_LATIN',
   'MISSING_DOB',
   'INVALID_DOB',
   'MISSING_COMMUNE_CODE',
@@ -192,6 +205,16 @@ export const IMPORT_ISSUE_CODES = [
   'CONFLICTS_WITH_EXISTING_HISTORY',
   'ALREADY_A_WINNER',
   'CONTRADICTS_WINNER_CHRONOLOGY',
+
+  /**
+   * The national ID matches nobody the registry already knows, so this row
+   * would create a new participant — and every new participant needs a
+   * gender and a phone number. Neither is inferred; a row lacking one is
+   * blocked until it is corrected, exactly as it would be for a fresh
+   * registration.
+   */
+  'MISSING_GENDER_FOR_NEW_PARTICIPANT',
+  'MISSING_PHONE_NUMBER_FOR_NEW_PARTICIPANT',
 
   // Contact details, which are never load-bearing.
   'INVALID_PHONE_NUMBER',
@@ -251,7 +274,10 @@ export interface ImportRowDto {
   status: ImportRowStatus
   /** Last four digits only — enough to find the row in the register, useless alone. */
   nationalIdSuffix: string
-  fullName: string
+  firstNameAr: string
+  lastNameAr: string
+  firstNameLatin: string
+  lastNameLatin: string
   communeCode: string
   drawYear: number | null
   participated: boolean | null

@@ -17,6 +17,7 @@ import {
   TEST_PASSWORD,
   type TestGeography,
 } from './helpers/admins.js'
+import { buildApplicant, participantFixture } from './helpers/participants.js'
 
 const prisma = new PrismaClient()
 
@@ -52,7 +53,7 @@ const auditVia = (cookie: string, query = '') =>
 /** One participant with one historical record, in the given commune. */
 async function historyRecord(communeId: string, drawYearValue = YEAR - 1) {
   const participant = await prisma.participant.create({
-    data: { nationalId: nationalId(), fullName: 'Ledger Subject', dob: new Date('1980-04-12') },
+    data: participantFixture(nationalId(), { lastNameLatin: 'Ledger Subject', dob: new Date('1980-04-12') }),
   })
 
   return participationHistoryService.create({
@@ -90,6 +91,8 @@ describe('what may be written to the trail', () => {
       { apiKey: 'x' },
       { dob: '1980-04-12' },
       { fullName: 'Somebody' },
+      { firstNameAr: 'أحمد' },
+      { lastNameLatin: 'Somebody' },
       { nested: { deeper: { national_id: '1' } } },
     ]) {
       // Refusing beats redacting: a silently stripped field leaves a record that
@@ -427,7 +430,7 @@ describe('the lottery is audited', () => {
           entryType: 'SINGLE',
           wilayaId: geo.wilayaA.id,
           communeId: geo.communeA1.id,
-          primary: { nationalId: nationalId(), fullName: 'Draw Subject', dob: '1980-04-12', gender: 'MALE' },
+          primary: buildApplicant(nationalId(), { dob: '1980-04-12', gender: 'MALE' }),
         })
       if (response.status !== 201) throw new Error(`Registration failed: ${response.status}`)
 

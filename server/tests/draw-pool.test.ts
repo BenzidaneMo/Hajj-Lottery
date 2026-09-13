@@ -9,6 +9,7 @@ import { drawPoolService } from '../src/services/draw-pool.service.js'
 import { participationHistoryService } from '../src/services/participation-history.service.js'
 import { weightService } from '../src/services/weight.service.js'
 import { AdminRole, createAdminAndSignIn, ensureTestGeography, type TestGeography } from './helpers/admins.js'
+import { buildApplicant } from './helpers/participants.js'
 
 const prisma = new PrismaClient()
 
@@ -41,7 +42,7 @@ async function registerAndWeigh(
     entryType: 'SINGLE',
     wilayaId,
     communeId,
-    primary: { nationalId: id, fullName: 'Pool Subject', dob: '1980-04-12', gender: 'MALE' },
+    primary: buildApplicant(id, { dob: '1980-04-12', gender: 'MALE' }),
   })
   if (response.status !== 201) {
     throw new Error(`Registration failed: ${response.status} ${JSON.stringify(response.body)}`)
@@ -604,7 +605,15 @@ describe('the frozen pool is immutable', () => {
     `
     const names = columns.map((c) => c.column_name)
 
-    for (const leaked of ['full_name', 'national_id', 'dob', 'phone_number']) {
+    for (const leaked of [
+      'first_name_ar',
+      'last_name_ar',
+      'first_name_latin',
+      'last_name_latin',
+      'national_id',
+      'dob',
+      'phone_number',
+    ]) {
       expect(names).not.toContain(leaked)
     }
     expect(pool.entryCount).toBe(1)

@@ -23,9 +23,12 @@ import type { CreateApplicationInput } from '../validation/application.js'
 /** One applicant after validation: identity fields already canonical. */
 interface ApplicantData {
   nationalId: string
-  fullName: string
+  firstNameAr: string
+  lastNameAr: string
+  firstNameLatin: string
+  lastNameLatin: string
   dob: Date
-  phoneNumber?: string | undefined
+  phoneNumber: string
   gender: 'MALE' | 'FEMALE'
 }
 
@@ -239,23 +242,18 @@ async function findOrCreateParticipant(
   const existing = await tx.participant.findUnique({
     where: { nationalId: applicant.nationalId },
   })
-  if (existing) {
-    if (existing.gender === null) {
-      return tx.participant.update({
-        where: { id: existing.id },
-        data: { gender: applicant.gender },
-      })
-    }
-    return existing
-  }
+  if (existing) return existing
 
   return tx.participant.create({
     data: {
       nationalId: applicant.nationalId,
-      fullName: applicant.fullName,
+      firstNameAr: applicant.firstNameAr,
+      lastNameAr: applicant.lastNameAr,
+      firstNameLatin: applicant.firstNameLatin,
+      lastNameLatin: applicant.lastNameLatin,
       dob: applicant.dob,
       gender: applicant.gender,
-      phoneNumber: applicant.phoneNumber ?? null,
+      phoneNumber: applicant.phoneNumber,
       // hasWonHajj and phoneVerifiedAt keep their defaults. Neither is
       // settable from a public form.
     },

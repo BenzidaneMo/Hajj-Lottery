@@ -11,6 +11,7 @@ import { mapHeaders, parseImportBoolean, parseImportDate } from '../src/lib/impo
 import { neutralizeSpreadsheetText } from '../src/lib/spreadsheet-safety.js'
 import { participationHistoryService } from '../src/services/participation-history.service.js'
 import { AdminRole, createAdminAndSignIn, ensureTestGeography, type TestGeography } from './helpers/admins.js'
+import { participantFixture } from './helpers/participants.js'
 
 const prisma = new PrismaClient()
 
@@ -20,7 +21,24 @@ let geo: TestGeography
 /** Comfortably in the past, and clear of the years other suites configure. */
 const YEAR = 2022
 
-const HEADER = ['national_id', 'full_name', 'dob', 'commune_code', 'draw_year', 'participated', 'won']
+// gender and phone_number are part of the base header (not appended per-test)
+// so that a plain `line()` always carries what a brand-new participant needs
+// — see MISSING_GENDER_FOR_NEW_PARTICIPANT / MISSING_PHONE_NUMBER_FOR_NEW_PARTICIPANT
+// below. A test that wants to exercise their absence overrides them to ''.
+const HEADER = [
+  'national_id',
+  'first_name_ar',
+  'last_name_ar',
+  'first_name_latin',
+  'last_name_latin',
+  'dob',
+  'commune_code',
+  'draw_year',
+  'participated',
+  'won',
+  'gender',
+  'phone_number',
+]
 
 let nextId = 0
 function nationalId(): string {
@@ -28,20 +46,29 @@ function nationalId(): string {
   return `61000000000000${String(nextId).padStart(4, '0')}`
 }
 
-/** One well-formed line. Overrides replace individual cells. */
-function line(overrides: Partial<Record<(typeof HEADER)[number], string>> = {}): string[] {
-  const values: Record<string, string> = {
+/** One well-formed row's values, keyed by column. Overrides replace individual cells. */
+function values(overrides: Record<string, string> = {}): Record<string, string> {
+  return {
     national_id: nationalId(),
-    full_name: 'Amine Belkacem',
+    first_name_ar: 'أمين',
+    last_name_ar: 'بلقاسم',
+    first_name_latin: 'Amine',
+    last_name_latin: 'Belkacem',
     dob: '1980-04-12',
     commune_code: '90101',
     draw_year: String(YEAR),
     participated: 'true',
     won: 'false',
+    gender: 'male',
+    phone_number: '0555123456',
     ...overrides,
   }
+}
 
-  return HEADER.map((column) => values[column] ?? '')
+/** One well-formed line, as an array in `header`'s column order (default: the base HEADER). */
+function line(overrides: Record<string, string> = {}, header: string[] = HEADER): string[] {
+  const row = values(overrides)
+  return header.map((column) => row[column] ?? '')
 }
 
 function csv(rows: string[][], header: string[] = HEADER): Buffer {
@@ -88,7 +115,10 @@ async function rowsOf(cookie: string, batchId: string) {
   return response.body.items as {
     rowNumber: number
     status: string
-    fullName: string
+    firstNameAr: string
+    lastNameAr: string
+    firstNameLatin: string
+    lastNameLatin: string
     nationalIdSuffix: string
     issues: { code: string; column: string | null }[]
   }[]
@@ -123,13 +153,30 @@ async function importFully(rows: string[][], uploader?: { cookie: string }) {
   return { batchId, executed, reviewer, owner }
 }
 
-async function aParticipant(overrides: { nationalId?: string; fullName?: string; dob?: string } = {}) {
+async function aParticipant(
+  overrides: {
+    nationalId?: string
+    firstNameAr?: string
+    lastNameAr?: string
+    firstNameLatin?: string
+    lastNameLatin?: string
+    dob?: string
+    gender?: 'MALE' | 'FEMALE'
+    phoneNumber?: string
+  } = {},
+) {
+  const { nationalId: id, dob, ...rest } = overrides
   return prisma.participant.create({
-    data: {
-      nationalId: overrides.nationalId ?? nationalId(),
-      fullName: overrides.fullName ?? 'Amine Belkacem',
-      dob: new Date(overrides.dob ?? '1980-04-12'),
-    },
+    data: participantFixture(id ?? nationalId(), {
+      firstNameAr: 'أمين',
+      lastNameAr: 'بلقاسم',
+      firstNameLatin: 'Amine',
+      lastNameLatin: 'Belkacem',
+      // Matches line()'s own default dob, so a test that overrides neither
+      // does not accidentally manufacture an IDENTITY_CONFLICT.
+      dob: new Date(dob ?? '1980-04-12'),
+      ...rest,
+    }),
   })
 }
 
@@ -212,7 +259,7 @@ describe('reading the file', () => {
     const { cookie } = await superAdmin()
     const header = HEADER.filter((column) => column !== 'won')
 
-    const response = await upload(cookie, csv([line().slice(0, 6)], header))
+    const response = await upload(cookie, csv([line({}, header)], header))
 
     expect(response.status).toBe(400)
     expect(response.body.code).toBe('INVALID_IMPORT_TEMPLATE')
@@ -222,7 +269,10 @@ describe('reading the file', () => {
   it('maps the documented aliases and ignores unknown headers', () => {
     const mapping = mapHeaders([
       'Numéro national',
-      'Nom complet',
+      'Prenom AR',
+      'Nom AR',
+      'Prénom',
+      'Nom',
       'Date de naissance',
       'Code commune',
       'Année',
@@ -233,7 +283,11 @@ describe('reading the file', () => {
 
     expect(mapping.missing).toEqual([])
     expect(mapping.columns.national_id).toBe(0)
-    expect(mapping.columns.won).toBe(6)
+    expect(mapping.columns.first_name_ar).toBe(1)
+    expect(mapping.columns.last_name_ar).toBe(2)
+    expect(mapping.columns.first_name_latin).toBe(3)
+    expect(mapping.columns.last_name_latin).toBe(4)
+    expect(mapping.columns.won).toBe(9)
     // Not guessed at, not turned into a field — reported and dropped.
     expect(mapping.ignored).toEqual(['Colonne inconnue'])
   })
@@ -249,12 +303,12 @@ describe('reading the file', () => {
 
   it('refuses a formula rather than evaluating it', async () => {
     const { cookie } = await superAdmin()
-    const batchId = await stage(cookie, [line({ full_name: '=1+1' })])
+    const batchId = await stage(cookie, [line({ first_name_ar: '=1+1' })])
 
     const [row] = await rowsOf(cookie, batchId)
     expect(codesOn(row!)).toContain('FORMULA_CELL')
     // And what comes back is inert text, not something a spreadsheet would run.
-    expect(row!.fullName.startsWith("'")).toBe(true)
+    expect(row!.firstNameAr.startsWith("'")).toBe(true)
     expect(neutralizeSpreadsheetText('=HYPERLINK("http://x")')).toBe('\'=HYPERLINK("http://x")')
   })
 
@@ -277,7 +331,7 @@ describe('reading the file', () => {
     const [staged] = await rowsOf(cookie, response.body.id)
     expect(codesOn(staged!)).toContain('FORMULA_CELL')
     // The cached result is whatever some other machine computed. It is not used.
-    expect(staged!.fullName).not.toBe('Innocent Name')
+    expect(staged!.firstNameAr).not.toBe('Innocent Name')
   })
 })
 
@@ -385,13 +439,45 @@ describe('what a row must say', () => {
 
   it('treats a phone number as contact information, not a reason to refuse a life of waiting', async () => {
     const { cookie } = await superAdmin()
-    const header = [...HEADER, 'phone_number']
-    const batchId = await stage(cookie, [[...line(), 'not a number']], header)
+    // An existing participant: a malformed phone here cannot block on the
+    // separate new-participant requirement below, which is exactly the case
+    // this property is about — nothing dials this number regardless.
+    const participant = await aParticipant()
+    const batchId = await stage(cookie, [
+      line({ national_id: participant.nationalId, phone_number: 'not a number' }),
+    ])
 
     const [row] = await rowsOf(cookie, batchId)
     expect(codesOn(row!)).toContain('INVALID_PHONE_NUMBER')
     // A warning, so the historical record still imports.
     expect(row!.status).toBe('WARNING')
+  })
+
+  it('blocks a new participant whose gender or phone number cannot be established', async () => {
+    const { cookie } = await superAdmin()
+
+    const noGender = await stage(cookie, [line({ gender: '' })])
+    const [genderRow] = await rowsOf(cookie, noGender)
+    expect(codesOn(genderRow!)).toContain('MISSING_GENDER_FOR_NEW_PARTICIPANT')
+    expect(genderRow!.status).toBe('INVALID')
+
+    const noPhone = await stage(cookie, [line({ phone_number: '' })])
+    const [phoneRow] = await rowsOf(cookie, noPhone)
+    expect(codesOn(phoneRow!)).toContain('MISSING_PHONE_NUMBER_FOR_NEW_PARTICIPANT')
+    expect(phoneRow!.status).toBe('INVALID')
+  })
+
+  it('does not require gender or phone for a row matching an existing participant', async () => {
+    const { cookie } = await superAdmin()
+    const participant = await aParticipant()
+
+    const batchId = await stage(cookie, [
+      line({ national_id: participant.nationalId, gender: '', phone_number: '' }),
+    ])
+
+    const [row] = await rowsOf(cookie, batchId)
+    expect(codesOn(row!)).not.toContain('MISSING_GENDER_FOR_NEW_PARTICIPANT')
+    expect(codesOn(row!)).not.toContain('MISSING_PHONE_NUMBER_FOR_NEW_PARTICIPANT')
   })
 })
 
@@ -516,10 +602,19 @@ describe('duplicates against the database', () => {
 describe('identity matching', () => {
   it('flags a name or date of birth that disagrees with the registry', async () => {
     const { cookie } = await superAdmin()
-    const participant = await aParticipant({ fullName: 'Ahmed Ben Ali', dob: '1980-05-10' })
+    const participant = await aParticipant({
+      firstNameLatin: 'Ahmed',
+      lastNameLatin: 'Ben Ali',
+      dob: '1980-05-10',
+    })
 
     const batchId = await stage(cookie, [
-      line({ national_id: participant.nationalId, full_name: 'Ahmed Ali', dob: '1981-05-10' }),
+      line({
+        national_id: participant.nationalId,
+        first_name_latin: 'Ahmed',
+        last_name_latin: 'Ali',
+        dob: '1981-05-10',
+      }),
     ])
 
     const [row] = await rowsOf(cookie, batchId)
@@ -529,10 +624,14 @@ describe('identity matching', () => {
 
   it('treats case and spacing as transcription noise rather than a different person', async () => {
     const { cookie } = await superAdmin()
-    const participant = await aParticipant({ fullName: 'Ahmed Ben Ali' })
+    const participant = await aParticipant({ firstNameLatin: 'Ahmed', lastNameLatin: 'Ben Ali' })
 
     const batchId = await stage(cookie, [
-      line({ national_id: participant.nationalId, full_name: '  ahmed   ben ali ' }),
+      line({
+        national_id: participant.nationalId,
+        first_name_latin: '  ahmed ',
+        last_name_latin: '  ben   ali ',
+      }),
     ])
 
     const [row] = await rowsOf(cookie, batchId)
@@ -540,17 +639,26 @@ describe('identity matching', () => {
   })
 
   it('never overwrites an existing participant', async () => {
-    const participant = await aParticipant({ fullName: 'Ahmed Ben Ali', dob: '1980-05-10' })
+    const participant = await aParticipant({
+      firstNameLatin: 'Ahmed',
+      lastNameLatin: 'Ben Ali',
+      dob: '1980-05-10',
+    })
 
     // The name matches, so nothing blocks; the register's own spelling and phone
     // still must not revise the registry.
     const { executed } = await importFully([
-      line({ national_id: participant.nationalId, full_name: 'AHMED BEN ALI', dob: '1980-05-10' }),
+      line({
+        national_id: participant.nationalId,
+        first_name_latin: 'AHMED',
+        last_name_latin: 'BEN ALI',
+        dob: '1980-05-10',
+      }),
     ])
 
     expect(executed.status).toBe(200)
     const after = await prisma.participant.findUniqueOrThrow({ where: { id: participant.id } })
-    expect(after.fullName).toBe('Ahmed Ben Ali')
+    expect(after.lastNameLatin).toBe('Ben Ali')
     expect(after.updatedAt.getTime()).toBe(participant.updatedAt.getTime())
   })
 
@@ -780,10 +888,10 @@ describe('the import itself', () => {
     const id = nationalId()
 
     await importFully([
-      line({ national_id: id, draw_year: '2020', full_name: 'Patient Person' }),
-      line({ national_id: id, draw_year: '2021', full_name: 'Patient Person' }),
-      line({ national_id: id, draw_year: '2022', full_name: 'Patient Person' }),
-      line({ national_id: id, draw_year: '2023', full_name: 'Patient Person' }),
+      line({ national_id: id, draw_year: '2020', last_name_latin: 'Patient Person' }),
+      line({ national_id: id, draw_year: '2021', last_name_latin: 'Patient Person' }),
+      line({ national_id: id, draw_year: '2022', last_name_latin: 'Patient Person' }),
+      line({ national_id: id, draw_year: '2023', last_name_latin: 'Patient Person' }),
     ])
 
     const participant = await prisma.participant.findUniqueOrThrow({ where: { nationalId: id } })
@@ -800,7 +908,7 @@ describe('the import itself', () => {
 
     const batchId = await stage(owner.cookie, [
       line({ national_id: winner.nationalId, won: 'true' }),
-      line({ full_name: 'Somebody Entirely New' }),
+      line({ last_name_latin: 'Somebody Entirely New' }),
     ])
 
     await request(app)
@@ -821,7 +929,7 @@ describe('the import itself', () => {
 
     // Nothing at all: not the other row's participant, not a single ledger row,
     // and not the claim on the batch.
-    expect(await prisma.participant.count({ where: { fullName: 'Somebody Entirely New' } })).toBe(0)
+    expect(await prisma.participant.count({ where: { lastNameLatin: 'Somebody Entirely New' } })).toBe(0)
     expect(await prisma.participationHistory.count()).toBe(0)
     expect(await prisma.legacyWinner.count()).toBe(0)
     expect(await prisma.importBatch.findUniqueOrThrow({ where: { id: batchId } })).toMatchObject({
@@ -1124,7 +1232,9 @@ describe('auditing', () => {
     const serialized = JSON.stringify(trail)
     expect(serialized).toContain('sourceChecksum')
     expect(serialized).not.toContain(id)
-    expect(serialized).not.toContain('Amine Belkacem')
+    expect(serialized).not.toContain('Amine')
+    expect(serialized).not.toContain('Belkacem')
+    expect(serialized).not.toContain('أمين')
     expect(serialized).not.toContain('1980-04-12')
   })
 
@@ -1172,7 +1282,8 @@ describe('the summary an administrator reviews', () => {
       line(),
       line({
         national_id: existing.nationalId,
-        full_name: existing.fullName,
+        first_name_latin: existing.firstNameLatin,
+        last_name_latin: existing.lastNameLatin,
         dob: '1980-04-12',
         won: 'true',
       }),

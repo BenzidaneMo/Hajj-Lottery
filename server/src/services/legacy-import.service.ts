@@ -211,7 +211,10 @@ export class LegacyImportService {
           importBatchId: batch.id,
           rowNumber: row.rowNumber,
           nationalId: row.values.nationalId,
-          fullName: row.values.fullName,
+          firstNameAr: row.values.firstNameAr,
+          lastNameAr: row.values.lastNameAr,
+          firstNameLatin: row.values.firstNameLatin,
+          lastNameLatin: row.values.lastNameLatin,
           dob: row.values.dob,
           phoneNumber: row.values.phoneNumber,
           communeCode: row.values.communeCode,
@@ -308,7 +311,10 @@ export class LegacyImportService {
         select: {
           id: true,
           nationalId: true,
-          fullName: true,
+          firstNameAr: true,
+          lastNameAr: true,
+          firstNameLatin: true,
+          lastNameLatin: true,
           dob: true,
           phoneNumber: true,
           hasWonHajj: true,
@@ -318,7 +324,10 @@ export class LegacyImportService {
       for (const participant of participants) {
         const entry = {
           id: participant.id,
-          fullName: participant.fullName,
+          firstNameAr: participant.firstNameAr,
+          lastNameAr: participant.lastNameAr,
+          firstNameLatin: participant.firstNameLatin,
+          lastNameLatin: participant.lastNameLatin,
           dob: participant.dob,
           phoneNumber: participant.phoneNumber,
           hasWonHajj: participant.hasWonHajj,
@@ -717,16 +726,35 @@ export class LegacyImportService {
     tx: Prisma.TransactionClient,
     rows: readonly { row: ImportRow }[],
   ): Promise<{ idByNationalId: Map<string, string>; created: number; reused: number }> {
-    const identities = new Map<
-      string,
-      { fullName: string; dob: Date; phoneNumber: string | null; gender: 'MALE' | 'FEMALE' | null }
-    >()
+    interface StagedIdentity {
+      firstNameAr: string
+      lastNameAr: string
+      firstNameLatin: string
+      lastNameLatin: string
+      dob: Date
+      phoneNumber: string | null
+      gender: 'MALE' | 'FEMALE' | null
+    }
+
+    const identities = new Map<string, StagedIdentity>()
 
     for (const { row } of rows) {
-      if (!row.nationalId || !row.fullName || !row.dob) continue
+      if (
+        !row.nationalId ||
+        !row.firstNameAr ||
+        !row.lastNameAr ||
+        !row.firstNameLatin ||
+        !row.lastNameLatin
+      ) {
+        continue
+      }
+      if (!row.dob) continue
       if (!identities.has(row.nationalId)) {
         identities.set(row.nationalId, {
-          fullName: row.fullName,
+          firstNameAr: row.firstNameAr,
+          lastNameAr: row.lastNameAr,
+          firstNameLatin: row.firstNameLatin,
+          lastNameLatin: row.lastNameLatin,
           dob: row.dob,
           phoneNumber: row.phoneNumber,
           gender: row.gender,
@@ -751,15 +779,29 @@ export class LegacyImportService {
     for (let index = 0; index < missing.length; index += CHUNK) {
       await tx.participant.createMany({
         data: missing.slice(index, index + CHUNK).map((nationalId) => {
-          const identity = identities.get(nationalId) as {
-            fullName: string
-            dob: Date
-            phoneNumber: string | null
-            gender: 'MALE' | 'FEMALE' | null
+          const identity = identities.get(nationalId) as StagedIdentity
+
+          // Gender and phone should already be guaranteed present for any row
+          // that reaches here — validation blocks a new-participant row that
+          // lacks either (MISSING_GENDER_FOR_NEW_PARTICIPANT /
+          // MISSING_PHONE_NUMBER_FOR_NEW_PARTICIPANT) well before execution.
+          // Checked again here rather than trusted, because a Participant
+          // column being NOT NULL means a bug in that earlier check would
+          // otherwise surface as an opaque database error instead of this
+          // one, readable message.
+          if (identity.gender === null || identity.phoneNumber === null) {
+            throw new ConflictError(
+              'IMPORT_HAS_CONFLICTS',
+              `A new participant (national ID ending ${nationalId.slice(-4)}) is missing a gender or phone number`,
+            )
           }
+
           return {
             nationalId,
-            fullName: identity.fullName,
+            firstNameAr: identity.firstNameAr,
+            lastNameAr: identity.lastNameAr,
+            firstNameLatin: identity.firstNameLatin,
+            lastNameLatin: identity.lastNameLatin,
             dob: identity.dob,
             gender: identity.gender,
             // Recorded because it is contact information the register carried.
@@ -1066,7 +1108,10 @@ function toStagedRow(row: ImportRow): StagedRow {
     rowNumber: row.rowNumber,
     values: {
       nationalId: row.nationalId,
-      fullName: row.fullName,
+      firstNameAr: row.firstNameAr,
+      lastNameAr: row.lastNameAr,
+      firstNameLatin: row.firstNameLatin,
+      lastNameLatin: row.lastNameLatin,
       dob: row.dob,
       phoneNumber: row.phoneNumber,
       communeCode: row.communeCode,

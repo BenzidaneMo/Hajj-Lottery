@@ -63,9 +63,36 @@ function validate(): void {
  * locally, and are skipped entirely in production.
  */
 const DEV_PARTICIPANTS = [
-  { nationalId: '000000000000000001', fullName: 'DEV TEST — Participant One', dob: '1980-01-01' },
-  { nationalId: '000000000000000002', fullName: 'DEV TEST — Participant Two', dob: '1975-06-15' },
-  { nationalId: '000000000000000003', fullName: 'DEV TEST — Participant Three', dob: '1990-11-30' },
+  {
+    nationalId: '000000000000000001',
+    firstNameAr: 'اختبار',
+    lastNameAr: 'مشارك واحد',
+    firstNameLatin: 'DEV TEST',
+    lastNameLatin: 'Participant One',
+    dob: '1980-01-01',
+    gender: 'MALE' as const,
+    phoneNumber: '+213555000001',
+  },
+  {
+    nationalId: '000000000000000002',
+    firstNameAr: 'اختبار',
+    lastNameAr: 'مشارك اثنان',
+    firstNameLatin: 'DEV TEST',
+    lastNameLatin: 'Participant Two',
+    dob: '1975-06-15',
+    gender: 'FEMALE' as const,
+    phoneNumber: '+213555000002',
+  },
+  {
+    nationalId: '000000000000000003',
+    firstNameAr: 'اختبار',
+    lastNameAr: 'مشارك ثلاثة',
+    firstNameLatin: 'DEV TEST',
+    lastNameLatin: 'Participant Three',
+    dob: '1990-11-30',
+    gender: 'MALE' as const,
+    phoneNumber: '+213555000003',
+  },
 ]
 
 async function seedDevParticipants(): Promise<void> {
@@ -76,13 +103,23 @@ async function seedDevParticipants(): Promise<void> {
 
   console.log(`Seeding ${DEV_PARTICIPANTS.length} development participants...`)
   for (const p of DEV_PARTICIPANTS) {
+    const fields = {
+      firstNameAr: p.firstNameAr,
+      lastNameAr: p.lastNameAr,
+      firstNameLatin: p.firstNameLatin,
+      lastNameLatin: p.lastNameLatin,
+      gender: p.gender,
+      phoneNumber: p.phoneNumber,
+    }
     await prisma.participant.upsert({
       where: { nationalId: p.nationalId },
-      update: { fullName: p.fullName },
+      // A re-run converges dev fixtures to the current seed definition rather
+      // than leaving a stale partial row from before a field was added.
+      update: fields,
       // hasWonHajj is left at its default; only winner processing may set it.
       create: {
         nationalId: p.nationalId,
-        fullName: p.fullName,
+        ...fields,
         dob: new Date(`${p.dob}T00:00:00.000Z`),
       },
     })

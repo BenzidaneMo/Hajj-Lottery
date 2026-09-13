@@ -83,8 +83,9 @@ export const listApplications: RequestHandler = async (req, res) => {
  *
  * Carries the applicants, because an administrator serving a citizen at a
  * counter needs to know who is on the application. It carries only the last
- * four digits of a national ID and no phone number at all: enough to confirm
- * the person in front of you, not enough to copy an identity out of a screen.
+ * four digits of a national ID — enough to confirm the person in front of
+ * you, not enough to copy an identity out of a screen — but does carry
+ * gender and phone, which the Mahram rule and future contact workflows need.
  */
 export const getApplication: RequestHandler = async (req, res) => {
   const applicationId = req.params.id
@@ -160,9 +161,14 @@ function toApplicationDetailDto(application: ApplicationWithApplicants): AdminAp
     applicants: application.participants.map((link): AdminApplicantDto => ({
       participantId: link.participantId,
       role: link.role,
-      fullName: link.participant.fullName,
+      firstNameAr: link.participant.firstNameAr,
+      lastNameAr: link.participant.lastNameAr,
+      firstNameLatin: link.participant.firstNameLatin,
+      lastNameLatin: link.participant.lastNameLatin,
       nationalIdSuffix: link.participant.nationalId.slice(-4),
       dob: link.participant.dob.toISOString().slice(0, 10),
+      gender: link.participant.gender,
+      phoneNumber: link.participant.phoneNumber,
       hasWonHajj: link.participant.hasWonHajj,
     })),
     updatedAt: application.updatedAt.toISOString(),
@@ -172,9 +178,13 @@ function toApplicationDetailDto(application: ApplicationWithApplicants): AdminAp
 function toParticipantSummaryDto(participant: Participant): AdminParticipantSummaryDto {
   return {
     id: participant.id,
-    fullName: participant.fullName,
+    firstNameAr: participant.firstNameAr,
+    lastNameAr: participant.lastNameAr,
+    firstNameLatin: participant.firstNameLatin,
+    lastNameLatin: participant.lastNameLatin,
     nationalId: participant.nationalId,
     dob: participant.dob.toISOString().slice(0, 10),
+    gender: participant.gender,
     phoneNumber: participant.phoneNumber,
     hasWonHajj: participant.hasWonHajj,
     createdAt: participant.createdAt.toISOString(),

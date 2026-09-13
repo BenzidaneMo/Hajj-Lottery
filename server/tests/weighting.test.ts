@@ -13,6 +13,7 @@ import {
   ensureTestGeography,
   type TestGeography,
 } from './helpers/admins.js'
+import { buildApplicant } from './helpers/participants.js'
 
 const prisma = new PrismaClient()
 
@@ -30,7 +31,7 @@ const NATIONAL_IDS = {
 }
 
 function applicant(nationalId: string, overrides: Record<string, unknown> = {}) {
-  return { nationalId, fullName: 'Weight Subject', dob: '1980-04-12', gender: 'MALE', ...overrides }
+  return buildApplicant(nationalId, { dob: '1980-04-12', gender: 'MALE', ...overrides })
 }
 
 const submit = (body: Record<string, unknown>) => request(app).post('/api/applications').send(body)
@@ -51,7 +52,7 @@ function pairedBody(overrides: Record<string, unknown> = {}) {
     wilayaId: geo.wilayaA.id,
     communeId: geo.communeA1.id,
     primary: applicant(NATIONAL_IDS.ahmed, { gender: 'FEMALE' }),
-    secondary: applicant(NATIONAL_IDS.fatima, { fullName: 'Second Applicant', gender: 'MALE' }),
+    secondary: applicant(NATIONAL_IDS.fatima, { gender: 'MALE' }),
     ...overrides,
   }
 }

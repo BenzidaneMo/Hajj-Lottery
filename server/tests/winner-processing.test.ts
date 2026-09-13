@@ -10,6 +10,7 @@ import { LotteryService } from '../src/services/lottery.service.js'
 import { participationHistoryService } from '../src/services/participation-history.service.js'
 import { weightService } from '../src/services/weight.service.js'
 import { AdminRole, createAdminAndSignIn, ensureTestGeography, type TestGeography } from './helpers/admins.js'
+import { buildApplicant } from './helpers/participants.js'
 
 const prisma = new PrismaClient()
 
@@ -46,20 +47,10 @@ async function register(
     // A pair is specifically a female primary and her male Mahram; a single
     // entry stays male so the (optional-above-45, required-below) Mahram rule
     // never enters into it.
-    primary: {
-      nationalId: primaryId,
-      fullName: 'Winner Subject',
-      dob: '1980-04-12',
-      gender: options.paired ? 'FEMALE' : 'MALE',
-    },
+    primary: buildApplicant(primaryId, { dob: '1980-04-12', gender: options.paired ? 'FEMALE' : 'MALE' }),
   }
   if (options.paired) {
-    body.secondary = {
-      nationalId: nationalId(),
-      fullName: 'Winner Partner',
-      dob: '1982-06-30',
-      gender: 'MALE',
-    }
+    body.secondary = buildApplicant(nationalId(), { dob: '1982-06-30', gender: 'MALE' })
   }
 
   const response = await request(app).post('/api/applications').send(body)
@@ -475,12 +466,7 @@ describe('lifetime exclusion', () => {
         entryType: 'SINGLE',
         wilayaId: geo.wilayaA.id,
         communeId: geo.communeA1.id,
-        primary: {
-          nationalId: participant.nationalId,
-          fullName: participant.fullName,
-          dob: '1980-04-12',
-          gender: 'MALE',
-        },
+        primary: buildApplicant(participant.nationalId, { dob: '1980-04-12', gender: 'MALE' }),
       })
 
     expect(response.status).toBe(422)
@@ -965,7 +951,15 @@ describe('a completed result is immutable', () => {
     `
     const names = columns.map((column) => column.column_name)
 
-    for (const leaked of ['full_name', 'national_id', 'dob', 'phone_number']) {
+    for (const leaked of [
+      'first_name_ar',
+      'last_name_ar',
+      'first_name_latin',
+      'last_name_latin',
+      'national_id',
+      'dob',
+      'phone_number',
+    ]) {
       expect(names).not.toContain(leaked)
     }
   })

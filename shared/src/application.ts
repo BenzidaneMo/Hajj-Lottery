@@ -37,12 +37,16 @@ export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number]
 /** One applicant, as submitted by the registration form. */
 export interface ApplicantInput {
   nationalId: string
-  fullName: string
+  /** Both scripts are always required — the interface language never decides. */
+  firstNameAr: string
+  lastNameAr: string
+  firstNameLatin: string
+  lastNameLatin: string
   /** Calendar date, `YYYY-MM-DD`. */
   dob: string
   /** Recorded by the identity-registry intake and enforced by the server. */
   gender: ApplicantGender
-  phoneNumber?: string
+  phoneNumber: string
 }
 
 /**
