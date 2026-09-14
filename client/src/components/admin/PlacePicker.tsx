@@ -95,7 +95,18 @@ function PlaceCombobox({
         <PopoverContent className="w-[min(24rem,90vw)] p-0" align="start">
           <Command>
             <CommandInput placeholder={searchPlaceholder} />
-            <CommandList>
+            {/* The Popover is deliberately non-modal (see git history) so closing it
+                doesn't leave a parent Dialog's scroll lock stuck. But `modal={false}`
+                also means this list sits outside that lock's own DOM subtree, so its
+                wheel/touch events still reach the parent Dialog's document-level
+                listener (react-remove-scroll blocks both the same way), which then
+                blocks scrolling here too — on a touchscreen as much as with a wheel.
+                Stopping propagation on both keeps this list scrollable without
+                reopening the stuck-lock bug. */}
+            <CommandList
+              onWheel={(event) => event.stopPropagation()}
+              onTouchMove={(event) => event.stopPropagation()}
+            >
               <CommandEmpty>{emptyMessage}</CommandEmpty>
               <CommandGroup>
                 <CommandItem
