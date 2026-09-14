@@ -8,10 +8,9 @@ import {
   type BatchNotReadyReason,
   type BatchValidationDto,
   type CommuneDrawListItemDto,
-  type DrawYearDto,
   type SupportedLocale,
 } from '@hajj-lottery/shared'
-import { PlayIcon, PlusIcon, SettingsIcon } from 'lucide-react'
+import { PlayIcon, SettingsIcon } from 'lucide-react'
 import { useCallback, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -40,7 +39,6 @@ import { Progress } from '@/components/shadcn/progress'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/shadcn/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/shadcn/table'
 import {
-  createCommuneDraw,
   executeBatchDraws,
   fetchCommuneDraw,
   fetchCommuneDraws,
@@ -98,7 +96,6 @@ export function AdminCommunes() {
     ...INITIAL_FILTERS,
     drawYearId: params.get('drawYearId') ?? undefined,
   })
-  const [creating, setCreating] = useState(false)
   const [editingId, setEditingId] = useState<string | undefined>(undefined)
   const [batchOpen, setBatchOpen] = useState(false)
 
@@ -189,14 +186,6 @@ export function AdminCommunes() {
     <AdminPage
       title={t('admin.pages.communes.title')}
       description={t('admin.communeDraws.description')}
-      action={
-        isSuperAdmin ? (
-          <Button type="button" onClick={() => setCreating(true)}>
-            <PlusIcon aria-hidden="true" />
-            {t('admin.communeDraws.create')}
-          </Button>
-        ) : undefined
-      }
     >
       {!isSuperAdmin && (
         <Alert>
@@ -316,18 +305,6 @@ export function AdminCommunes() {
         />
       )}
 
-      {isSuperAdmin && (
-        <CreateCommuneDrawDialog
-          open={creating}
-          onOpenChange={setCreating}
-          years={years.state.status === 'ready' ? years.state.data : []}
-          onCreated={() => {
-            setCreating(false)
-            reload()
-          }}
-        />
-      )}
-
       {isSuperAdmin && editingId && (
         <EditAllocationDialog
           communeDrawId={editingId}
@@ -348,109 +325,6 @@ export function AdminCommunes() {
         />
       )}
     </AdminPage>
-  )
-}
-
-function CreateCommuneDrawDialog({
-  open,
-  onOpenChange,
-  years,
-  onCreated,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  years: DrawYearDto[]
-  onCreated: () => void
-}) {
-  const { t, i18n } = useTranslation()
-  const locale = i18n.language as SupportedLocale
-  const [drawYearId, setDrawYearId] = useState('')
-  const [place, setPlace] = useState<{ wilayaId?: string; communeId?: string }>({})
-  const [spots, setSpots] = useState('')
-  const action = useAction(createCommuneDraw)
-
-  const ready = drawYearId !== '' && place.communeId !== undefined && spots !== ''
-
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault()
-    if (!ready || !place.communeId) return
-    const created = await action.run({
-      drawYearId,
-      communeId: place.communeId,
-      allocatedSpots: Number(spots),
-    })
-    if (created) {
-      toast.success(t('admin.communeDraws.created'))
-      setSpots('')
-      setPlace({})
-      onCreated()
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <DialogHeader>
-            <DialogTitle>{t('admin.communeDraws.create')}</DialogTitle>
-            <DialogDescription>{t('admin.communeDraws.createBody')}</DialogDescription>
-          </DialogHeader>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="new-draw-year-select">{t('admin.draws.year')}</Label>
-            <Select value={drawYearId} onValueChange={setDrawYearId}>
-              <SelectTrigger id="new-draw-year-select">
-                <SelectValue placeholder={t('admin.communeDraws.selectYear')} />
-              </SelectTrigger>
-              <SelectContent>
-                {years.map((year) => (
-                  <SelectItem key={year.id} value={year.id}>
-                    {formatYear(year.year, locale)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <PlacePicker
-              wilayaId={place.wilayaId}
-              communeId={place.communeId}
-              onChange={(next) => setPlace(next)}
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="new-allocated-spots">{t('admin.communeDraws.allocatedSpots')}</Label>
-            <Input
-              id="new-allocated-spots"
-              type="number"
-              inputMode="numeric"
-              required
-              min={MIN_ALLOCATED_SPOTS}
-              max={MAX_ALLOCATED_SPOTS}
-              value={spots}
-              aria-describedby="new-allocated-spots-hint"
-              onChange={(event) => setSpots(event.target.value)}
-            />
-            <p id="new-allocated-spots-hint" className="text-xs text-muted-foreground">
-              {t('admin.communeDraws.allocatedSpotsHint')}
-            </p>
-          </div>
-
-          {action.error !== undefined && <ErrorNotice error={action.error} />}
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              {t('admin.actions.cancel')}
-            </Button>
-            <Button type="submit" disabled={action.pending || !ready}>
-              {action.pending ? t('admin.actions.working') : t('admin.communeDraws.create')}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
   )
 }
 
