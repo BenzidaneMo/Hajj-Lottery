@@ -15,6 +15,7 @@
     "seed:mock-applications": "tsx src/scripts/seed-mock-applications.ts",
     "reset-commune-draw": "tsx src/scripts/reset-commune-draw.ts",
     "reopen-registration": "tsx src/scripts/reopen-registration.ts",
+    "reset-participants": "tsx src/scripts/reset-participants.ts",
     "typecheck": "tsc -p tsconfig.test.json"
   },
   "dependencies": {
