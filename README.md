@@ -71,6 +71,13 @@ npm run --workspace server start
 | `npm run reopen-registration --workspace server`                              | **Development tool.** Undoes `REGISTRATION_CLOSED` for further manual testing — also has no production route                                                                   |
 | `npm run reset-participants --workspace server -- --yes`                      | **Development tool.** Wipes every participant/application/pool/result/import batch — a dry run without `--yes`; geography, draw years, commune-draw config and admins are kept |
 
+> **Windows PowerShell note:** plain `npm` resolves to `npm.ps1`, which in some npm/PowerShell
+> combinations silently drops everything after `--` — a command like
+> `npm run reset-participants --workspace server -- --yes` then runs with no `--yes` at all, with no
+> error to say so. If a script with `-- <flags>` above seems to ignore its flags in PowerShell, run
+> it with `npm.cmd` instead of `npm` (same arguments otherwise); Git Bash and `cmd.exe` are not
+> affected.
+
 ## Application shell
 
 **Public routes** (`AppLayout`: header with logo/nav/language switcher,
