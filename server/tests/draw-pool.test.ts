@@ -399,7 +399,12 @@ describe('freezing a pool', () => {
   it('refuses and leaves nothing behind when validation blocks', async () => {
     const communeDraw = await communeDrawFor(geo.communeA1.id)
     const application = await registerAndWeigh(geo.communeA1.id, geo.wilayaA.id)
-    await prisma.application.update({ where: { id: application.id }, data: { calculatedWeight: null } })
+    // A blocker freeze cannot resolve on its own, unlike a missing weight —
+    // see "resolves a missing weight" below.
+    await prisma.participant.update({
+      where: { id: application.primaryParticipantId },
+      data: { hasWonHajj: true },
+    })
     await readyToFreeze(communeDraw)
 
     await expect(drawPoolService.freeze(communeDraw.id)).rejects.toMatchObject({
@@ -412,6 +417,34 @@ describe('freezing a pool', () => {
     expect((await prisma.communeDraw.findUniqueOrThrow({ where: { id: communeDraw.id } })).status).toBe(
       'READY',
     )
+  })
+
+  it('resolves a missing weight and completes the freeze, when that is the only blocker', async () => {
+    // Registers without ever calling weightService.freezeApplicationWeight —
+    // nothing in production does either, so this is the realistic case, not
+    // registerAndWeigh's pre-weighed one.
+    const communeDraw = await communeDrawFor(geo.communeA1.id)
+    const id = nationalId()
+    const response = await submit({
+      entryType: 'SINGLE',
+      wilayaId: geo.wilayaA.id,
+      communeId: geo.communeA1.id,
+      primary: buildApplicant(id, { dob: '1980-04-12', gender: 'MALE' }),
+    })
+    expect(response.status).toBe(201)
+    await readyToFreeze(communeDraw)
+
+    const application = await prisma.application.findFirstOrThrow({
+      where: { applicationReference: response.body.applicationReference },
+    })
+    expect(application.calculatedWeight).toBeNull()
+
+    const { pool } = await drawPoolService.freeze(communeDraw.id)
+
+    expect(pool.entryCount).toBe(1)
+    expect(
+      (await prisma.application.findUniqueOrThrow({ where: { id: application.id } })).calculatedWeight,
+    ).toBe(1)
   })
 
   it('is retryable once the blocking problem is fixed', async () => {

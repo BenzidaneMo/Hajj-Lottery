@@ -74,6 +74,10 @@ export interface PoolFreezeResult {
  * winner — each blocks the freeze and is reported. Silently fixing any of them
  * would mean the pool no longer matched the records it was built from, which
  * is precisely the situation freezing exists to prevent.
+ *
+ * A weight that has never been frozen at all is different from a stale one,
+ * and is the one thing `freeze` *does* resolve rather than only report — see
+ * `freeze`'s own comment for why.
  */
 export class DrawPoolService {
   private readonly db: PrismaClient
@@ -225,9 +229,20 @@ export class DrawPoolService {
    * Calling it again after success returns the existing pool rather than
    * building a second one — the snapshot is the authoritative input, and there
    * can only be one.
+   *
+   * No route ever calls `WeightService.freezeApplicationWeight` before this
+   * point — nothing else in the system has a moment of its own for it. So
+   * when every other precondition already holds and the only thing standing
+   * between this commune draw and a frozen pool is a candidate that has never
+   * had its weight snapshotted, that snapshot is taken right here, as part of
+   * freezing the pool itself: the same deliberate, one-time, irreversible act
+   * that fixes everything else about the pool's contents. If anything *else*
+   * is also blocking, nothing is frozen — an operator retrying a doomed
+   * attempt for an unrelated reason (say, registration still being open)
+   * must not have weights locked in as a side effect of that attempt.
    */
   async freeze(communeDrawId: string, actor: AuditActor | null = null): Promise<PoolFreezeResult> {
-    const validation = await this.validate(communeDrawId)
+    let validation = await this.validate(communeDrawId)
     const settled = (pool: DrawPool, alreadyFrozen: boolean): PoolFreezeResult => ({
       pool,
       communeDraw: validation.communeDraw,
@@ -248,6 +263,14 @@ export class DrawPoolService {
     // Already done. Not an error: an administrator retrying a request that
     // succeeded should be told the outcome, not handed a failure.
     if (validation.existingPool) return settled(validation.existingPool, true)
+
+    const onlyUnfrozenWeights =
+      validation.blockers.length > 0 && validation.blockers.every((b) => b.code === 'MISSING_WEIGHT')
+
+    if (onlyUnfrozenWeights) {
+      await this.freezeMissingWeights(validation.communeDraw)
+      validation = await this.validate(communeDrawId)
+    }
 
     if (!validation.ready) {
       throw new ConflictError(
@@ -354,6 +377,40 @@ export class DrawPoolService {
         if (existing) return settled(existing, true)
       }
       throw error
+    }
+  }
+
+  /**
+   * Freezes the weight of every eligible candidate that has never had one,
+   * for this commune's draw year.
+   *
+   * Best-effort per application, not one transaction across all of them:
+   * `freezeApplicationWeight`'s own compare-and-set is already atomic per
+   * row, so a later failure elsewhere leaves nothing worse than a handful of
+   * applications frozen ahead of a pool that still does not exist yet — the
+   * same harmless state `freeze` already tolerates when it is called twice.
+   * An application whose *fresh* eligibility no longer agrees with its stored
+   * status is left alone: `validate`'s own re-evaluation, called right after
+   * this, is what reports that as the real blocker it is, rather than this
+   * pass surfacing it as an unrelated exception.
+   */
+  private async freezeMissingWeights(communeDraw: CommuneDrawWithPlace): Promise<void> {
+    const candidates = await this.db.application.findMany({
+      where: {
+        communeId: communeDraw.communeId,
+        drawYear: communeDraw.drawYear.year,
+        status: 'ELIGIBLE',
+        calculatedWeight: null,
+      },
+      select: { id: true },
+    })
+
+    for (const candidate of candidates) {
+      try {
+        await this.weights.freezeApplicationWeight(candidate.id)
+      } catch (error) {
+        if (!(error instanceof ApiError && error.code === 'APPLICATION_INELIGIBLE')) throw error
+      }
     }
   }
 
