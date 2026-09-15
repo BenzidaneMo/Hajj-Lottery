@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "seed:admin": "tsx src/scripts/create-admin.ts",
     "admin:create": "tsx src/scripts/create-admin.ts --explicit",
+    "seed:mock-applications": "tsx src/scripts/seed-mock-applications.ts",
     "typecheck": "tsc -p tsconfig.test.json"
   },
   "dependencies": {
