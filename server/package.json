@@ -13,6 +13,8 @@
     "seed:admin": "tsx src/scripts/create-admin.ts",
     "admin:create": "tsx src/scripts/create-admin.ts --explicit",
     "seed:mock-applications": "tsx src/scripts/seed-mock-applications.ts",
+    "reset-commune-draw": "tsx src/scripts/reset-commune-draw.ts",
+    "reopen-registration": "tsx src/scripts/reopen-registration.ts",
     "typecheck": "tsc -p tsconfig.test.json"
   },
   "dependencies": {

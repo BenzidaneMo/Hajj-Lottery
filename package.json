@@ -31,6 +31,8 @@
     "seed:admin": "npm run seed:admin --workspace server",
     "admin:create": "npm run admin:create --workspace server",
     "seed:mock-applications": "npm run seed:mock-applications --workspace server",
+    "reset-commune-draw": "npm run reset-commune-draw --workspace server",
+    "reopen-registration": "npm run reopen-registration --workspace server",
     "prisma:studio": "prisma studio --schema prisma/schema.prisma",
     "build:geo-data": "node prisma/seed-data/build.mjs"
   },
