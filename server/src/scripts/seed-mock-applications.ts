@@ -1,16 +1,23 @@
 /**
- * Mock applicant generator, scoped to one wilaya, for exercising the lottery
- * end to end (registration -> eligibility -> weighting -> pool -> draw)
- * with more data than `prisma/seed.ts`'s three DEV_PARTICIPANTS provide.
+ * Mock applicant generator, for exercising the lottery end to end
+ * (registration -> eligibility -> weighting -> pool -> draw) with more data
+ * than `prisma/seed.ts`'s three DEV_PARTICIPANTS provide.
  *
  *   npm run seed:mock-applications --workspace server
  *   npm run seed:mock-applications --workspace server -- --wilaya=16 --perCommune=25
  *
+ * With no `--wilaya`, this registers into every active wilaya's communes --
+ * the whole country. Pass `--wilaya` to scope it to one, as the second
+ * example above does. Either way, `--perCommune` (default 40) is applicants
+ * per commune, so a nationwide run is 1541 communes x that number of
+ * registrations; expect it to take a while, and watch the per-wilaya
+ * progress lines rather than assuming it has hung.
+ *
  * Registers every applicant through `RegistrationService.register` -- the
  * same path `POST /api/applications` uses -- so eligibility, weighting and
  * the one-application-per-year guarantee are all real, never faked by
- * inserting rows directly. Every national ID starts with the fixed "88"
- * marker followed by a strictly increasing sequence (no real Algerian ID
+ * inserting rows directly. Every national ID starts with a fixed marker
+ * prefix followed by a strictly increasing sequence (no real Algerian ID
  * scheme is checked beyond digit count, but this keeps every mock record
  * obviously synthetic to a human reading the database), and every name comes
  * from a small fixed pool that repeats on purpose. These are not real people.
@@ -26,14 +33,15 @@ import { createApplicationSchema } from '../validation/application.js'
 
 const NATIONAL_ID_PREFIX = '01'
 
-function arg(name: string, fallback: string): string {
+function arg(name: string): string | undefined {
   const flag = `--${name}=`
   const found = process.argv.find((value) => value.startsWith(flag))
-  return found ? found.slice(flag.length) : fallback
+  return found ? found.slice(flag.length) : undefined
 }
 
-const WILAYA_CODE = arg('wilaya', '27')
-const PER_COMMUNE = Number(arg('perCommune', '40'))
+/** Undefined means every active wilaya -- the nationwide default. */
+const WILAYA_CODE = arg('wilaya')
+const PER_COMMUNE = Number(arg('perCommune') ?? '40')
 
 interface NamePart {
   ar: string
@@ -137,58 +145,82 @@ function buildApplicant(
 }
 
 async function main(): Promise<void> {
-  const wilaya = await prisma.wilaya.findUnique({ where: { code: WILAYA_CODE } })
-  if (!wilaya) throw new Error(`No wilaya with code "${WILAYA_CODE}"`)
+  const wilayas = WILAYA_CODE
+    ? await prisma.wilaya.findMany({ where: { code: WILAYA_CODE } })
+    : await prisma.wilaya.findMany({ where: { isActive: true }, orderBy: { code: 'asc' } })
 
-  const communes = await prisma.commune.findMany({ where: { wilayaId: wilaya.id }, orderBy: { code: 'asc' } })
-  if (communes.length === 0) throw new Error(`Wilaya "${WILAYA_CODE}" has no communes`)
+  if (WILAYA_CODE && wilayas.length === 0) throw new Error(`No wilaya with code "${WILAYA_CODE}"`)
+  if (wilayas.length === 0) throw new Error('No active wilayas found')
 
   console.log(
-    `Registering ${PER_COMMUNE} mock applications in each of ${communes.length} communes of wilaya ${WILAYA_CODE}...`,
+    WILAYA_CODE
+      ? `Registering ${PER_COMMUNE} mock applications per commune in wilaya ${WILAYA_CODE}...`
+      : `Registering ${PER_COMMUNE} mock applications per commune across all ${wilayas.length} wilayas...`,
   )
 
   let registered = 0
   let skipped = 0
 
-  for (const commune of communes) {
-    for (let i = 0; i < PER_COMMUNE; i += 1) {
-      const slot = i % 4
-      let primary: MockApplicant
-      let secondary: MockApplicant | undefined
+  for (const wilaya of wilayas) {
+    const communes = await prisma.commune.findMany({
+      where: { wilayaId: wilaya.id },
+      orderBy: { code: 'asc' },
+    })
 
-      if (slot === 2) {
-        // SINGLE female, 45+: eligible alone, no Mahram required.
-        primary = buildApplicant(FEMALE_FIRST_NAMES, i, FEMALE_SOLO_AGES[i % FEMALE_SOLO_AGES.length]!, 'FEMALE')
-      } else if (slot === 3) {
-        // PAIRED: female under 45 with a male Mahram.
-        primary = buildApplicant(
-          FEMALE_FIRST_NAMES,
-          i,
-          FEMALE_PAIRED_AGES[i % FEMALE_PAIRED_AGES.length]!,
-          'FEMALE',
-        )
-        secondary = buildApplicant(MALE_FIRST_NAMES, i + 1, MAHRAM_AGES[i % MAHRAM_AGES.length]!, 'MALE')
-      } else {
-        // SINGLE male.
-        primary = buildApplicant(MALE_FIRST_NAMES, i, MALE_AGES[i % MALE_AGES.length]!, 'MALE')
+    for (const commune of communes) {
+      for (let i = 0; i < PER_COMMUNE; i += 1) {
+        const slot = i % 4
+        let primary: MockApplicant
+        let secondary: MockApplicant | undefined
+
+        if (slot === 2) {
+          // SINGLE female, 45+: eligible alone, no Mahram required.
+          primary = buildApplicant(
+            FEMALE_FIRST_NAMES,
+            i,
+            FEMALE_SOLO_AGES[i % FEMALE_SOLO_AGES.length]!,
+            'FEMALE',
+          )
+        } else if (slot === 3) {
+          // PAIRED: female under 45 with a male Mahram.
+          primary = buildApplicant(
+            FEMALE_FIRST_NAMES,
+            i,
+            FEMALE_PAIRED_AGES[i % FEMALE_PAIRED_AGES.length]!,
+            'FEMALE',
+          )
+          secondary = buildApplicant(MALE_FIRST_NAMES, i + 1, MAHRAM_AGES[i % MAHRAM_AGES.length]!, 'MALE')
+        } else {
+          // SINGLE male.
+          primary = buildApplicant(MALE_FIRST_NAMES, i, MALE_AGES[i % MALE_AGES.length]!, 'MALE')
+        }
+
+        const input = createApplicationSchema.parse({
+          entryType: secondary ? 'PAIRED' : 'SINGLE',
+          wilayaId: wilaya.id,
+          communeId: commune.id,
+          primary,
+          secondary,
+        })
+
+        try {
+          const receipt = await registrationService.register(input)
+          registered += receipt.applicantCount
+        } catch (error) {
+          skipped += 1
+          const message = error instanceof Error ? error.message : String(error)
+          console.warn(`  skipped one application in ${commune.nameFr}: ${message}`)
+        }
       }
+    }
 
-      const input = createApplicationSchema.parse({
-        entryType: secondary ? 'PAIRED' : 'SINGLE',
-        wilayaId: wilaya.id,
-        communeId: commune.id,
-        primary,
-        secondary,
-      })
-
-      try {
-        const receipt = await registrationService.register(input)
-        registered += receipt.applicantCount
-      } catch (error) {
-        skipped += 1
-        const message = error instanceof Error ? error.message : String(error)
-        console.warn(`  skipped one application in ${commune.nameFr}: ${message}`)
-      }
+    // A nationwide run takes a while -- one line per wilaya is how an
+    // operator tells "still working" from "hung" without per-commune noise.
+    if (!WILAYA_CODE) {
+      console.log(
+        `  wilaya ${wilaya.code} (${wilaya.nameFr}): ${communes.length} communes done, ` +
+          `${registered} applicants registered so far`,
+      )
     }
   }
 

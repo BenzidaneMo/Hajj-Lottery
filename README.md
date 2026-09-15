@@ -56,19 +56,19 @@ npm run --workspace server start
 
 ## Other scripts
 
-| Command                                                                            | Description                                                                                                                                      |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `npm test`                                                                         | Every Vitest suite (server needs `TEST_DATABASE_URL`)                                                                                            |
-| `npm run test --workspace client`                                                  | Public page tests only — jsdom, no database                                                                                                      |
-| `npm run test --workspace server`                                                  | API and domain tests — needs `TEST_DATABASE_URL`                                                                                                 |
-| `npm run lint`                                                                     | ESLint across the whole repository                                                                                                               |
-| `npm run format`                                                                   | Prettier — write                                                                                                                                 |
-| `npm run format:check`                                                             | Prettier — check only                                                                                                                            |
-| `npm run typecheck`                                                                | TypeScript project checks for every workspace                                                                                                    |
-| `npm run prisma:studio`                                                            | Prisma Studio (visual database browser)                                                                                                          |
-| `npm run seed:mock-applications --workspace server -- --wilaya=27 --perCommune=40` | Bulk synthetic applicants for one wilaya, via the real `POST /api/applications` path — for exercising a draw with more than a handful of entries |
-| `npm run reset-commune-draw --workspace server -- --wilaya=27 --commune=2701`      | **Development tool, not a feature.** Undoes one commune's pool freeze and/or draw execution — no production route does this, on purpose          |
-| `npm run reopen-registration --workspace server`                                   | **Development tool.** Undoes `REGISTRATION_CLOSED` for further manual testing — also has no production route                                     |
+| Command                                                                       | Description                                                                                                                                                                |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm test`                                                                    | Every Vitest suite (server needs `TEST_DATABASE_URL`)                                                                                                                      |
+| `npm run test --workspace client`                                             | Public page tests only — jsdom, no database                                                                                                                                |
+| `npm run test --workspace server`                                             | API and domain tests — needs `TEST_DATABASE_URL`                                                                                                                           |
+| `npm run lint`                                                                | ESLint across the whole repository                                                                                                                                         |
+| `npm run format`                                                              | Prettier — write                                                                                                                                                           |
+| `npm run format:check`                                                        | Prettier — check only                                                                                                                                                      |
+| `npm run typecheck`                                                           | TypeScript project checks for every workspace                                                                                                                              |
+| `npm run prisma:studio`                                                       | Prisma Studio (visual database browser)                                                                                                                                    |
+| `npm run seed:mock-applications --workspace server`                           | Bulk synthetic applicants nationwide (or `-- --wilaya=27` for one), via the real `POST /api/applications` path — for exercising a draw with more than a handful of entries |
+| `npm run reset-commune-draw --workspace server -- --wilaya=27 --commune=2701` | **Development tool, not a feature.** Undoes one commune's pool freeze and/or draw execution — no production route does this, on purpose                                    |
+| `npm run reopen-registration --workspace server`                              | **Development tool.** Undoes `REGISTRATION_CLOSED` for further manual testing — also has no production route                                                               |
 
 ## Application shell
 
