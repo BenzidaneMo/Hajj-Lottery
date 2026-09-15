@@ -92,19 +92,30 @@ export const COMMUNE_DRAW_TRANSITIONS: Record<CommuneDrawStatus, readonly Commun
 }
 
 /**
- * States an administrator may never write by hand.
+ * States an administrator may never write by hand, and what legitimately
+ * produces each one instead — so a refusal can name the real cause rather
+ * than a generic "not allowed".
  *
  * LOCKED → COMPLETED is a legal transition, but only winner processing may
  * perform it, and only alongside the result and winners it commits with. An
  * administrator setting it directly would produce a draw that claims to have
  * concluded with no winners to show — the worst state this system could reach.
+ *
+ * READY → LOCKED is also legal, but only `DrawPoolService.freeze()` may
+ * perform it, atomically with creating the pool itself. Setting LOCKED
+ * directly here — as a plain "move to Locked" administrative action — used to
+ * be possible and produced a commune draw with no pool to run a lottery
+ * against: indistinguishable, to every later reader, from data corruption.
  */
-export const EXECUTION_ONLY_COMMUNE_DRAW_STATUSES: readonly CommuneDrawStatus[] = ['COMPLETED']
+export const SYSTEM_ONLY_COMMUNE_DRAW_STATUS_ACTIONS: Partial<Record<CommuneDrawStatus, string>> = {
+  LOCKED: 'freezing its pool',
+  COMPLETED: 'executing its draw',
+}
 
 /** The transitions an administrator may actually offer to perform. */
 export function administrativeCommuneDrawTransitions(from: CommuneDrawStatus): readonly CommuneDrawStatus[] {
   return COMMUNE_DRAW_TRANSITIONS[from].filter(
-    (status) => !EXECUTION_ONLY_COMMUNE_DRAW_STATUSES.includes(status),
+    (status) => !(status in SYSTEM_ONLY_COMMUNE_DRAW_STATUS_ACTIONS),
   )
 }
 

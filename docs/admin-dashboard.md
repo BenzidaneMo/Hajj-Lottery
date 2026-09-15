@@ -196,8 +196,12 @@ takes.
 Administrative transitions come from `administrativeCommuneDrawTransitions` in
 `shared/src/draw-configuration.ts`. Those tables moved to `shared` in this step
 so the console can offer only moves that exist; `server/src/lib/draw-lifecycle.ts`
-imports the same tables and remains the only thing that decides. `COMPLETED` is
-filtered out of the offered set — only winner processing may reach it.
+imports the same tables and remains the only thing that decides. `COMPLETED` and
+`LOCKED` are both filtered out of the offered set — only winner processing may
+reach the former, and only freezing the pool (`DrawPoolService.freeze`) may
+reach the latter. `LOCKED` was reachable as a plain "move to" action until a
+fix: it let an administrator lock a commune draw with no pool behind it,
+which then had no route back and made running the lottery 404.
 
 ### Pool validation and freezing
 

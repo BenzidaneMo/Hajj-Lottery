@@ -1,3 +1,4 @@
+import { administrativeCommuneDrawTransitions } from '@hajj-lottery/shared'
 import { PrismaClient, type DrawYear } from '@prisma/client'
 import request from 'supertest'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -56,6 +57,19 @@ async function configureCommune(drawYearId: string, communeId: string, allocated
   return drawConfigurationService.createCommuneDraw({ drawYearId, communeId, allocatedSpots })
 }
 
+/**
+ * Reaches LOCKED without going through `DrawPoolService.freeze()`.
+ *
+ * LOCKED is not administratively settable — only freezing may produce it,
+ * atomically with the pool itself — so tests that only need a locked commune
+ * draw to exercise unrelated behaviour (allocation edits, registration,
+ * reverse transitions) write the column directly rather than going through
+ * `drawConfigurationService.updateCommuneDraw`, which now refuses this.
+ */
+async function lockDirectly(communeDrawId: string) {
+  return prisma.communeDraw.update({ where: { id: communeDrawId }, data: { status: 'LOCKED' } })
+}
+
 const asAdmin = (cookie: string) => ({ cookie })
 
 beforeAll(async () => {
@@ -100,14 +114,19 @@ describe('the lifecycle rules, in isolation', () => {
     expect(canTransitionCommuneDraw('COMPLETED', 'CANCELLED')).toBe(false)
   })
 
-  it('keeps COMPLETED out of an administrator’s hands', () => {
-    for (const status of ['DRAFT', 'READY', 'LOCKED', 'CANCELLED'] as const) {
+  it('keeps COMPLETED and LOCKED out of an administrator’s hands', () => {
+    for (const status of ['DRAFT', 'READY', 'CANCELLED'] as const) {
       expect(isAdministrativelySettable(status)).toBe(true)
     }
 
     // Legal as a transition, but only winner processing may perform it — a
     // commune draw marked complete by hand would claim a lottery that never ran.
     expect(isAdministrativelySettable('COMPLETED')).toBe(false)
+
+    // Legal as a transition too, but only freezing the pool may perform it —
+    // set by hand, it produces a commune draw with no pool to run a lottery
+    // against, and (unlike COMPLETED) no database trigger catches that.
+    expect(isAdministrativelySettable('LOCKED')).toBe(false)
   })
 })
 
@@ -301,7 +320,7 @@ describe('commune draws', () => {
     const year = await draftYear()
     const draw = await configureCommune(year.id, geo.communeA1.id, 12)
     await drawConfigurationService.updateCommuneDraw(draw.id, { status: 'READY' })
-    await drawConfigurationService.updateCommuneDraw(draw.id, { status: 'LOCKED' })
+    await lockDirectly(draw.id)
 
     await expect(
       drawConfigurationService.updateCommuneDraw(draw.id, { allocatedSpots: 99 }),
@@ -315,11 +334,33 @@ describe('commune draws', () => {
     const year = await draftYear()
     const draw = await configureCommune(year.id, geo.communeA1.id)
     await drawConfigurationService.updateCommuneDraw(draw.id, { status: 'READY' })
-    await drawConfigurationService.updateCommuneDraw(draw.id, { status: 'LOCKED' })
+    await lockDirectly(draw.id)
 
     await expect(
       drawConfigurationService.updateCommuneDraw(draw.id, { status: 'READY' }),
     ).rejects.toMatchObject({ code: 'INVALID_STATUS_TRANSITION' })
+  })
+
+  it('refuses to lock a commune draw by hand, so a pool cannot be skipped', async () => {
+    const year = await draftYear()
+    const draw = await configureCommune(year.id, geo.communeA1.id)
+    await drawConfigurationService.updateCommuneDraw(draw.id, { status: 'READY' })
+
+    // Only DrawPoolService.freeze() may produce LOCKED — atomically with the
+    // pool itself. A bare status write here would leave a commune draw locked
+    // with nothing to run a lottery against, and (unlike COMPLETED) no
+    // database trigger would catch it.
+    await expect(
+      drawConfigurationService.updateCommuneDraw(draw.id, { status: 'LOCKED' }),
+    ).rejects.toMatchObject({ status: 409, code: 'INVALID_STATUS_TRANSITION' })
+
+    const stored = await prisma.communeDraw.findUniqueOrThrow({ where: { id: draw.id } })
+    expect(stored.status).toBe('READY')
+  })
+
+  it('never offers LOCKED or COMPLETED among the transitions an administrator may pick', () => {
+    expect(administrativeCommuneDrawTransitions('READY')).not.toContain('LOCKED')
+    expect(administrativeCommuneDrawTransitions('LOCKED')).not.toContain('COMPLETED')
   })
 })
 
@@ -361,7 +402,7 @@ describe('registration depends on the configuration', () => {
     const year = await openYear()
     const draw = await configureCommune(year.id, geo.communeA1.id)
     await drawConfigurationService.updateCommuneDraw(draw.id, { status: 'READY' })
-    await drawConfigurationService.updateCommuneDraw(draw.id, { status: 'LOCKED' })
+    await lockDirectly(draw.id)
 
     const response = await submit(singleBody())
 

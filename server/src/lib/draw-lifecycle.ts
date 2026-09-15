@@ -1,7 +1,7 @@
 import {
   COMMUNE_DRAW_TRANSITIONS,
   DRAW_YEAR_TRANSITIONS,
-  EXECUTION_ONLY_COMMUNE_DRAW_STATUSES,
+  SYSTEM_ONLY_COMMUNE_DRAW_STATUS_ACTIONS,
   type CommuneDrawStatus,
   type DrawYearStatus,
 } from '@hajj-lottery/shared'
@@ -27,12 +27,16 @@ import {
 /**
  * States an administrator may never write by hand.
  *
- * The database refuses them too, through a deferred constraint trigger. This
- * check exists so the refusal arrives as a sentence rather than as a
- * constraint violation at commit.
+ * `COMPLETED` is additionally refused by the database, through a deferred
+ * constraint trigger tying it to the existence of a result. `LOCKED` has no
+ * such trigger — nothing in the schema requires a pool to exist alongside it
+ * — so this check is the only thing standing between an administrator and a
+ * commune draw locked with no pool to run a lottery against; see
+ * `SYSTEM_ONLY_COMMUNE_DRAW_STATUS_ACTIONS` in `shared` for why each status
+ * here is refused.
  */
 export function isAdministrativelySettable(status: CommuneDrawStatus): boolean {
-  return !EXECUTION_ONLY_COMMUNE_DRAW_STATUSES.includes(status)
+  return !(status in SYSTEM_ONLY_COMMUNE_DRAW_STATUS_ACTIONS)
 }
 
 export function canTransitionDrawYear(from: DrawYearStatus, to: DrawYearStatus): boolean {

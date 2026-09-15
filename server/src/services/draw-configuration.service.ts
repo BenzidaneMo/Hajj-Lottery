@@ -1,4 +1,8 @@
-import type { CommuneDrawStatus, DrawYearStatus } from '@hajj-lottery/shared'
+import {
+  SYSTEM_ONLY_COMMUNE_DRAW_STATUS_ACTIONS,
+  type CommuneDrawStatus,
+  type DrawYearStatus,
+} from '@hajj-lottery/shared'
 import {
   Prisma,
   type Commune,
@@ -318,14 +322,14 @@ export class DrawConfigurationService {
       throw new Error('updateCommuneDraw: expectedUpdatedAt is required when changing allocatedSpots')
     }
 
-    // COMPLETED belongs to winner processing alone. Setting it here would
-    // produce a draw that claims to have concluded with no winners to show, so
-    // it is refused before the transition table is even consulted — the
-    // transition itself is legal, but not from an administrator's hand.
+    // COMPLETED belongs to winner processing alone, and LOCKED to freezing the
+    // pool — each is refused before the transition table is even consulted,
+    // because the transition itself is legal, just not from an
+    // administrator's hand. See SYSTEM_ONLY_COMMUNE_DRAW_STATUS_ACTIONS.
     if (changes.status !== undefined && !isAdministrativelySettable(changes.status)) {
       throw new ConflictError(
         'INVALID_STATUS_TRANSITION',
-        `A commune draw can only become ${changes.status} by executing its draw`,
+        `A commune draw can only become ${changes.status} by ${SYSTEM_ONLY_COMMUNE_DRAW_STATUS_ACTIONS[changes.status]}`,
       )
     }
 

@@ -192,10 +192,14 @@ describe('batch draw execution — readiness', () => {
       communeId: geo.communeA1.id,
       allocatedSpots: 5,
     })
-    // Locked directly, bypassing the freeze-pool flow — a real, reachable
-    // state since LOCKED is itself an administratively settable status.
+    // Forced directly at the database, bypassing the freeze-pool flow: LOCKED
+    // is not administratively settable (only freezing may produce it), so
+    // this state should not be reachable through the service at all — but
+    // batch validation must still treat it defensively as NO_POOL rather than
+    // assume every LOCKED row has one, in case it is ever reached some other
+    // way (a bug, a manual database edit, a future migration).
     await drawConfigurationService.updateCommuneDraw(communeDraw.id, { status: 'READY' })
-    await drawConfigurationService.updateCommuneDraw(communeDraw.id, { status: 'LOCKED' })
+    await prisma.communeDraw.update({ where: { id: communeDraw.id }, data: { status: 'LOCKED' } })
 
     const { cookie } = await superAdmin()
     const response = await validateVia(drawYear.id, cookie)
