@@ -117,6 +117,10 @@
         "national": "Toutes les wilayas"
       }
     },
+    "theme": {
+      "switchToDark": "Passer au thème sombre",
+      "switchToLight": "Passer au thème clair"
+    },
     "nav": {
       "ariaLabel": "Navigation administrateur",
       "dashboard": "Tableau de bord",

@@ -40,16 +40,18 @@
    console and the citizen portal should not disagree about what "the
    interactive colour" is.
 
-   Dark mode is deliberately pinned to a class nothing sets. Several generated
-   components carry `dark:` utilities, and Tailwind's default `dark:` responds
-   to the operating system — which would leave parts of a light page dark on a
-   machine set that way, while the rest of the app stayed light. Redefining the
-   variant to require an ancestor `.dark` disables that until somebody builds a
-   real theme. */
+   Dark mode is deliberately pinned to a class, not Tailwind's default
+   `prefers-color-scheme` responder — the citizen portal has no dark theme, so
+   the default would leave parts of a light page dark on a machine set that
+   way while the rest of the app stayed light. `lib/use-admin-theme.ts` is the
+   only thing that ever sets `.dark`, and only on `<html>` while an admin page
+   is mounted (removed again on unmount), which is what keeps this admin-only:
+   the citizen portal never mounts that hook, so it never sees the class. */
 @custom-variant dark (&:is(.dark *));
 
 :root {
   --radius: 0.5rem;
+  color-scheme: light;
 
   --background: #ffffff;
   --foreground: #1c1917;
@@ -70,6 +72,42 @@
   --border: #e7e5e4;
   --input: #e7e5e4;
   --ring: #006233;
+}
+
+/* The admin console's dark theme. `.dark` is toggled on `<html>` only while an
+   admin page is mounted (`lib/use-admin-theme.ts`), so the citizen portal —
+   which never adds that class — is unaffected. `#1f2937`/`#273142` (a slate,
+   not a near-black) anchor the ramp per the console's own design brief; the
+   brand green is lightened for `--primary` so it still meets contrast against
+   these darker surfaces.
+
+   `color-scheme` matters as much as the custom properties above: without it,
+   Chromium keeps rendering native chrome — the document scrollbar above all —
+   in light-mode gray (its own OS-level default) even while everything else on
+   the page is dark, since that chrome follows the OS preference, not our
+   `.dark` class. Declaring it here is what makes the browser draw its own UI
+   to match. */
+.dark {
+  color-scheme: dark;
+  --background: #1a2130;
+  --foreground: #e5e9f0;
+  --card: #1f2937;
+  --card-foreground: #e5e9f0;
+  --popover: #1f2937;
+  --popover-foreground: #e5e9f0;
+  --primary: #34a870;
+  --primary-foreground: #0b1310;
+  --secondary: #273142;
+  --secondary-foreground: #e5e9f0;
+  --muted: #273142;
+  --muted-foreground: #9aa4b6;
+  --accent: #2d3a4f;
+  --accent-foreground: #e5e9f0;
+  --destructive: #f16565;
+  --destructive-foreground: #2a0f0f;
+  --border: #313d51;
+  --input: #313d51;
+  --ring: #34a870;
 }
 
 @theme inline {

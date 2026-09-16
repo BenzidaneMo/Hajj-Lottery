@@ -4,6 +4,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 
 import { Sheet, SheetContent, SheetTitle } from '@/components/shadcn/sheet'
 import { Toaster } from '@/components/shadcn/sonner'
+import { useAdminTheme } from '@/lib/use-admin-theme'
 
 import { AdminSidebar } from './admin/AdminSidebar'
 import { AdminTopbar } from './admin/AdminTopbar'
@@ -25,6 +26,7 @@ export function AdminLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const location = useLocation()
   const [lastPathname, setLastPathname] = useState(location.pathname)
+  const { theme, toggle: toggleTheme } = useAdminTheme()
 
   // Close the mobile sheet on navigation. Adjusted during render (React's
   // documented pattern for resetting state on prop change) rather than in an
@@ -50,7 +52,7 @@ export function AdminLayout() {
       </Sheet>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <AdminTopbar onOpenSidebar={() => setIsSidebarOpen(true)} />
+        <AdminTopbar onOpenSidebar={() => setIsSidebarOpen(true)} theme={theme} onToggleTheme={toggleTheme} />
         <main id="main-content" className="min-w-0 flex-1 px-4 py-8 sm:px-6 lg:px-8">
           <Outlet />
         </main>
