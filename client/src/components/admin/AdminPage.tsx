@@ -1,4 +1,4 @@
-import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react'
+import { ChevronLeftIcon, ChevronRightIcon, type LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -38,14 +38,17 @@ export interface MetricProps {
   /** One line saying what the number is for. Never decoration. */
   hint?: string
   loading?: boolean
+  /** Purely decorative — never the only way a metric is distinguished. */
+  icon?: LucideIcon
 }
 
 /** A single operational number. */
-export function Metric({ label, value, hint, loading }: MetricProps) {
+export function Metric({ label, value, hint, loading, icon: Icon }: MetricProps) {
   return (
     <Card>
-      <CardHeader className="pb-2">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
+        {Icon && <Icon className="size-4 text-muted-foreground" aria-hidden="true" />}
       </CardHeader>
       <CardContent>
         {loading ? (

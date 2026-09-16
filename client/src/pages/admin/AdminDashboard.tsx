@@ -1,4 +1,22 @@
 import { localizedGeoName, type SupportedLocale } from '@hajj-lottery/shared'
+import {
+  ArmchairIcon,
+  CalendarDaysIcon,
+  CalendarOffIcon,
+  CheckCircle2Icon,
+  ClipboardCheckIcon,
+  ClipboardListIcon,
+  ClockIcon,
+  EyeIcon,
+  EyeOffIcon,
+  FileSpreadsheetIcon,
+  LockIcon,
+  PhoneCallIcon,
+  ShieldCheckIcon,
+  TrophyIcon,
+  UserMinusIcon,
+  XCircleIcon,
+} from 'lucide-react'
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
@@ -61,6 +79,7 @@ export function AdminDashboard() {
     >
       {data && !data.drawYear && (
         <Alert>
+          <CalendarOffIcon aria-hidden="true" />
           <AlertTitle>{t('admin.dashboard.noDrawYear')}</AlertTitle>
           <AlertDescription>{t('admin.dashboard.noDrawYearHint')}</AlertDescription>
         </Alert>
@@ -69,7 +88,10 @@ export function AdminDashboard() {
       {data?.drawYear && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">{t('admin.dashboard.activeYear')}</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <CalendarDaysIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+              {t('admin.dashboard.activeYear')}
+            </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-wrap items-center gap-3">
             <span className="text-2xl font-semibold tabular-nums">
@@ -86,7 +108,11 @@ export function AdminDashboard() {
       )}
 
       <section aria-labelledby="dashboard-registration">
-        <h2 id="dashboard-registration" className="mb-3 text-sm font-semibold text-foreground">
+        <h2
+          id="dashboard-registration"
+          className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground"
+        >
+          <ClipboardListIcon className="size-4 text-muted-foreground" aria-hidden="true" />
           {t('admin.dashboard.sections.registration')}
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -95,30 +121,38 @@ export function AdminDashboard() {
             value={number(counts?.applications)}
             hint={t('admin.dashboard.metrics.applicationsHint')}
             loading={loading}
+            icon={ClipboardListIcon}
           />
           <Metric
             label={t('admin.dashboard.metrics.eligible')}
             value={number(counts?.eligibleApplications)}
             hint={t('admin.dashboard.metrics.eligibleHint')}
             loading={loading}
+            icon={CheckCircle2Icon}
           />
           <Metric
             label={t('admin.dashboard.metrics.ineligible')}
             value={number(counts?.ineligibleApplications)}
             hint={t('admin.dashboard.metrics.ineligibleHint')}
             loading={loading}
+            icon={XCircleIcon}
           />
           <Metric
             label={t('admin.dashboard.metrics.allocatedSpots')}
             value={number(counts?.allocatedSpots)}
             hint={t('admin.dashboard.metrics.allocatedSpotsHint')}
             loading={loading}
+            icon={ArmchairIcon}
           />
         </div>
       </section>
 
       <section aria-labelledby="dashboard-draws">
-        <h2 id="dashboard-draws" className="mb-3 text-sm font-semibold text-foreground">
+        <h2
+          id="dashboard-draws"
+          className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground"
+        >
+          <ClipboardCheckIcon className="size-4 text-muted-foreground" aria-hidden="true" />
           {t('admin.dashboard.sections.draws')}
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -127,30 +161,38 @@ export function AdminDashboard() {
             value={number(counts?.communeDraws)}
             hint={t('admin.dashboard.metrics.communeDrawsHint')}
             loading={loading}
+            icon={ClipboardCheckIcon}
           />
           <Metric
             label={t('admin.dashboard.metrics.readyDraws')}
             value={number(counts?.readyDraws)}
             hint={t('admin.dashboard.metrics.readyDrawsHint')}
             loading={loading}
+            icon={ClockIcon}
           />
           <Metric
             label={t('admin.dashboard.metrics.lockedDraws')}
             value={number(counts?.lockedDraws)}
             hint={t('admin.dashboard.metrics.lockedDrawsHint')}
             loading={loading}
+            icon={LockIcon}
           />
           <Metric
             label={t('admin.dashboard.metrics.completedDraws')}
             value={number(counts?.completedDraws)}
             hint={t('admin.dashboard.metrics.completedDrawsHint')}
             loading={loading}
+            icon={CheckCircle2Icon}
           />
         </div>
       </section>
 
       <section aria-labelledby="dashboard-results">
-        <h2 id="dashboard-results" className="mb-3 text-sm font-semibold text-foreground">
+        <h2
+          id="dashboard-results"
+          className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground"
+        >
+          <TrophyIcon className="size-4 text-muted-foreground" aria-hidden="true" />
           {t('admin.dashboard.sections.results')}
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -159,24 +201,28 @@ export function AdminDashboard() {
             value={number(counts?.unpublishedResults)}
             hint={t('admin.dashboard.metrics.unpublishedHint')}
             loading={loading}
+            icon={EyeOffIcon}
           />
           <Metric
             label={t('admin.dashboard.metrics.published')}
             value={number(counts?.publishedResults)}
             hint={t('admin.dashboard.metrics.publishedHint')}
             loading={loading}
+            icon={EyeIcon}
           />
           <Metric
             label={t('admin.dashboard.metrics.withdrawn')}
             value={number(counts?.withdrawnWinners)}
             hint={t('admin.dashboard.metrics.withdrawnHint')}
             loading={loading}
+            icon={UserMinusIcon}
           />
           <Metric
             label={t('admin.dashboard.metrics.reservesCalled')}
             value={number(counts?.reservesAwaitingDecision)}
             hint={t('admin.dashboard.metrics.reservesCalledHint')}
             loading={loading}
+            icon={PhoneCallIcon}
           />
         </div>
       </section>
@@ -186,7 +232,11 @@ export function AdminDashboard() {
           national figure here to hide. */}
       {data?.governance && (
         <section aria-labelledby="dashboard-governance">
-          <h2 id="dashboard-governance" className="mb-3 text-sm font-semibold text-foreground">
+          <h2
+            id="dashboard-governance"
+            className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground"
+          >
+            <ShieldCheckIcon className="size-4 text-muted-foreground" aria-hidden="true" />
             {t('admin.dashboard.sections.governance')}
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -194,11 +244,13 @@ export function AdminDashboard() {
               label={t('admin.dashboard.metrics.pendingImports')}
               value={formatNumber(data.governance.pendingImports, locale)}
               hint={t('admin.dashboard.metrics.pendingImportsHint')}
+              icon={FileSpreadsheetIcon}
             />
             <Metric
               label={t('admin.dashboard.metrics.pendingApprovals')}
               value={formatNumber(data.governance.pendingApprovals, locale)}
               hint={t('admin.dashboard.metrics.pendingApprovalsHint')}
+              icon={ShieldCheckIcon}
             />
           </div>
         </section>
