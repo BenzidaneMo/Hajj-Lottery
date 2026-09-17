@@ -61,6 +61,17 @@ export interface PoolFreezeResult {
 }
 
 /**
+ * True when every blocker is one `freeze()` itself resolves rather than only
+ * reports — currently just `MISSING_WEIGHT`. Exported so a batch preview
+ * (`BatchPoolFreezeService`) can report such a commune as freezable instead
+ * of incorrectly blocked, without duplicating this rule and risking the two
+ * disagreeing about what `freeze()` will actually attempt.
+ */
+export function isResolvableByFreezing(blockers: readonly PoolBlocker[]): boolean {
+  return blockers.length > 0 && blockers.every((blocker) => blocker.code === 'MISSING_WEIGHT')
+}
+
+/**
  * The boundary between mutable application data and the fixed input a lottery
  * is run against.
  *
@@ -264,10 +275,7 @@ export class DrawPoolService {
     // succeeded should be told the outcome, not handed a failure.
     if (validation.existingPool) return settled(validation.existingPool, true)
 
-    const onlyUnfrozenWeights =
-      validation.blockers.length > 0 && validation.blockers.every((b) => b.code === 'MISSING_WEIGHT')
-
-    if (onlyUnfrozenWeights) {
+    if (isResolvableByFreezing(validation.blockers)) {
       await this.freezeMissingWeights(validation.communeDraw)
       validation = await this.validate(communeDrawId)
     }

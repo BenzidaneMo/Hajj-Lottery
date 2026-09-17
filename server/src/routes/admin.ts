@@ -13,6 +13,10 @@ import {
 } from '../controllers/admin-application.controller.js'
 import { executeBatchDraw, validateBatchDraw } from '../controllers/admin-batch-draw.controller.js'
 import {
+  freezeBatchPools,
+  validateBatchPoolFreeze,
+} from '../controllers/admin-batch-pool-freeze.controller.js'
+import {
   getApplication,
   getDashboard,
   listApplications,
@@ -137,6 +141,19 @@ adminRouter.post(
   '/commune-draws/batch/execute',
   requireRole(AdminRole.SUPER_ADMIN),
   asyncHandler(executeBatchDraw),
+)
+// Same reason, same authority, one step earlier in the pipeline: freezing
+// every ready commune's pool in a year before "Execute All Validated Draws"
+// has anything locked to run.
+adminRouter.post(
+  '/commune-draws/batch/freeze/validate',
+  requireRole(AdminRole.SUPER_ADMIN),
+  asyncHandler(validateBatchPoolFreeze),
+)
+adminRouter.post(
+  '/commune-draws/batch/freeze/execute',
+  requireRole(AdminRole.SUPER_ADMIN),
+  asyncHandler(freezeBatchPools),
 )
 adminRouter.get('/commune-draws/:id', asyncHandler(getCommuneDraw))
 adminRouter.post('/commune-draws', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(createCommuneDraw))
