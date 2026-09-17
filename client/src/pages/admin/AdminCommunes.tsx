@@ -5,12 +5,15 @@ import {
   COMMUNE_DRAW_STATUSES,
   type BatchCandidateDto,
   type BatchExecutionResultDto,
+  type BatchFreezeResultDto,
+  type BatchFreezeValidationDto,
   type BatchNotReadyReason,
   type BatchValidationDto,
   type CommuneDrawListItemDto,
+  type PoolBlockerCode,
   type SupportedLocale,
 } from '@hajj-lottery/shared'
-import { PlayIcon, SettingsIcon } from 'lucide-react'
+import { LockIcon, PlayIcon, SettingsIcon } from 'lucide-react'
 import { useCallback, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -43,8 +46,10 @@ import {
   fetchCommuneDraw,
   fetchCommuneDraws,
   fetchDrawYears,
+  freezeBatchPools,
   updateCommuneDraw,
   validateBatchDraws,
+  validateBatchPoolFreeze,
 } from '@/lib/admin-api'
 import { useAuth } from '@/lib/auth-context'
 import { formatNumber, formatYear } from '@/lib/format'
@@ -98,6 +103,7 @@ export function AdminCommunes() {
   })
   const [editingId, setEditingId] = useState<string | undefined>(undefined)
   const [batchOpen, setBatchOpen] = useState(false)
+  const [batchFreezeOpen, setBatchFreezeOpen] = useState(false)
 
   const narrow = (change: Partial<Filters>) => setFilters((current) => ({ ...current, ...change, page: 1 }))
 
@@ -183,15 +189,32 @@ export function AdminCommunes() {
   ]
 
   return (
-    <AdminPage
-      title={t('admin.pages.communes.title')}
-      description={t('admin.communeDraws.description')}
-    >
+    <AdminPage title={t('admin.pages.communes.title')} description={t('admin.communeDraws.description')}>
       {!isSuperAdmin && (
         <Alert>
           <AlertTitle>{t('admin.communeDraws.readOnlyTitle')}</AlertTitle>
           <AlertDescription>{t('admin.communeDraws.readOnlyBody')}</AlertDescription>
         </Alert>
+      )}
+
+      {isSuperAdmin && (
+        <div className="flex flex-col gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-foreground">{t('admin.batchFreeze.title')}</p>
+            <p className="text-sm text-muted-foreground">
+              {filters.drawYearId ? t('admin.batchFreeze.hint') : t('admin.batchFreeze.selectYearHint')}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!filters.drawYearId}
+            onClick={() => setBatchFreezeOpen(true)}
+          >
+            <LockIcon aria-hidden="true" />
+            {t('admin.batchFreeze.freeze')}
+          </Button>
+        </div>
       )}
 
       {isSuperAdmin && (
@@ -313,6 +336,15 @@ export function AdminCommunes() {
             setEditingId(undefined)
             reload()
           }}
+        />
+      )}
+
+      {isSuperAdmin && filters.drawYearId && (
+        <BatchFreezeDialog
+          open={batchFreezeOpen}
+          onOpenChange={setBatchFreezeOpen}
+          drawYearId={filters.drawYearId}
+          onCompleted={reload}
         />
       )}
 
@@ -676,6 +708,256 @@ function BatchExecutionDialog({
               {pending
                 ? t('admin.actions.working')
                 : t('admin.batch.confirmExecute', { count: validation?.ready.length ?? 0 })}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/**
+ * Freeze All Ready Pools — SUPER_ADMIN only, scoped to the page's own
+ * draw-year filter.
+ *
+ * The same two-request shape as `BatchExecutionDialog`, over
+ * `DrawPoolService.freeze` instead of `DrawExecutionService.execute`: a fresh
+ * validation, then — only on explicit confirmation of exactly what was shown
+ * — the freeze call, sent the same `ready` ids verbatim. Unlike execution's
+ * coarse preview, "not ready" here can mean several things about the
+ * applications themselves, not just the commune's own state, so each row
+ * lists every real blocker `DrawPoolService.validate` reported rather than
+ * one coarse reason.
+ */
+function BatchFreezeDialog({
+  open,
+  onOpenChange,
+  drawYearId,
+  onCompleted,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  drawYearId: string
+  onCompleted: () => void
+}) {
+  const { t, i18n } = useTranslation()
+  const locale = i18n.language as SupportedLocale
+  const [phase, setPhase] = useState<BatchPhase>('validating')
+  const [validation, setValidation] = useState<BatchFreezeValidationDto | undefined>(undefined)
+  const [result, setResult] = useState<BatchFreezeResultDto | undefined>(undefined)
+  const [error, setError] = useState<unknown>(undefined)
+  const [pending, setPending] = useState(false)
+
+  const [wasOpen, setWasOpen] = useState(open)
+  if (wasOpen !== open) {
+    setWasOpen(open)
+    if (open) {
+      setPhase('validating')
+      setValidation(undefined)
+      setResult(undefined)
+      setError(undefined)
+      validateBatchPoolFreeze(drawYearId)
+        .then((data) => {
+          setValidation(data)
+          setPhase('confirm')
+        })
+        .catch((caught: unknown) => setError(caught))
+    }
+  }
+
+  if (!open) return null
+
+  async function runFreeze() {
+    if (!validation) return
+    setPending(true)
+    setError(undefined)
+    try {
+      const readyIds = validation.ready.map((row) => row.communeDrawId)
+      const outcome = await freezeBatchPools(drawYearId, readyIds)
+      setResult(outcome)
+      setPhase('results')
+      onCompleted()
+    } catch (caught) {
+      setError(caught)
+    } finally {
+      setPending(false)
+    }
+  }
+
+  const place = (row: BatchCandidateDto) =>
+    `${localizedGeoName(row.wilaya, locale)} — ${localizedGeoName(row.commune, locale)}`
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{t('admin.batchFreeze.dialogTitle')}</DialogTitle>
+          <DialogDescription>{t('admin.batchFreeze.dialogDescription')}</DialogDescription>
+        </DialogHeader>
+
+        {phase === 'validating' && !error && (
+          <p className="text-sm text-muted-foreground">{t('admin.batchFreeze.validating')}</p>
+        )}
+
+        {phase === 'confirm' && pending && (
+          <div className="flex flex-col gap-2">
+            <p className="text-sm text-muted-foreground">{t('admin.batchFreeze.processing')}</p>
+            <Progress value={undefined} className="h-2 animate-pulse" />
+          </div>
+        )}
+
+        {error !== undefined && <ErrorNotice error={error} />}
+
+        {phase === 'confirm' && validation && (
+          <>
+            <FactList
+              facts={[
+                {
+                  label: t('admin.batchFreeze.readyCount'),
+                  value: formatNumber(validation.ready.length, locale),
+                },
+                {
+                  label: t('admin.batchFreeze.notReadyCount'),
+                  value: formatNumber(validation.notReady.length, locale),
+                },
+                {
+                  label: t('admin.batchFreeze.alreadyFrozenCount'),
+                  value: formatNumber(validation.alreadyFrozen.length, locale),
+                },
+                { label: t('admin.batchFreeze.totalCount'), value: formatNumber(validation.total, locale) },
+              ]}
+            />
+
+            {validation.ready.length === 0 ? (
+              <Alert>
+                <AlertTitle>{t('admin.batchFreeze.noneReadyTitle')}</AlertTitle>
+                <AlertDescription>{t('admin.batchFreeze.noneReadyBody')}</AlertDescription>
+              </Alert>
+            ) : (
+              <Alert variant="destructive">
+                <AlertTitle>{t('admin.batchFreeze.warningTitle')}</AlertTitle>
+                <AlertDescription>
+                  {t('admin.batchFreeze.warningBody', { count: validation.ready.length })}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {validation.notReady.length > 0 && (
+              <div className="max-h-48 overflow-y-auto rounded-md border border-border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t('geo.commune.label')}</TableHead>
+                      <TableHead>{t('admin.batchFreeze.blockers')}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {validation.notReady.map((row) => (
+                      <TableRow key={row.communeDrawId}>
+                        <TableCell>{place(row)}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {row.blockers.map((code: PoolBlockerCode) => (
+                              <Badge key={code} variant="destructive">
+                                {t(`admin.poolBlocker.${code}`)}
+                              </Badge>
+                            ))}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </>
+        )}
+
+        {phase === 'results' && result && (
+          <>
+            <FactList
+              facts={[
+                { label: t('admin.batchFreeze.targeted'), value: formatNumber(result.targeted, locale) },
+                { label: t('admin.batchFreeze.succeeded'), value: formatNumber(result.succeeded, locale) },
+                { label: t('admin.batchFreeze.failed'), value: formatNumber(result.failed, locale) },
+                { label: t('admin.batchFreeze.skipped'), value: formatNumber(result.skipped, locale) },
+              ]}
+            />
+            {result.targeted === 0 ? (
+              <Alert>
+                <AlertDescription>{t('admin.batchFreeze.noneReadyBody')}</AlertDescription>
+              </Alert>
+            ) : result.failed === 0 ? (
+              <Alert>
+                <AlertTitle>{t('admin.batchFreeze.allSucceededTitle')}</AlertTitle>
+              </Alert>
+            ) : result.succeeded === 0 ? (
+              <Alert variant="destructive">
+                <AlertTitle>{t('admin.batchFreeze.allFailedTitle')}</AlertTitle>
+              </Alert>
+            ) : (
+              <Alert>
+                <AlertTitle>{t('admin.batchFreeze.partialTitle')}</AlertTitle>
+              </Alert>
+            )}
+
+            <div className="max-h-64 overflow-y-auto rounded-md border border-border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('geo.commune.label')}</TableHead>
+                    <TableHead>{t('admin.communeDraws.poolState')}</TableHead>
+                    <TableHead>
+                      <span className="sr-only">{t('admin.table.actions')}</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {result.outcomes.map((row) => (
+                    <TableRow key={row.communeDrawId}>
+                      <TableCell>{place(row)}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            row.status === 'completed'
+                              ? 'success'
+                              : row.status === 'skipped'
+                                ? 'outline'
+                                : 'destructive'
+                          }
+                        >
+                          {t(`admin.batchFreeze.outcome.${row.status}`)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-end">
+                        <Button asChild variant="ghost" size="sm">
+                          <Link to={`/admin/communes/${row.communeDrawId}`}>
+                            {t('admin.communeDraws.open')}
+                          </Link>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </>
+        )}
+
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            {phase === 'results' ? t('admin.batchFreeze.done') : t('admin.actions.cancel')}
+          </Button>
+          {phase === 'confirm' && (
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={pending || !validation || validation.ready.length === 0}
+              onClick={runFreeze}
+            >
+              {pending
+                ? t('admin.actions.working')
+                : t('admin.batchFreeze.confirmFreeze', { count: validation?.ready.length ?? 0 })}
             </Button>
           )}
         </DialogFooter>

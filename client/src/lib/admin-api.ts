@@ -9,6 +9,8 @@ import type {
   ApplicationStatus,
   ApplicationWeightDto,
   BatchExecutionResultDto,
+  BatchFreezeResultDto,
+  BatchFreezeValidationDto,
   BatchValidationDto,
   ApprovalRequestDto,
   ApprovalStatus,
@@ -188,6 +190,24 @@ export function executeBatchDraws(
   communeDrawIds: string[],
 ): Promise<BatchExecutionResultDto> {
   return apiPost<BatchExecutionResultDto>('/api/admin/commune-draws/batch/execute', {
+    drawYearId,
+    communeDrawIds,
+  })
+}
+
+/**
+ * A preview only — nothing freezes. `freezeBatchPools` must be sent exactly
+ * the `ready` ids this returns, never a freshly recomputed set.
+ */
+export function validateBatchPoolFreeze(drawYearId: string): Promise<BatchFreezeValidationDto> {
+  return apiPost<BatchFreezeValidationDto>('/api/admin/commune-draws/batch/freeze/validate', { drawYearId })
+}
+
+export function freezeBatchPools(
+  drawYearId: string,
+  communeDrawIds: string[],
+): Promise<BatchFreezeResultDto> {
+  return apiPost<BatchFreezeResultDto>('/api/admin/commune-draws/batch/freeze/execute', {
     drawYearId,
     communeDrawIds,
   })
