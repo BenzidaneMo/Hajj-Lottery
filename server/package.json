@@ -16,6 +16,7 @@
     "reset-commune-draw": "tsx src/scripts/reset-commune-draw.ts",
     "reopen-registration": "tsx src/scripts/reopen-registration.ts",
     "reset-participants": "tsx src/scripts/reset-participants.ts",
+    "ready-commune-draws": "tsx src/scripts/ready-commune-draws.ts",
     "typecheck": "tsc -p tsconfig.test.json"
   },
   "dependencies": {
