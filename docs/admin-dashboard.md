@@ -23,7 +23,7 @@ also reads, and the server refuses the request regardless of what was rendered.
 | `/admin/communes`                      | Commune draws and their allocations              | read all, write SUPER_ADMIN                                  |
 | `/admin/communes/:id`                  | One commune's whole workflow                     | read scoped; ready it (Draft↔Ready) scoped; else SUPER_ADMIN |
 | `/admin/winners`                       | Concluded draws, published and not               | all, scoped                                                  |
-| `/admin/imports`, `/admin/imports/:id` | Legacy register pipeline                         | SUPER_ADMIN                                                  |
+| `/admin/imports`, `/admin/imports/:id` | Legacy register pipeline                         | all, scoped; decide SUPER_ADMIN                              |
 | `/admin/approvals`                     | Correction requests awaiting a decision          | SUPER_ADMIN                                                  |
 | `/admin/audit`                         | The trail                                        | SUPER_ADMIN                                                  |
 | `/admin/admins`                        | Administrator accounts                           | SUPER_ADMIN                                                  |
@@ -552,13 +552,25 @@ submission never re-asserts values nobody meant to touch) plus a mandatory
 reason. A scoped administrator's submission creates an `ApprovalRequest` and
 changes nothing; a SUPER_ADMIN's applies directly. Nothing is editable inline.
 
-**Imports.** Upload → validate → review → approve → execute. The page states
-that uploading writes nothing authoritative. Conflicts are listed and block;
-nothing offers to resolve, ignore or override one, and a test asserts no such
-control exists. The uploader is not offered a decision on their own batch (the
-service and a CHECK constraint refuse it too). Execution warns that past winners
-are excluded for life and that there is no un-import. Staged rows show only the
-last four digits of a national ID.
+**Imports.** Upload → validate → review → approve → execute. Uploading and
+reviewing are open to every administrator, narrowed to their own scope by the
+same `AuthorizationService` pattern as the rest of the console — a scoped
+administrator's file may only name their own territory, and a row that goes
+further is refused per row (`OUT_OF_SCOPE_COMMUNE`) rather than silently
+dropped or reassigned. The page states that uploading writes nothing
+authoritative. Conflicts are listed and block; nothing offers to resolve,
+ignore or override one, and a test asserts no such control exists. Only a
+`SUPER_ADMIN` sees Approve/Reject/Execute, and never for their own upload (the
+service and a CHECK constraint refuse it too regardless of what the client
+shows); a scoped administrator sees a plain statement that the batch is
+waiting on national review instead of an empty gap where those actions would
+be. Execution warns that past winners are excluded for life and that there is
+no un-import. Staged rows show only the last four digits of a national ID.
+The `imports` area's nav gate is a convenience like every other one here —
+`ADMIN_AREA_ROLES.imports` in `shared/src/scope.ts` only decides whether the
+sidebar link is shown, and the server enforces the real rule on every request
+regardless. See [docs/legacy-import.md](docs/legacy-import.md) for the full
+permission model.
 
 **Step 25** added a sample-template pair (`Download Sample CSV`/`Download
 Sample XLSX`) and an inline column guide to the upload card, without touching

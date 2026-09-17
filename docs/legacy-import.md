@@ -521,3 +521,19 @@ approved. A test posts them all and asserts they are ignored.
 - **Reversing an import.** There is no un-import and there should not be one
   without a policy decision about what happens to a lifetime exclusion that turns
   out to have been transcribed wrongly.
+- **Exporting real data.** `GET /api/admin/imports/template.csv`/`.xlsx` are
+  _sample_ templates — a fixed, fictional example of the expected column shape,
+  generated from `REQUIRED_IMPORT_COLUMNS`/`OPTIONAL_IMPORT_COLUMNS` so they
+  cannot drift from what an upload actually requires. They carry no authoritative
+  or staged data and are not an export feature; nothing in this codebase
+  downloads real participants, applications, history or results today. A future
+  export should mirror the scope model already used everywhere else in the
+  console — SUPER_ADMIN national, WILAYA_ADMIN their own wilaya, COMMUNE_ADMIN
+  their own commune if that is ever the operational policy — enforced
+  server-side through `AuthorizationService` like every other read here, never
+  by a client-side filter; audited like a mutation, since pulling a dataset out
+  of the system is exactly the kind of action the audit trail exists to
+  reconstruct; and explicit in its own request about which dataset and which
+  filters produced the file, so two exports can be compared. None of this is
+  built, and it should not be added speculatively — a route with a shape nobody
+  has asked for yet is a route nobody has thought hard about the scope of.
