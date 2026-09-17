@@ -158,6 +158,25 @@ describe('the import pipeline', () => {
     expect(screen.queryByRole('button', { name: /resolve|ignore|override|force/i })).not.toBeInTheDocument()
   })
 
+  it('tells a scoped administrator the batch is waiting on national review, with no decision controls', async () => {
+    await switchLocale('en')
+    stubApi({
+      '/api/admin/imports/ib-1/summary': { body: importSummary({ importable: true }) },
+      '/api/admin/imports/ib-1/conflicts': {
+        body: { items: [], page: 1, pageSize: 50, total: 0, totalPages: 1 },
+      },
+    })
+
+    renderAdmin(<AdminImportDetail />, { ...IMPORT_ROUTE, role: 'WILAYA_ADMIN' })
+
+    expect(
+      await screen.findByText(/ready for a national administrator to approve, reject or import/),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Import now' })).not.toBeInTheDocument()
+  })
+
   it('does not offer the uploader a decision on their own batch', async () => {
     await switchLocale('en')
     stubApi({

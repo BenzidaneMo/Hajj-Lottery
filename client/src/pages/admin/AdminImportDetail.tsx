@@ -150,28 +150,38 @@ export function AdminImportDetail() {
         </AlertDescription>
       </Alert>
 
-      {isSuperAdmin && (awaitingDecision || readyToExecute) && (
+      {(awaitingDecision || readyToExecute) && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/30 p-3">
-          {awaitingDecision && !isUploader && (
+          {isSuperAdmin ? (
             <>
-              <Button type="button" disabled={!summary.importable} onClick={() => setDeciding('approve')}>
-                {t('admin.imports.approve')}
-              </Button>
-              <Button type="button" variant="outline" onClick={() => setDeciding('reject')}>
-                {t('admin.imports.reject')}
-              </Button>
-              {!summary.importable && (
-                <span className="text-sm text-muted-foreground">{t('admin.imports.cannotApprove')}</span>
+              {awaitingDecision && !isUploader && (
+                <>
+                  <Button type="button" disabled={!summary.importable} onClick={() => setDeciding('approve')}>
+                    {t('admin.imports.approve')}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setDeciding('reject')}>
+                    {t('admin.imports.reject')}
+                  </Button>
+                  {!summary.importable && (
+                    <span className="text-sm text-muted-foreground">{t('admin.imports.cannotApprove')}</span>
+                  )}
+                </>
+              )}
+              {awaitingDecision && isUploader && (
+                <span className="text-sm text-muted-foreground">{t('admin.imports.notYourOwn')}</span>
+              )}
+              {readyToExecute && (
+                <Button type="button" onClick={() => setExecutingOpen(true)}>
+                  {t('admin.imports.execute')}
+                </Button>
               )}
             </>
-          )}
-          {awaitingDecision && isUploader && (
-            <span className="text-sm text-muted-foreground">{t('admin.imports.notYourOwn')}</span>
-          )}
-          {readyToExecute && (
-            <Button type="button" onClick={() => setExecutingOpen(true)}>
-              {t('admin.imports.execute')}
-            </Button>
+          ) : (
+            // Operational admins prepare and review a batch within their scope;
+            // approval and execution are a national decision, made elsewhere —
+            // this is information, not a hidden control the server would also
+            // refuse, since there is no such control for this role to begin with.
+            <span className="text-sm text-muted-foreground">{t('admin.imports.awaitingNationalReview')}</span>
           )}
         </div>
       )}

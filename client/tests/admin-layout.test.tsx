@@ -50,9 +50,14 @@ describe('role-aware navigation', () => {
     expect(links).toContain('Applications')
     expect(links).toContain('Commune draws')
 
-    // National work: deciding imports and approvals, reading the whole trail,
-    // managing accounts, and the identity registry that has no scope at all.
-    for (const hidden of ['Administrators', 'Audit log', 'Imports', 'Approvals', 'Participants']) {
+    // Uploading and reviewing a register is ordinary scoped work, same as
+    // applications or commune draws — the server never gated it to
+    // SUPER_ADMIN, only approve/reject/execute are.
+    expect(links).toContain('Imports')
+
+    // National work: deciding approvals, reading the whole trail, managing
+    // accounts, and the identity registry that has no scope at all.
+    for (const hidden of ['Administrators', 'Audit log', 'Approvals', 'Participants']) {
       expect(links).not.toContain(hidden)
     }
   })
@@ -64,6 +69,8 @@ describe('role-aware navigation', () => {
     const links = navLinks()
     expect(links).toHaveLength(areasFor('COMMUNE_ADMIN').length)
     expect(links).toContain('Results')
+    // Preparing their own commune's paper register is within reach too.
+    expect(links).toContain('Imports')
     // A commune administrator has no wilaya-wide configuration view.
     expect(links).not.toContain('Commune draws')
     expect(links).not.toContain('Participants')

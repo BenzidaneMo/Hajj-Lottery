@@ -799,6 +799,7 @@
       "rejectBody": "Le lot est clos et ne peut pas être rouvert. Un registre corrigé peut être déposé comme nouveau lot.",
       "cannotApprove": "Résolvez d'abord les conflits.",
       "notYourOwn": "Vous avez déposé ce lot ; quelqu'un d'autre doit donc en décider.",
+      "awaitingNationalReview": "Ce lot est prêt pour qu'un administrateur national l'approuve, le rejette ou l'importe. Il n'y a rien d'autre à faire ici.",
       "decided": "Décision enregistrée.",
       "reason": "Motif",
       "execute": "Importer maintenant",

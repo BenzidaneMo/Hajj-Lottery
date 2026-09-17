@@ -36,7 +36,13 @@ export const ADMIN_AREA_ROLES = {
   draws: ['SUPER_ADMIN', 'WILAYA_ADMIN', 'COMMUNE_ADMIN'],
   winners: ['SUPER_ADMIN', 'WILAYA_ADMIN', 'COMMUNE_ADMIN'],
   history: ['SUPER_ADMIN', 'WILAYA_ADMIN', 'COMMUNE_ADMIN'],
-  imports: ['SUPER_ADMIN'],
+  // Uploading and reviewing a register is ordinary scoped work — the server
+  // never gated it to SUPER_ADMIN (see admin.ts's `/imports` routes and
+  // AuthorizationService's import scoping). Approve/reject/execute stay
+  // SUPER_ADMIN-only, enforced by `requireRole` regardless of this map; that
+  // narrower gate is what the console's own action buttons key off of, not
+  // this area check — see AdminImportDetail's `isSuperAdmin` guard.
+  imports: ['SUPER_ADMIN', 'WILAYA_ADMIN', 'COMMUNE_ADMIN'],
   approvals: ['SUPER_ADMIN'],
   audit: ['SUPER_ADMIN'],
   admins: ['SUPER_ADMIN'],

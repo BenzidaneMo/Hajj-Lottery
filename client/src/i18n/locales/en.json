@@ -799,6 +799,7 @@
       "rejectBody": "The batch is closed and cannot be reopened. A corrected register may be uploaded as a new batch.",
       "cannotApprove": "Resolve the conflicts first.",
       "notYourOwn": "You uploaded this batch, so somebody else must decide it.",
+      "awaitingNationalReview": "This batch is ready for a national administrator to approve, reject or import. There is nothing further to do here.",
       "decided": "Decision recorded.",
       "reason": "Reason",
       "execute": "Import now",
