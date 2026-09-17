@@ -42,6 +42,10 @@ export const AUDIT_ACTIONS = [
   /** Freezing locks the commune draw in the same transaction, so this is the
    *  record of both. */
   'DRAW_POOL_FROZEN',
+  /** One summary event per batch freeze, in addition to each commune's own
+   *  DRAW_POOL_FROZEN — filed under the draw year, since a batch spans every
+   *  commune in it rather than one territory. */
+  'COMMUNE_DRAW_BATCH_POOL_FROZEN',
   'COMMUNE_DRAW_EXECUTED',
   /** One summary event per batch run, in addition to each commune's own
    *  COMMUNE_DRAW_EXECUTED — filed under the draw year, since a batch spans
