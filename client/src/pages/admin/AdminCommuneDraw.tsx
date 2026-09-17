@@ -46,18 +46,22 @@ import { useAction, useAsync } from '@/lib/use-async'
  * never from a step counter this page keeps.
  *
  * Reading is ordinary scoped work — a commune administrator watches their own
- * draw here. Every act that moves it is national: freezing fixes the terms of
- * a lottery, executing is irreversible and excludes the people it selects for
- * life, publishing announces it. Nobody should be able to do any of those to a
- * draw they are themselves subject to, so scoped administrators see this page
- * without the buttons — and the server refuses the requests regardless.
+ * draw here. Moving it between DRAFT and READY is scoped work too: it is the
+ * local administrator declaring their own commune's applications settled, so
+ * a wilaya or commune administrator sees that pair of buttons for their own
+ * draw. Every other act is national: allocating spots, cancelling, freezing
+ * fixes the terms of a lottery, executing is irreversible and excludes the
+ * people it selects for life, publishing announces it. Nobody should be able
+ * to do any of those to a draw they are themselves subject to, so scoped
+ * administrators see this page without those buttons — and the server
+ * refuses the requests regardless.
  */
 export function AdminCommuneDraw() {
   const { t, i18n } = useTranslation()
   const locale = i18n.language as SupportedLocale
   const { id = '' } = useParams()
   const { user } = useAuth()
-  const canOperate = user?.role === 'SUPER_ADMIN'
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN'
 
   const loadDraw = useCallback(() => fetchCommuneDraw(id), [id])
   const draw = useAsync(loadDraw)
@@ -109,6 +113,13 @@ export function AdminCommuneDraw() {
   const frozenPool = pool.state.status === 'ready' ? pool.state.data : undefined
   const published = currentResult?.publishedAt != null
   const expectedSelections = totalDrawSelections(record.allocatedSpots)
+  // A wilaya/commune administrator reaching this page already had their scope
+  // checked by the server to load it — the only transitions withheld from
+  // them here are the ones that are never theirs to make, not ones outside
+  // their territory.
+  const visibleTransitions = administrativeCommuneDrawTransitions(record.status).filter(
+    (next) => isSuperAdmin || next === 'DRAFT' || next === 'READY',
+  )
 
   const refreshAll = () => {
     setLiveResult(undefined)
@@ -146,10 +157,10 @@ export function AdminCommuneDraw() {
 
       <DrawLifecycleStepper status={record.status} published={published} />
 
-      {canOperate && administrativeCommuneDrawTransitions(record.status).length > 0 && (
+      {visibleTransitions.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm text-muted-foreground">{t('admin.communeDraws.moveTo')}</span>
-          {administrativeCommuneDrawTransitions(record.status).map((next) => (
+          {visibleTransitions.map((next) => (
             <Button
               key={next}
               type="button"
@@ -177,7 +188,7 @@ export function AdminCommuneDraw() {
             draw={record}
             pool={frozenPool}
             poolLoading={pool.state.status === 'loading'}
-            canFreeze={canOperate && record.status === 'READY'}
+            canFreeze={isSuperAdmin && record.status === 'READY'}
             onChanged={refreshAll}
           />
         </TabsContent>
@@ -203,7 +214,7 @@ export function AdminCommuneDraw() {
                 <AlertTitle>{t('admin.execution.readyTitle')}</AlertTitle>
                 <AlertDescription>{t('admin.execution.readyBody')}</AlertDescription>
               </Alert>
-              {canOperate ? (
+              {isSuperAdmin ? (
                 <div>
                   <Button type="button" onClick={() => setExecuting(true)}>
                     <PlayIcon aria-hidden="true" />
@@ -222,7 +233,7 @@ export function AdminCommuneDraw() {
             <ErrorNotice error={result.state.error} onRetry={result.reload} />
           ) : currentResult ? (
             <div className="flex flex-col gap-4">
-              {canOperate && !published && (
+              {isSuperAdmin && !published && (
                 <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted/30 p-3">
                   <span className="text-sm">{t('admin.result.unpublishedHint')}</span>
                   <Button type="button" size="sm" onClick={() => setPublishing(true)}>
@@ -240,7 +251,7 @@ export function AdminCommuneDraw() {
               <ResultPanel
                 draw={record}
                 result={currentResult}
-                canOperate={canOperate}
+                canOperate={isSuperAdmin}
                 onChanged={setLiveResult}
               />
             </div>

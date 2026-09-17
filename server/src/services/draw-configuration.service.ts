@@ -65,9 +65,14 @@ export interface UpdateCommuneDrawInput {
  * commune with 843 eligible applications for 12 places is the ordinary case,
  * and so is one with 100 places and 20 applicants.
  *
- * Geographic authorization is not here. Reads go through AuthorizationService,
- * where scope is a query filter; writes are SUPER_ADMIN-only and gated at the
- * route.
+ * Geographic authorization is not here — reads go through AuthorizationService,
+ * where scope is a query filter, and `updateCommuneDraw`'s caller has already
+ * been resolved and scope-checked by the controller before this class ever
+ * sees the id. Role restriction is not here either: whether the caller may
+ * touch `allocatedSpots`, or move to any status but DRAFT/READY, is decided by
+ * the controller (`admin-draw.controller.ts`) before calling in, using the
+ * actor already threaded through as `AuditActor`. What *is* here is the
+ * lifecycle — which transitions exist at all, regardless of who asks.
  */
 export class DrawConfigurationService {
   private readonly db: PrismaClient

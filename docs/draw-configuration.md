@@ -155,11 +155,11 @@ not a value baked into a deployment.
 
 ## Who may do what
 
-|                 | Read draw years | Read commune draws | Configure anything |
-| --------------- | --------------- | ------------------ | ------------------ |
-| `SUPER_ADMIN`   | ✓               | all                | ✓                  |
-| `WILAYA_ADMIN`  | ✓               | their wilaya       | —                  |
-| `COMMUNE_ADMIN` | ✓               | their commune      | —                  |
+|                 | Read draw years | Read commune draws | Ready their own commune draw | Configure anything else |
+| --------------- | --------------- | ------------------ | ---------------------------- | ----------------------- |
+| `SUPER_ADMIN`   | ✓               | all                | ✓                            | ✓                       |
+| `WILAYA_ADMIN`  | ✓               | their wilaya       | ✓, within their wilaya       | —                       |
+| `COMMUNE_ADMIN` | ✓               | their commune      | ✓, their own commune only    | —                       |
 
 Draw years are read unscoped: a year is national, names no territory, and
 reveals nothing about anyone's commune. Which communes are configured _within_
@@ -170,14 +170,27 @@ Commune draws are scoped through the commune relation inside the query, per
 rather than skipping a check. An out-of-scope commune draw returns **404**,
 byte-identical to an id that was never issued.
 
-**Mutation is SUPER_ADMIN-only**, and returns **403** to a scoped administrator
-— they are authenticated and the route is no secret; they simply may not do
-this. That holds even inside their own territory: a commune administrator
-allocating their own commune's pilgrimage places is precisely the conflict of
-interest the roles exist to prevent.
+**Most mutation is SUPER_ADMIN-only**, and returns **403** to a scoped
+administrator — they are authenticated and the route is no secret; they simply
+may not do this. That holds even inside their own territory: a commune
+administrator allocating their own commune's pilgrimage places is precisely
+the conflict of interest the roles exist to prevent, and the same is true of
+cancelling a draw or moving it to any status a lottery already depends on.
 
-The geographic validation infrastructure is correct regardless, so widening
-write access later is a change of one route guard rather than a redesign.
+**One transition is the deliberate exception**: moving a commune's own draw
+between `DRAFT` and `READY`. That is the local administrator declaring their
+own commune's applications settled, not deciding how many people win — it
+carries none of the conflict of interest an allocation or a cancellation
+would. `PATCH /api/admin/commune-draws/:id` therefore carries no route-level
+role gate; it looks the draw up the same scoped way the read does (404
+out-of-scope) and then, inline, refuses an allocation change or any other
+target status to anyone but `SUPER_ADMIN`. Sending both a status and an
+allocation in the same request is refused as a whole for a scoped caller —
+there is no partial application of one field and rejection of the other.
+
+The geographic validation infrastructure made this possible without a
+redesign: the same scoped lookup the read path always used is what the write
+path now reuses, exactly as originally anticipated here.
 
 ## Integrity
 

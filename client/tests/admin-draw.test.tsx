@@ -271,6 +271,39 @@ describe('the draw workflow', () => {
     expect(screen.queryByRole('button', { name: 'Freeze the pool' })).not.toBeInTheDocument()
   })
 
+  it('lets a wilaya or commune administrator ready their own draw, but never offers Cancel', async () => {
+    await switchLocale('en')
+    stubApi(drawPage({ draw: communeDraw({ status: 'READY' }) }))
+
+    for (const role of ['WILAYA_ADMIN', 'COMMUNE_ADMIN'] as const) {
+      const { unmount } = renderAdmin(<AdminCommuneDraw />, { ...DRAW_ROUTE, role })
+
+      // READY's only administrative move is back to DRAFT; CANCELLED exists
+      // in the lifecycle table too, but is national work, not theirs.
+      expect(await screen.findByRole('button', { name: 'Draft' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Cancelled' })).not.toBeInTheDocument()
+      // Freezing stays out of reach regardless.
+      expect(screen.queryByRole('button', { name: 'Freeze the pool' })).not.toBeInTheDocument()
+
+      unmount()
+    }
+  })
+
+  it('sends the requested status when a scoped administrator readies their own draw', async () => {
+    await switchLocale('en')
+    stubApi(drawPage({ draw: communeDraw({ status: 'DRAFT' }) }))
+
+    renderAdmin(<AdminCommuneDraw />, { ...DRAW_ROUTE, role: 'COMMUNE_ADMIN' })
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Ready' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Ready' }))
+
+    const patched = requestLog.find((entry) => entry.method === 'PATCH')
+    expect(patched?.url).toContain('/api/admin/commune-draws/cd-1')
+    expect(JSON.parse(patched?.body ?? '{}')).toEqual({ status: 'READY' })
+  })
+
   it('treats a missing pool or result as "not yet", not as a failure', async () => {
     await switchLocale('en')
     stubApi(drawPage({ draw: communeDraw({ status: 'DRAFT' }) }))

@@ -517,7 +517,7 @@
       "confirmTransitionTitle": "Modifier le tirage communal",
       "transitioned": "Tirage communal mis à jour.",
       "readOnlyTitle": "Lecture seule",
-      "readOnlyBody": "L'attribution est décidée au niveau national. Vous pouvez suivre vos tirages ici mais pas les configurer.",
+      "readOnlyBody": "L'attribution est décidée au niveau national. Vous pouvez suivre vos tirages ici, et ouvrir l'un d'eux pour le faire passer de Brouillon à Prêt, mais pas modifier son attribution.",
       "poolState": "Vivier",
       "executionState": "Tirage",
       "publicationState": "Publication",

@@ -12,23 +12,23 @@ also reads, and the server refuses the request regardless of what was rendered.
 
 ## Information architecture
 
-| Route                                  | Screen                                           | Who                          |
-| -------------------------------------- | ------------------------------------------------ | ---------------------------- |
-| `/admin`                               | Dashboard — what needs attention                 | all                          |
-| `/admin/applications`                  | Applications table                               | all, scoped                  |
-| `/admin/applications/:id`              | One application: applicants, eligibility, weight | all, scoped                  |
-| `/admin/participants`                  | National identity registry                       | SUPER_ADMIN                  |
-| `/admin/history`                       | One person's participation ledger                | all, scoped                  |
-| `/admin/draws`                         | Draw years — the national cycle                  | read all, write SUPER_ADMIN  |
-| `/admin/communes`                      | Commune draws and their allocations              | read all, write SUPER_ADMIN  |
-| `/admin/communes/:id`                  | One commune's whole workflow                     | read scoped, act SUPER_ADMIN |
-| `/admin/winners`                       | Concluded draws, published and not               | all, scoped                  |
-| `/admin/imports`, `/admin/imports/:id` | Legacy register pipeline                         | SUPER_ADMIN                  |
-| `/admin/approvals`                     | Correction requests awaiting a decision          | SUPER_ADMIN                  |
-| `/admin/audit`                         | The trail                                        | SUPER_ADMIN                  |
-| `/admin/admins`                        | Administrator accounts                           | SUPER_ADMIN                  |
-| `/admin/settings`                      | The session you are working in                   | SUPER_ADMIN                  |
-| `/admin/*`                             | An address with no page                          | all                          |
+| Route                                  | Screen                                           | Who                                                          |
+| -------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------ |
+| `/admin`                               | Dashboard — what needs attention                 | all                                                          |
+| `/admin/applications`                  | Applications table                               | all, scoped                                                  |
+| `/admin/applications/:id`              | One application: applicants, eligibility, weight | all, scoped                                                  |
+| `/admin/participants`                  | National identity registry                       | SUPER_ADMIN                                                  |
+| `/admin/history`                       | One person's participation ledger                | all, scoped                                                  |
+| `/admin/draws`                         | Draw years — the national cycle                  | read all, write SUPER_ADMIN                                  |
+| `/admin/communes`                      | Commune draws and their allocations              | read all, write SUPER_ADMIN                                  |
+| `/admin/communes/:id`                  | One commune's whole workflow                     | read scoped; ready it (Draft↔Ready) scoped; else SUPER_ADMIN |
+| `/admin/winners`                       | Concluded draws, published and not               | all, scoped                                                  |
+| `/admin/imports`, `/admin/imports/:id` | Legacy register pipeline                         | SUPER_ADMIN                                                  |
+| `/admin/approvals`                     | Correction requests awaiting a decision          | SUPER_ADMIN                                                  |
+| `/admin/audit`                         | The trail                                        | SUPER_ADMIN                                                  |
+| `/admin/admins`                        | Administrator accounts                           | SUPER_ADMIN                                                  |
+| `/admin/settings`                      | The session you are working in                   | SUPER_ADMIN                                                  |
+| `/admin/*`                             | An address with no page                          | all                                                          |
 
 The whole operational sequence for one commune lives on **one** page
 (`/admin/communes/:id`) rather than four. It is one sequence, and an operator
@@ -202,6 +202,24 @@ reach the former, and only freezing the pool (`DrawPoolService.freeze`) may
 reach the latter. `LOCKED` was reachable as a plain "move to" action until a
 fix: it let an administrator lock a commune draw with no pool behind it,
 which then had no route back and made running the lottery 404.
+
+**The move-to buttons are not all SUPER_ADMIN-only.** A WILAYA_ADMIN or
+COMMUNE_ADMIN previously had to ask a national administrator to move every
+commune from `DRAFT` to `READY` by hand before batch pool freezing or batch
+execution had anything to work on — the same "manually go commune by commune"
+bottleneck the two batch buttons above exist to remove, just one step
+earlier, and not solvable by a batch button since only the commune's own
+administrator knows their applications are actually settled. The client
+filters `administrativeCommuneDrawTransitions(record.status)` down to just
+`DRAFT`/`READY` for anyone who isn't a SUPER_ADMIN before rendering the
+button row — `CANCELLED` stays hidden from scoped roles — and the server
+enforces the same restriction independently in `updateCommuneDraw`
+(`admin-draw.controller.ts`): it fetches the draw through
+`AuthorizationService.findCommuneDraw` exactly as the read does (404 for
+out-of-scope), then refuses `allocatedSpots` or any status other than
+`DRAFT`/`READY` to anyone but SUPER_ADMIN. A console rendering only the two
+safe buttons is a courtesy, not the boundary — the route carries no
+role-based gate at all, unlike every other mutation on this page.
 
 ### Pool validation and freezing
 

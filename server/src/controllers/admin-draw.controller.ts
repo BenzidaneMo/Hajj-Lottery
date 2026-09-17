@@ -9,7 +9,7 @@ import type {
 import type { DrawYear } from '@prisma/client'
 import type { RequestHandler } from 'express'
 
-import { BadRequestError, NotFoundError } from '../lib/errors.js'
+import { BadRequestError, ForbiddenError, NotFoundError } from '../lib/errors.js'
 import { getAuthenticatedUser } from '../middleware/require-authenticated-user.js'
 import { auditActor } from '../services/audit.service.js'
 import { authorizationService } from '../services/authorization.service.js'
@@ -29,11 +29,15 @@ import {
 /**
  * Draw configuration for administrators.
  *
- * Reads are open to any administrator and narrowed to their territory. Writes
- * are SUPER_ADMIN-only, gated at the route — allocation is a national
- * decision, and a wilaya or commune administrator awarding their own
- * pilgrimage places is exactly the conflict of interest the roles exist to
- * prevent.
+ * Reads are open to any administrator and narrowed to their territory.
+ * Creating a draw year or a commune draw, and changing an allocation or any
+ * status but DRAFT/READY, are SUPER_ADMIN-only, gated at the route or (for
+ * `updateCommuneDraw`, which shares one endpoint with the scoped DRAFT<->READY
+ * case) inline in the handler — allocation is a national decision, and a
+ * wilaya or commune administrator awarding their own pilgrimage places is
+ * exactly the conflict of interest the roles exist to prevent. Moving a
+ * commune's own draw between DRAFT and READY carries none of that conflict,
+ * so it is open to whichever administrator's territory the draw is in.
  */
 
 // --- The national cycle ------------------------------------------------------
@@ -163,10 +167,17 @@ export const createCommuneDraw: RequestHandler = async (req, res) => {
 }
 
 /**
- * PATCH /api/admin/commune-draws/:id — SUPER_ADMIN only.
+ * PATCH /api/admin/commune-draws/:id — 404 for out-of-scope, as for missing.
  *
  * The allocation may move while the draw is still configurable and not after:
- * once locked, the number of places is the published terms of a lottery.
+ * once locked, the number of places is the published terms of a lottery. Only
+ * a SUPER_ADMIN may change it, and only a SUPER_ADMIN may move a draw to any
+ * status other than DRAFT or READY — CANCELLED included. A WILAYA_ADMIN or
+ * COMMUNE_ADMIN may move their own commune draw between DRAFT and READY: that
+ * is the local administrator declaring their own commune's applications
+ * settled, which carries none of the conflict-of-interest an allocation or a
+ * cancellation would. The lifecycle table in the service still decides
+ * whether the specific transition is legal from the draw's current status.
  */
 export const updateCommuneDraw: RequestHandler = async (req, res) => {
   const parsed = updateCommuneDrawSchema.safeParse(req.body)
@@ -178,8 +189,31 @@ export const updateCommuneDraw: RequestHandler = async (req, res) => {
     )
   }
 
+  const user = getAuthenticatedUser(req)
+  const existing = await authorizationService.findCommuneDraw(user, req.params.id ?? '')
+  if (!existing) throw new NotFoundError('COMMUNE_DRAW_NOT_FOUND', 'Commune draw not found')
+
+  if (user.role !== 'SUPER_ADMIN') {
+    if (parsed.data.allocatedSpots !== undefined) {
+      throw new ForbiddenError(
+        'FORBIDDEN_ROLE',
+        'Only a national administrator may change a commune draw’s allocation',
+      )
+    }
+    if (
+      parsed.data.status !== undefined &&
+      parsed.data.status !== 'DRAFT' &&
+      parsed.data.status !== 'READY'
+    ) {
+      throw new ForbiddenError(
+        'FORBIDDEN_ROLE',
+        'A wilaya or commune administrator may only move a draw between Draft and Ready',
+      )
+    }
+  }
+
   const updated = await drawConfigurationService.updateCommuneDraw(
-    req.params.id ?? '',
+    existing.id,
     {
       ...(parsed.data.allocatedSpots === undefined ? {} : { allocatedSpots: parsed.data.allocatedSpots }),
       ...(parsed.data.status === undefined ? {} : { status: parsed.data.status as CommuneDrawStatus }),
@@ -187,7 +221,7 @@ export const updateCommuneDraw: RequestHandler = async (req, res) => {
         ? {}
         : { expectedUpdatedAt: parsed.data.expectedUpdatedAt }),
     },
-    auditActor(getAuthenticatedUser(req)),
+    auditActor(user),
   )
 
   res.json(toCommuneDrawDto(updated))

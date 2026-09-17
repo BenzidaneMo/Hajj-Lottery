@@ -118,10 +118,17 @@ adminRouter.get('/participants/:id/history', asyncHandler(getParticipantHistory)
 adminRouter.get('/history/:id', asyncHandler(getHistoryRecord))
 
 // Draw configuration. Reading is for every administrator, narrowed to their
-// own territory by the query; changing it is national work, so the mutations
-// carry an explicit role gate rather than relying on scope to be restrictive
-// enough — a COMMUNE_ADMIN allocating their own commune's pilgrimage places is
-// precisely the conflict of interest the roles exist to prevent.
+// own territory by the query. The national cycle's mutations carry an
+// explicit role gate — opening or closing registration is not something a
+// wilaya or commune administrator should do. A commune's own allocation is
+// the same kind of national work — a COMMUNE_ADMIN awarding their own
+// commune's pilgrimage places is precisely the conflict of interest the roles
+// exist to prevent — but readying a commune draw for the pipeline (moving it
+// between DRAFT and READY) is not: that is the local administrator saying
+// their own commune's applications are settled, which is exactly whose call
+// it should be. So the PATCH route below carries no role gate; the handler
+// itself enforces the caller's scope and refuses everything but DRAFT<->READY
+// to anyone who isn't SUPER_ADMIN. See updateCommuneDraw.
 adminRouter.get('/draw-years', asyncHandler(listDrawYears))
 adminRouter.get('/draw-years/:year', asyncHandler(getDrawYear))
 adminRouter.post('/draw-years', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(createDrawYear))
@@ -157,7 +164,7 @@ adminRouter.post(
 )
 adminRouter.get('/commune-draws/:id', asyncHandler(getCommuneDraw))
 adminRouter.post('/commune-draws', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(createCommuneDraw))
-adminRouter.patch('/commune-draws/:id', requireRole(AdminRole.SUPER_ADMIN), asyncHandler(updateCommuneDraw))
+adminRouter.patch('/commune-draws/:id', asyncHandler(updateCommuneDraw))
 
 // The draw pool. Inspecting and dry-running are scoped but unrestricted by
 // role — seeing why your own commune cannot be frozen is not privileged.

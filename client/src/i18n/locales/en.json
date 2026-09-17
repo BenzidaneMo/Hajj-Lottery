@@ -517,7 +517,7 @@
       "confirmTransitionTitle": "Change the commune draw",
       "transitioned": "Commune draw updated.",
       "readOnlyTitle": "Read-only",
-      "readOnlyBody": "Allocation is decided nationally. You can follow your own draws here but not configure them.",
+      "readOnlyBody": "Allocation is decided nationally. You can follow your own draws here, and open one to move it between Draft and Ready, but not change its allocation.",
       "poolState": "Pool",
       "executionState": "Draw",
       "publicationState": "Publication",

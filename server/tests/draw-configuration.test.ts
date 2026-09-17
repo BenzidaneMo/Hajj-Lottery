@@ -611,16 +611,118 @@ describe('administrative access', () => {
     const commune = await communeAdmin(geo.wilayaA.id, geo.communeA1.id)
 
     for (const { cookie } of [wilaya, commune]) {
+      // A valid `expectedUpdatedAt` so the request passes validation and the
+      // refusal comes from the role check inside the handler, not from the
+      // unrelated "you must prove you read this record" rule.
       const response = await request(app)
         .patch(`/api/admin/commune-draws/${draw.id}`)
         .set('Cookie', cookie)
-        .send({ allocatedSpots: 99 })
+        .send({ allocatedSpots: 99, expectedUpdatedAt: draw.updatedAt.toISOString() })
 
       expect(response.status).toBe(403)
+      expect(response.body.code).toBe('FORBIDDEN_ROLE')
     }
 
     const stored = await prisma.communeDraw.findUniqueOrThrow({ where: { id: draw.id } })
     expect(stored.allocatedSpots).toBe(12)
+  })
+
+  it('lets a commune administrator ready their own commune draw, and return it to draft', async () => {
+    const year = await draftYear()
+    const draw = await configureCommune(year.id, geo.communeA1.id, 12)
+
+    const { cookie } = await communeAdmin(geo.wilayaA.id, geo.communeA1.id)
+
+    const readied = await request(app)
+      .patch(`/api/admin/commune-draws/${draw.id}`)
+      .set('Cookie', cookie)
+      .send({ status: 'READY' })
+
+    expect(readied.status).toBe(200)
+    expect(readied.body.status).toBe('READY')
+
+    const backToDraft = await request(app)
+      .patch(`/api/admin/commune-draws/${draw.id}`)
+      .set('Cookie', cookie)
+      .send({ status: 'DRAFT' })
+
+    expect(backToDraft.status).toBe(200)
+    expect(backToDraft.body.status).toBe('DRAFT')
+  })
+
+  it('lets a wilaya administrator ready a commune draw anywhere in their wilaya', async () => {
+    const year = await draftYear()
+    const draw = await configureCommune(year.id, geo.communeA2.id, 8)
+
+    const { cookie } = await wilayaAdmin(geo.wilayaA.id)
+
+    const response = await request(app)
+      .patch(`/api/admin/commune-draws/${draw.id}`)
+      .set('Cookie', cookie)
+      .send({ status: 'READY' })
+
+    expect(response.status).toBe(200)
+    expect(response.body.status).toBe('READY')
+  })
+
+  it('refuses a scoped administrator cancelling a commune draw', async () => {
+    const year = await draftYear()
+    const draw = await configureCommune(year.id, geo.communeA1.id, 12)
+
+    const wilaya = await wilayaAdmin(geo.wilayaA.id)
+    const commune = await communeAdmin(geo.wilayaA.id, geo.communeA1.id)
+
+    for (const { cookie } of [wilaya, commune]) {
+      const response = await request(app)
+        .patch(`/api/admin/commune-draws/${draw.id}`)
+        .set('Cookie', cookie)
+        .send({ status: 'CANCELLED' })
+
+      expect(response.status).toBe(403)
+      expect(response.body.code).toBe('FORBIDDEN_ROLE')
+    }
+
+    const stored = await prisma.communeDraw.findUniqueOrThrow({ where: { id: draw.id } })
+    expect(stored.status).toBe('DRAFT')
+  })
+
+  it('refuses a scoped administrator smuggling an allocation change into a status update', async () => {
+    const year = await draftYear()
+    const draw = await configureCommune(year.id, geo.communeA1.id, 12)
+
+    const { cookie } = await communeAdmin(geo.wilayaA.id, geo.communeA1.id)
+
+    const response = await request(app)
+      .patch(`/api/admin/commune-draws/${draw.id}`)
+      .set('Cookie', cookie)
+      .send({ status: 'READY', allocatedSpots: 99, expectedUpdatedAt: draw.updatedAt.toISOString() })
+
+    expect(response.status).toBe(403)
+
+    const stored = await prisma.communeDraw.findUniqueOrThrow({ where: { id: draw.id } })
+    expect(stored.status).toBe('DRAFT')
+    expect(stored.allocatedSpots).toBe(12)
+  })
+
+  it('refuses a scoped administrator readying a commune draw outside their territory', async () => {
+    const year = await draftYear()
+    const draw = await configureCommune(year.id, geo.communeB1.id, 12)
+
+    const wilaya = await wilayaAdmin(geo.wilayaA.id)
+    const commune = await communeAdmin(geo.wilayaA.id, geo.communeA1.id)
+
+    for (const { cookie } of [wilaya, commune]) {
+      const response = await request(app)
+        .patch(`/api/admin/commune-draws/${draw.id}`)
+        .set('Cookie', cookie)
+        .send({ status: 'READY' })
+
+      // Out of territory is indistinguishable from nonexistent.
+      expect(response.status).toBe(404)
+    }
+
+    const stored = await prisma.communeDraw.findUniqueOrThrow({ where: { id: draw.id } })
+    expect(stored.status).toBe('DRAFT')
   })
 
   it('refuses a scoped administrator creating a commune draw in their own territory', async () => {
