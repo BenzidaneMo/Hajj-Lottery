@@ -1142,6 +1142,46 @@ describe('geographic scoping', () => {
     expect(listed.body.items).toEqual([])
   })
 
+  it('lets a wilaya administrator read a batch touching their wilaya that somebody else uploaded', async () => {
+    const national = await superAdmin()
+    const batchId = await stage(national.cookie, [line({ commune_code: '90101' })])
+
+    const wilaya = await wilayaAdmin(geo.wilayaA.id)
+    const response = await request(app).get(`/api/admin/imports/${batchId}`).set('Cookie', wilaya.cookie)
+
+    expect(response.status).toBe(200)
+    expect(response.body.id).toBe(batchId)
+  })
+
+  it('does not reveal a batch that touches only a different wilaya, to a wilaya administrator', async () => {
+    const national = await superAdmin()
+    const batchId = await stage(national.cookie, [line({ commune_code: '90201' })])
+
+    const outsider = await wilayaAdmin(geo.wilayaA.id)
+
+    const found = await request(app).get(`/api/admin/imports/${batchId}`).set('Cookie', outsider.cookie)
+    expect(found.status).toBe(404)
+
+    const listed = await request(app).get('/api/admin/imports').set('Cookie', outsider.cookie)
+    expect(listed.body.items).toEqual([])
+  })
+
+  it('does not reveal a batch that touches only a different commune in the same wilaya, to a commune administrator', async () => {
+    const national = await superAdmin()
+    // communeA2 is in wilayaA, same as the outsider below, but is not their
+    // own commune — the boundary a COMMUNE_ADMIN's narrower scope draws that a
+    // WILAYA_ADMIN of the same wilaya would not.
+    const batchId = await stage(national.cookie, [line({ commune_code: '90102' })])
+
+    const outsider = await communeAdmin(geo.wilayaA.id, geo.communeA1.id)
+
+    const found = await request(app).get(`/api/admin/imports/${batchId}`).set('Cookie', outsider.cookie)
+    expect(found.status).toBe(404)
+
+    const listed = await request(app).get('/api/admin/imports').set('Cookie', outsider.cookie)
+    expect(listed.body.items).toEqual([])
+  })
+
   it('lets an uploader see their own batch entirely', async () => {
     const commune = await communeAdmin(geo.wilayaA.id, geo.communeA1.id)
     const batchId = await stage(commune.cookie, [line({ commune_code: '99999' })])

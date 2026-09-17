@@ -5,13 +5,16 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { createApp } from '../src/app.js'
 import { buildSampleCsv, buildSampleWorkbook } from '../src/lib/import-sample.js'
-import { AdminRole, createAdminAndSignIn } from './helpers/admins.js'
+import { AdminRole, createAdminAndSignIn, ensureTestGeography, type TestGeography } from './helpers/admins.js'
 
 const prisma = new PrismaClient()
 
 let app: ReturnType<typeof createApp>
+let geo: TestGeography
 
 const superAdmin = () => createAdminAndSignIn(app, prisma, { role: AdminRole.SUPER_ADMIN })
+const wilayaAdmin = (wilayaId: string) =>
+  createAdminAndSignIn(app, prisma, { role: AdminRole.WILAYA_ADMIN, wilayaId })
 
 /**
  * The sample's own commune codes (Adrar wilaya, real national reference
@@ -44,6 +47,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   app = createApp()
   await seedSampleGeography()
+  geo = await ensureTestGeography(prisma)
 })
 
 afterAll(async () => {
@@ -117,5 +121,14 @@ describe('the sample download routes', () => {
   it('refuses an unauthenticated caller, like every other admin route', async () => {
     expect((await request(app).get('/api/admin/imports/template.csv')).status).toBe(401)
     expect((await request(app).get('/api/admin/imports/template.xlsx')).status).toBe(401)
+  })
+
+  it('stays available to a scoped administrator — the template carries no data, just column names', async () => {
+    const { cookie } = await wilayaAdmin(geo.wilayaA.id)
+
+    expect((await request(app).get('/api/admin/imports/template.csv').set('Cookie', cookie)).status).toBe(200)
+    expect((await request(app).get('/api/admin/imports/template.xlsx').set('Cookie', cookie)).status).toBe(
+      200,
+    )
   })
 })
