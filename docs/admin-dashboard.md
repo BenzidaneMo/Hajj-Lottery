@@ -408,6 +408,45 @@ so the batch event plus the per-commune events together still let the whole
 operation be reconstructed, without a payload that grows without bound for a
 large batch.
 
+### Batch pool freezing
+
+**Freeze All Ready Pools**, SUPER_ADMIN only, one step earlier in the same
+pipeline and scoped to the same draw-year filter — without it, running batch
+execution first required an operator to open every commune's own page and
+freeze its pool by hand, one at a time, before "Execute All Validated Draws"
+had anything locked to run. `BatchPoolFreezeService` is the same kind of
+orchestration layer as `BatchDrawExecutionService` beside it: no new
+validation, no combined pools, and each named commune still freezes through
+exactly the same `DrawPoolService.freeze()` transaction it would from its own
+detail page.
+
+The two-request shape is identical — `POST /commune-draws/batch/freeze/validate`
+(`{ drawYearId }`), then, only on explicit confirmation of exactly the `ready`
+ids that returned, `POST /commune-draws/batch/freeze/execute` (`{ drawYearId,
+communeDrawIds }`) — but the readiness check itself cannot be as coarse as
+execution's. Whether a commune can freeze depends on every candidate
+application's current weight and eligibility, not just a count already sitting
+on the row, so `validate` calls `DrawPoolService.validate` once per commune
+without a pool — the same recompute the single-commune Validate button runs —
+and reports every real blocker (`PoolBlockerCode`, e.g.
+`REGISTRATION_STILL_OPEN`, `NO_ELIGIBLE_APPLICATIONS`, `STALE_WEIGHT`), not one
+coarse reason. A commune whose _only_ blocker is `MISSING_WEIGHT` is still
+reported `ready`: `freeze()` resolves that blocker itself before re-validating
+(see "Draw pool" in this file's source, or `DrawPoolService.freeze`'s own
+comment) via the exported `isResolvableByFreezing` — the batch preview reuses
+that exact function rather than re-deriving the condition, so the preview and
+what `freeze()` actually attempts cannot disagree.
+
+Outcomes are `completed`, `skipped` (the pool turned out to already be frozen
+— `POOL_ALREADY_EXISTS`, not an error) or `failed` (a real error, e.g.
+`POOL_NOT_READY` for a commune that stopped being freezable between the two
+requests). The concurrency guarantee is the same pattern as execution's: the
+real serialization is the unique constraint on `draw_pools.commune_draw_id`,
+and the service's own in-process `Set` is only a double-click short-circuit.
+One additional audit event, `COMMUNE_DRAW_BATCH_POOL_FROZEN`, is filed under
+the draw year alongside each commune's own `DRAW_POOL_FROZEN`, the same way
+`COMMUNE_DRAW_BATCH_EXECUTED` sits alongside `COMMUNE_DRAW_EXECUTED`.
+
 ## Official applicant eligibility rules (Step 25)
 
 Three rules joined the existing deterministic eligibility pipeline
