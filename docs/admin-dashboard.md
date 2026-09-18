@@ -230,17 +230,27 @@ with notes" for "cannot proceed". Nothing on the panel offers to repair a
 blocker.
 
 The freeze confirmation states the commune, the year, the allocation, the entry
-count, the total weight, and the selection breakdown: _N winners and N reserves
-— 2N selections in one continuous draw. One selected application occupies one
-position._ The operator is asked for none of those numbers, and a test asserts
+count, the pilgrim places it covers, the total weight, and the breakdown: _N
+winning places and N reserve places — 2N pilgrim places filled by one continuous
+draw. A paired application occupies two of them, so the draw selects however many
+applications it takes and never splits a pair._ The operator is asked for none of those numbers, and a test asserts
 the dialog contains no input at all. After freezing, the snapshot hash is shown
 with a note that it is **not a seed**. There is no unlock button, for anybody.
 
 ### Execution
 
-SUPER_ADMIN only. The confirmation lists the frozen pool's entry count and total
-weight, the pool hash, `LOTTERY_ALGORITHM_VERSION`, and the 2N breakdown, and
-warns that every selected person is excluded from future draws for life.
+SUPER_ADMIN only. The confirmation lists the frozen pool's entry count, the
+pilgrim places it covers, the total weight, the pool hash,
+`LOTTERY_ALGORITHM_VERSION`, and the `2N` places the draw will fill, and warns
+that every selected person is excluded from future draws for life.
+
+The result panel then reports both units side by side and separately labelled —
+winning applications and winning pilgrim places, reserve applications and reserve
+pilgrim places, applications still holding a place and pilgrim places still held —
+beside the allocation they are all measured against. A twelve place commune whose
+draw produced eleven winning applications filled all twelve places; reading the
+record count as the allocation is exactly the mistake
+[pilgrim-capacity.md](pilgrim-capacity.md) exists to prevent.
 
 `executeDraw` sends **no body at all** — not a winner count, not a seed, not an
 algorithm version. The server ignores one anyway; sending none makes it plain
@@ -375,8 +385,9 @@ Two requests, always in that order, never collapsed into one:
 
 1. **`POST /commune-draws/batch/validate`** (`{ drawYearId }`) computes a
    readiness preview and changes nothing. A commune is `ready` when
-   `status === 'LOCKED'`, a pool exists, and the pool's `entryCount` is at
-   least twice the allocation; otherwise it is `notReady` with a reason
+   `status === 'LOCKED'`, a pool exists, and the pool's `pilgrimCount` covers at
+   least twice the allocation — places, not entries, since that is what the
+   quota is spent in; otherwise it is `notReady` with a reason
    (`NOT_LOCKED`, `NO_POOL`, `INSUFFICIENT_ENTRIES`), or `alreadyCompleted`.
    This check is deliberately coarse — it does not re-verify the pool's hash
    or re-run eligibility, because that is `execute()`'s job and duplicating it

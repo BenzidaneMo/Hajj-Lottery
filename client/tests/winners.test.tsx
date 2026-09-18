@@ -306,7 +306,7 @@ describe('one commune’s official result', () => {
     renderResult()
 
     expect(await screen.findByText('a'.repeat(64))).toBeInTheDocument()
-    expect(screen.getByText('weighted-csprng-v1')).toBeInTheDocument()
+    expect(screen.getByText('weighted-csprng-capacity-v2')).toBeInTheDocument()
     // The commitment is published; the randomness that consumed it is not.
     expect(document.body.innerHTML).not.toMatch(/random[_ ]?value/i)
   })

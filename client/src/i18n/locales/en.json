@@ -646,9 +646,8 @@
       "blockedBody": "Each problem below must be resolved. Nothing is repaired automatically.",
       "blockers": "{{total}} problems",
       "eligibleApplications": "Eligible applications",
-      "entries": "Pool entries",
+      "entries": "Pool applications",
       "totalWeight": "Total weight",
-      "expectedSelections": "Selections the draw will make",
       "validatedAt": "Checked at",
       "freezeTitle": "Freeze the pool",
       "freezeBody": "This fixes the terms of the lottery permanently and locks the commune draw. There is no unlock.",
@@ -656,14 +655,16 @@
       "confirmFreezeTitle": "Freeze this commune's draw pool?",
       "confirmFreezeBody": "The entries and their weights stop moving from this moment. This cannot be undone by anyone.",
       "selectionBreakdown": "What the draw will select",
-      "selectionBreakdownBody": "{{winners}} winners and {{reserves}} reserves — {{total}} selections in one continuous draw. One selected application occupies one position.",
+      "selectionBreakdownBody": "{{winners}} winning places and {{reserves}} reserve places — {{total}} pilgrim places filled by one continuous draw. A paired application occupies two of them, so the draw selects however many applications it takes and never splits a pair.",
       "frozen": "Pool frozen.",
       "alreadyFrozen": "This pool was already frozen.",
       "frozenTitle": "The pool is frozen",
       "frozenBody": "These entries are what the lottery will read. Nothing can change them, and there is no unlock.",
       "frozenAt": "Frozen at",
       "snapshotHash": "Snapshot hash",
-      "snapshotHashHint": "Identifies the exact input this draw runs on. It is not a seed — the outcome does not depend on it."
+      "snapshotHashHint": "Identifies the exact input this draw runs on. It is not a seed — the outcome does not depend on it.",
+      "pilgrimCapacity": "Pilgrim places covered",
+      "requiredPilgrims": "Pilgrim places the draw must fill"
     },
     "execution": {
       "readyTitle": "Ready to run",
@@ -683,10 +684,10 @@
     "result": {
       "publication": "Publication",
       "notPublished": "Not published",
-      "winners": "Winners",
-      "reserves": "Reserves",
-      "activeWinners": "Places still held",
-      "winningParticipants": "Winning pilgrims",
+      "winners": "Winning applications",
+      "reserves": "Reserve applications",
+      "activeWinners": "Applications still holding a place",
+      "winningParticipants": "Lifetime winners recorded",
       "algorithmVersion": "Algorithm",
       "algorithmHint": "The implementation that produced this result. A concluded draw always names its own.",
       "poolHash": "Pool hash",
@@ -744,7 +745,11 @@
       "published": "Result published.",
       "alreadyPublished": "This result was already published.",
       "publishedTitle": "This result is public",
-      "publishedBody": "Citizens can see it on the public results page. There is no way to withdraw a publication."
+      "publishedBody": "Citizens can see it on the public results page. There is no way to withdraw a publication.",
+      "allocatedSpots": "Places allocated",
+      "winnerPilgrims": "Winning pilgrim places",
+      "reservePilgrims": "Reserve pilgrim places",
+      "activePilgrims": "Pilgrim places still held"
     },
     "winners": {
       "description": "Draws that have concluded, and which of them are still waiting to be announced.",

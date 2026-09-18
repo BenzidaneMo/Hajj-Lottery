@@ -181,7 +181,7 @@ describe('the draw workflow', () => {
     expect(screen.queryByText('The pool cannot be frozen')).not.toBeInTheDocument()
   })
 
-  it('states N winners, N reserves and 2N selections before freezing', async () => {
+  it('states the winning and reserve places in pilgrims, not in applications', async () => {
     await switchLocale('en')
     stubApi({
       ...drawPage({ draw: communeDraw({ status: 'READY', allocatedSpots: 12 }) }),
@@ -192,8 +192,12 @@ describe('the draw workflow', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Freeze the pool' }))
 
     const dialog = await screen.findByRole('alertdialog')
-    expect(within(dialog).getByText(/12 winners and 12 reserves — 24 selections/)).toBeInTheDocument()
-    expect(within(dialog).getByText(/One selected application occupies one position/)).toBeInTheDocument()
+    expect(
+      within(dialog).getByText(/12 winning places and 12 reserve places — 24 pilgrim places/),
+    ).toBeInTheDocument()
+    // And it says plainly why the number of applications will differ, rather
+    // than leaving an operator to read 24 as a count of records.
+    expect(within(dialog).getByText(/A paired application occupies two of them/)).toBeInTheDocument()
 
     // The operator is asked for none of these numbers; the server decides them.
     expect(within(dialog).queryAllByRole('spinbutton')).toHaveLength(0)
@@ -225,7 +229,7 @@ describe('the draw workflow', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Run the lottery' }))
 
     const dialog = await screen.findByRole('alertdialog')
-    expect(within(dialog).getByText('weighted-csprng-v1')).toBeInTheDocument()
+    expect(within(dialog).getByText('weighted-csprng-capacity-v2')).toBeInTheDocument()
     expect(within(dialog).getByText('b'.repeat(64))).toBeInTheDocument()
     expect(
       within(dialog).getByText(/3 winners and 3 reserves will be drawn — 6 selections in all/),

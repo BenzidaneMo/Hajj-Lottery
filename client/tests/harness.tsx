@@ -178,7 +178,7 @@ export function fullResult(overrides: Partial<PublicResultDto> = {}): PublicResu
     ...resultSummary(),
     entryCount: 843,
     poolHash: 'a'.repeat(64),
-    algorithmVersion: 'weighted-csprng-v1',
+    algorithmVersion: 'weighted-csprng-capacity-v2',
     drawnAt: '2027-04-28T08:30:00.000Z',
     winners: [
       {
@@ -291,7 +291,7 @@ export function expectNoPrivateData(container: HTMLElement): void {
   // Field names too: an empty or placeholder weight column would still be a
   // weight column, and the policy is that there is no such column.
   //
-  // The names rather than a bare "weight" substring — `weighted-csprng-v1` is
+  // The names rather than a bare "weight" substring — the algorithm version is
   // the published algorithm identifier and is meant to be on the page. A
   // substring check would fail on it and teach nothing.
   for (const label of [

@@ -2,7 +2,7 @@ import {
   administrativeCommuneDrawTransitions,
   localizedGeoName,
   LOTTERY_ALGORITHM_VERSION,
-  totalDrawSelections,
+  totalDrawPilgrimQuota,
   type CommuneDrawStatus,
   type DrawResultDto,
   type SupportedLocale,
@@ -112,7 +112,7 @@ export function AdminCommuneDraw() {
   const currentResult = liveResult ?? (result.state.status === 'ready' ? result.state.data : undefined)
   const frozenPool = pool.state.status === 'ready' ? pool.state.data : undefined
   const published = currentResult?.publishedAt != null
-  const expectedSelections = totalDrawSelections(record.allocatedSpots)
+  const requiredPilgrims = totalDrawPilgrimQuota(record.allocatedSpots)
   // A wilaya/commune administrator reaching this page already had their scope
   // checked by the server to load it — the only transitions withheld from
   // them here are the ones that are never theirs to make, not ones outside
@@ -139,8 +139,8 @@ export function AdminCommuneDraw() {
             value: formatNumber(record.allocatedSpots, locale),
           },
           {
-            label: t('admin.pool.expectedSelections'),
-            value: formatNumber(expectedSelections, locale),
+            label: t('admin.pool.requiredPilgrims'),
+            value: formatNumber(requiredPilgrims, locale),
           },
           {
             label: t('admin.communeDraws.status'),
@@ -285,6 +285,10 @@ export function AdminCommuneDraw() {
             value: frozenPool ? formatNumber(frozenPool.entryCount, locale) : '—',
           },
           {
+            label: t('admin.pool.pilgrimCapacity'),
+            value: frozenPool ? formatNumber(frozenPool.pilgrimCount, locale) : '—',
+          },
+          {
             label: t('admin.pool.totalWeight'),
             value: frozenPool ? formatNumber(frozenPool.totalWeight, locale) : '—',
           },
@@ -292,8 +296,8 @@ export function AdminCommuneDraw() {
           // concluded result must forever name the implementation it ran under.
           { label: t('admin.result.algorithmVersion'), value: LOTTERY_ALGORITHM_VERSION },
           {
-            label: t('admin.pool.expectedSelections'),
-            value: formatNumber(expectedSelections, locale),
+            label: t('admin.pool.requiredPilgrims'),
+            value: formatNumber(requiredPilgrims, locale),
           },
         ]}
         confirmLabel={t('admin.execution.execute')}
@@ -315,7 +319,7 @@ export function AdminCommuneDraw() {
             {t('admin.execution.warningBody', {
               winners: formatNumber(record.allocatedSpots, locale),
               reserves: formatNumber(record.allocatedSpots, locale),
-              total: formatNumber(expectedSelections, locale),
+              total: formatNumber(requiredPilgrims, locale),
             })}
           </AlertDescription>
         </Alert>
@@ -342,8 +346,16 @@ export function AdminCommuneDraw() {
             value: currentResult ? formatNumber(currentResult.winnerCount, locale) : '—',
           },
           {
+            label: t('admin.result.winningParticipants'),
+            value: currentResult ? formatNumber(currentResult.winnerPilgrimCount, locale) : '—',
+          },
+          {
             label: t('admin.result.reserves'),
             value: currentResult ? formatNumber(currentResult.reserveCount, locale) : '—',
+          },
+          {
+            label: t('admin.result.reservePilgrims'),
+            value: currentResult ? formatNumber(currentResult.reservePilgrimCount, locale) : '—',
           },
         ]}
         confirmLabel={t('admin.result.publish')}

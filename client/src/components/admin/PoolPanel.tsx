@@ -1,6 +1,6 @@
 import {
   localizedGeoName,
-  totalDrawSelections,
+  totalDrawPilgrimQuota,
   type CommuneDrawDto,
   type DrawPoolSummaryDto,
   type PoolValidationDto,
@@ -28,9 +28,14 @@ import { ErrorNotice } from './ErrorNotice'
  *
  * Every number on this panel is the server's. Nothing here recomputes a
  * weight, counts an eligible application or decides how many selections a
- * commune needs — `totalDrawSelections` is a shared constant expressing that N
- * places need 2N selections, not a calculation this screen performs on data it
- * fetched.
+ * commune needs — `totalDrawPilgrimQuota` is a shared constant expressing that N
+ * places need 2N places covered, not a calculation this screen performs on data
+ * it fetched.
+ *
+ * The pool is measured in two units here, and the screen says which is which:
+ * applications are what the draw selects, pilgrim places are what it spends. A
+ * pool of 24 applications covering 30 places is a perfectly ordinary pool, and
+ * only the second figure says whether a 12 place draw can run.
  *
  * Validation and freezing are deliberately separate acts. Validation writes
  * nothing, can be run as often as anybody likes, and reports *every* blocker
@@ -60,7 +65,7 @@ export function PoolPanel({ draw, pool, poolLoading, canFreeze, onChanged }: Poo
 
   if (pool) return <FrozenPool pool={pool} locale={locale} />
 
-  const expectedSelections = totalDrawSelections(draw.allocatedSpots)
+  const requiredPilgrims = totalDrawPilgrimQuota(draw.allocatedSpots)
 
   return (
     <div className="flex flex-col gap-4">
@@ -129,8 +134,12 @@ export function PoolPanel({ draw, pool, poolLoading, canFreeze, onChanged }: Poo
             value: validation ? formatNumber(validation.totalWeight, locale) : '—',
           },
           {
-            label: t('admin.pool.expectedSelections'),
-            value: formatNumber(expectedSelections, locale),
+            label: t('admin.pool.pilgrimCapacity'),
+            value: validation ? formatNumber(validation.pilgrimCount, locale) : '—',
+          },
+          {
+            label: t('admin.pool.requiredPilgrims'),
+            value: formatNumber(requiredPilgrims, locale),
           },
         ]}
         confirmLabel={t('admin.pool.freeze')}
@@ -152,7 +161,7 @@ export function PoolPanel({ draw, pool, poolLoading, canFreeze, onChanged }: Poo
             {t('admin.pool.selectionBreakdownBody', {
               winners: formatNumber(draw.allocatedSpots, locale),
               reserves: formatNumber(draw.allocatedSpots, locale),
-              total: formatNumber(expectedSelections, locale),
+              total: formatNumber(requiredPilgrims, locale),
             })}
           </AlertDescription>
         </Alert>
@@ -197,14 +206,18 @@ function ValidationSummary({
             label: t('admin.pool.eligibleApplications'),
             value: formatNumber(validation.applicationCount, locale),
           },
+          {
+            label: t('admin.pool.pilgrimCapacity'),
+            value: formatNumber(validation.pilgrimCount, locale),
+          },
           { label: t('admin.pool.totalWeight'), value: formatNumber(validation.totalWeight, locale) },
           {
             label: t('admin.communeDraws.allocatedSpots'),
             value: formatNumber(validation.allocatedSpots, locale),
           },
           {
-            label: t('admin.pool.expectedSelections'),
-            value: formatNumber(totalDrawSelections(validation.allocatedSpots), locale),
+            label: t('admin.pool.requiredPilgrims'),
+            value: formatNumber(totalDrawPilgrimQuota(validation.allocatedSpots), locale),
           },
           { label: t('admin.pool.validatedAt'), value: formatDateTime(validation.validatedAt, locale) },
         ]}
@@ -252,14 +265,15 @@ function FrozenPool({ pool, locale }: { pool: DrawPoolSummaryDto; locale: Suppor
       <FactList
         facts={[
           { label: t('admin.pool.entries'), value: formatNumber(pool.entryCount, locale) },
+          { label: t('admin.pool.pilgrimCapacity'), value: formatNumber(pool.pilgrimCount, locale) },
           { label: t('admin.pool.totalWeight'), value: formatNumber(pool.totalWeight, locale) },
           {
             label: t('admin.communeDraws.allocatedSpots'),
             value: formatNumber(pool.allocatedSpots, locale),
           },
           {
-            label: t('admin.pool.expectedSelections'),
-            value: formatNumber(totalDrawSelections(pool.allocatedSpots), locale),
+            label: t('admin.pool.requiredPilgrims'),
+            value: formatNumber(totalDrawPilgrimQuota(pool.allocatedSpots), locale),
           },
           { label: t('admin.pool.frozenAt'), value: formatDateTime(pool.frozenAt, locale) },
         ]}

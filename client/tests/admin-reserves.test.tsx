@@ -409,7 +409,7 @@ describe('the selection record', () => {
 
     // Named in the summary and again beside the record: a concluded draw
     // always identifies the implementation it ran under.
-    expect(screen.getAllByText('weighted-csprng-v1').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('weighted-csprng-capacity-v2').length).toBeGreaterThan(0)
     expect(screen.getByText(/A concluded draw always names its own/)).toBeInTheDocument()
   })
 })

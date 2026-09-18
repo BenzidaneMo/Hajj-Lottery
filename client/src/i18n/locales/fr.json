@@ -646,9 +646,8 @@
       "blockedBody": "Chaque problème ci-dessous doit être résolu. Rien n'est réparé automatiquement.",
       "blockers": "{{total}} problèmes",
       "eligibleApplications": "Demandes éligibles",
-      "entries": "Inscrits au vivier",
+      "entries": "Demandes du vivier",
       "totalWeight": "Poids total",
-      "expectedSelections": "Sélections que le tirage effectuera",
       "validatedAt": "Vérifié le",
       "freezeTitle": "Geler le vivier",
       "freezeBody": "Cela fixe définitivement les termes du tirage et verrouille le tirage communal. Il n'existe aucun déverrouillage.",
@@ -656,14 +655,16 @@
       "confirmFreezeTitle": "Geler le vivier de cette commune ?",
       "confirmFreezeBody": "Les inscrits et leurs poids cessent d'évoluer à partir de cet instant. Personne ne peut revenir en arrière.",
       "selectionBreakdown": "Ce que le tirage sélectionnera",
-      "selectionBreakdownBody": "{{winners}} gagnants et {{reserves}} suppléants — {{total}} sélections en un seul tirage continu. Une demande sélectionnée occupe une seule position.",
+      "selectionBreakdownBody": "{{winners}} places attribuées et {{reserves}} places de suppléance — {{total}} places de pèlerins pourvues par un seul tirage continu. Une demande en couple en occupe deux : le tirage retient autant de demandes qu’il le faut et ne sépare jamais un couple.",
       "frozen": "Vivier gelé.",
       "alreadyFrozen": "Ce vivier était déjà gelé.",
       "frozenTitle": "Le vivier est gelé",
       "frozenBody": "Ce sont ces inscrits que le tirage lira. Rien ne peut les modifier, et il n'existe aucun déverrouillage.",
       "frozenAt": "Gelé le",
       "snapshotHash": "Empreinte de l'instantané",
-      "snapshotHashHint": "Identifie exactement l'entrée sur laquelle ce tirage s'exécute. Ce n'est pas une graine : le résultat n'en dépend pas."
+      "snapshotHashHint": "Identifie exactement l'entrée sur laquelle ce tirage s'exécute. Ce n'est pas une graine : le résultat n'en dépend pas.",
+      "pilgrimCapacity": "Places de pèlerins couvertes",
+      "requiredPilgrims": "Places de pèlerins à pourvoir"
     },
     "execution": {
       "readyTitle": "Prêt à être lancé",
@@ -683,10 +684,10 @@
     "result": {
       "publication": "Publication",
       "notPublished": "Non publié",
-      "winners": "Gagnants",
-      "reserves": "Suppléants",
-      "activeWinners": "Places encore détenues",
-      "winningParticipants": "Pèlerins gagnants",
+      "winners": "Demandes retenues",
+      "reserves": "Demandes de suppléance",
+      "activeWinners": "Demandes conservant leur place",
+      "winningParticipants": "Lauréats à vie enregistrés",
       "algorithmVersion": "Algorithme",
       "algorithmHint": "L'implémentation qui a produit ce résultat. Un tirage achevé nomme toujours la sienne.",
       "poolHash": "Empreinte du vivier",
@@ -744,7 +745,11 @@
       "published": "Résultat publié.",
       "alreadyPublished": "Ce résultat était déjà publié.",
       "publishedTitle": "Ce résultat est public",
-      "publishedBody": "Les citoyens peuvent le consulter sur la page publique des résultats. Une publication ne peut pas être retirée."
+      "publishedBody": "Les citoyens peuvent le consulter sur la page publique des résultats. Une publication ne peut pas être retirée.",
+      "allocatedSpots": "Places attribuées à la commune",
+      "winnerPilgrims": "Places de pèlerins attribuées",
+      "reservePilgrims": "Places de pèlerins en suppléance",
+      "activePilgrims": "Places de pèlerins encore occupées"
     },
     "winners": {
       "description": "Les tirages achevés, et ceux qui attendent encore d'être annoncés.",

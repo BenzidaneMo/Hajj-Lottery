@@ -57,11 +57,28 @@ export function ResultPanel({ draw, result, canOperate, onChanged }: ResultPanel
     <div className="flex flex-col gap-4">
       <FactList
         facts={[
+          // Applications and pilgrim places, side by side and separately
+          // labelled. The commune was allocated *places*, so the pilgrim rows
+          // are the ones to read against the allocation — a draw for 12 places
+          // that selected 11 applications filled all 12 of them.
+          { label: t('admin.result.allocatedSpots'), value: formatNumber(result.allocatedSpots, locale) },
           { label: t('admin.result.winners'), value: formatNumber(result.winnerCount, locale) },
+          {
+            label: t('admin.result.winnerPilgrims'),
+            value: formatNumber(result.winnerPilgrimCount, locale),
+          },
           { label: t('admin.result.reserves'), value: formatNumber(result.reserveCount, locale) },
+          {
+            label: t('admin.result.reservePilgrims'),
+            value: formatNumber(result.reservePilgrimCount, locale),
+          },
           {
             label: t('admin.result.activeWinners'),
             value: formatNumber(result.activeWinnerCount, locale),
+          },
+          {
+            label: t('admin.result.activePilgrims'),
+            value: formatNumber(result.activePilgrimCount, locale),
           },
           {
             label: t('admin.result.winningParticipants'),

@@ -199,6 +199,7 @@ export function poolValidation(overrides: Partial<PoolValidationDto> = {}): Pool
     communeCode: COMMUNE.code,
     allocatedSpots: 12,
     applicationCount: 843,
+    pilgrimCount: 1102,
     totalWeight: 1904,
     blockers: [],
     validatedAt: '2027-03-01T10:00:00.000Z',
@@ -212,6 +213,7 @@ export function poolSummary(overrides: Partial<DrawPoolSummaryDto> = {}): DrawPo
     drawYear: 2027,
     communeCode: COMMUNE.code,
     entryCount: 843,
+    pilgrimCount: 1102,
     totalWeight: 1904,
     allocatedSpots: 12,
     snapshotHash: 'b'.repeat(64),
@@ -223,10 +225,14 @@ export function poolSummary(overrides: Partial<DrawPoolSummaryDto> = {}): DrawPo
 }
 
 /**
- * A concluded draw with three winners and three reserves.
+ * A concluded draw: three winning applications covering four pilgrim places, and
+ * three reserve applications covering four more.
  *
  * Deliberately 3 + 3 rather than a token pair: the reserve-ordering assertions
- * need enough rows that a sort would visibly rearrange them.
+ * need enough rows that a sort would visibly rearrange them. And deliberately
+ * 3 applications for 4 places — one of each half is PAIRED — because that is the
+ * shape the entry/pilgrim distinction exists for, and a fixture where the two
+ * numbers happened to coincide would let a screen conflate them unnoticed.
  */
 export function drawResult(overrides: Partial<DrawResultDto> = {}): DrawResultDto {
   return {
@@ -234,14 +240,17 @@ export function drawResult(overrides: Partial<DrawResultDto> = {}): DrawResultDt
     drawYear: 2027,
     communeCode: COMMUNE.code,
     winnerCount: 3,
+    winnerPilgrimCount: 4,
     reserveCount: 3,
+    reservePilgrimCount: 4,
     activeWinnerCount: 3,
+    activePilgrimCount: 4,
     winningParticipantCount: 4,
-    allocatedSpots: 3,
+    allocatedSpots: 4,
     entryCount: 843,
     totalWeightAtDraw: 1904,
     poolHash: 'b'.repeat(64),
-    algorithmVersion: 'weighted-csprng-v1',
+    algorithmVersion: 'weighted-csprng-capacity-v2',
     startedAt: '2027-04-28T08:29:00.000Z',
     completedAt: '2027-04-28T08:30:00.000Z',
     publishedAt: null,
