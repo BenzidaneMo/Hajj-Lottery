@@ -35,6 +35,7 @@
     "reopen-registration": "npm run reopen-registration --workspace server",
     "reset-participants": "npm run reset-participants --workspace server",
     "ready-commune-draws": "npm run ready-commune-draws --workspace server",
+    "draft-commune-draws": "npm run draft-commune-draws --workspace server",
     "prisma:studio": "prisma studio --schema prisma/schema.prisma",
     "build:geo-data": "node prisma/seed-data/build.mjs"
   },
