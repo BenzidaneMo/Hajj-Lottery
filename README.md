@@ -386,8 +386,9 @@ pooled applications, and writes the participation ledger. Any failure unwinds al
 the claim — the commune draw returns to `LOCKED`, retryable, with nothing left behind.
 
 **Concurrency is settled by the database**: a conditional `UPDATE ... WHERE status = 'LOCKED'` claim
-serializes two simultaneous executions on the row. **Spots count entries, not people** — a paired
-application is one lottery entry and two winners; marking only the primary would be a bug. A
+serializes two simultaneous executions on the row. **Spots count pilgrims, and entries fill them** —
+a paired application is one lottery entry occupying two places and producing two winners; marking
+only the primary would be a bug, and awarding it a single place would be another. A
 completed result is immutable by trigger, and PostgreSQL refuses to commit a `COMPLETED` commune
 draw that has no result.
 
@@ -395,9 +396,10 @@ See [docs/winner-processing.md](docs/winner-processing.md).
 
 ## Reserves and replacements
 
-A commune with N places draws **2N** entries in one continuous weighted sample: N winners, then N
-reserves, in the order they came out — produced by the original lottery and never regenerated,
-reordered, or sorted by weight.
+A commune with N pilgrim places fills **2N** places in one continuous weighted sample: N winning,
+then N reserved, in the order they came out — produced by the original lottery and never regenerated,
+reordered, or sorted by weight. How many _applications_ that takes depends on how many of them are
+paired; see [Pilgrim capacity](#pilgrim-capacity) below.
 
 | Endpoint                                                            | Role        | Purpose                         |
 | ------------------------------------------------------------------- | ----------- | ------------------------------- |
@@ -435,9 +437,40 @@ comes from `crypto.randomInt`; **`Math.random` is forbidden**, and a test scans 
 file to enforce it. The pool's own hash is never used as a seed — deriving randomness from the input
 would make the outcome a function of who entered. A selection **writes nothing** and has **no HTTP
 endpoint**, since nothing yet records that a draw has been run and a route would let an
-administrator re-roll. A pool smaller than its allocation is refused, never truncated.
+administrator re-roll. A pool that cannot cover its allocation is refused, never truncated.
 
 See [docs/lottery-engine.md](docs/lottery-engine.md).
+
+## Pilgrim capacity
+
+**The lottery quota is measured in pilgrims, not application records**, because that is what a
+commune is allocated. A paired registration is **one indivisible lottery group carrying two
+pilgrims**, so a 12-place draw may produce 11 winning applications and fill all 12 places.
+
+At each selection step, only groups that fit completely within the remaining pilgrim capacity are
+eligible; the existing weighted CSPRNG selection then runs over exactly those. A pair that cannot
+take a final single place is not drawn for it, is not weighted down, and is a full candidate again
+the moment there is room — including the whole of the reserve quota. Nothing is split, nothing is
+truncated after the fact, and no weight is changed.
+
+```
+Quota = 12 pilgrims        6 paired applications        = 12 pilgrims   valid
+                           10 single + 1 paired         = 12 pilgrims   valid
+                           12 applications, 3 paired    = 15 pilgrims   NEVER
+```
+
+The frozen pool stores and verifies its own `pilgrim_count`; the result records both units
+(`winner_count`/`winner_pilgrim_count`, `reserve_count`/`reserve_pilgrim_count`); and a deferred
+constraint trigger refuses to commit a draw whose winning and reserved places are not exactly the
+allocation. The one failure mode — a final place with only pairs left to take it — refuses as
+`QUOTA_NOT_EXACTLY_FILLABLE`, writing nothing and leaving the draw `LOCKED` and retryable.
+
+Results recorded under the earlier `weighted-csprng-v1` algorithm spent their quota in application
+records. Nothing recalculates them: the integrity gate and the database trigger both branch on the
+recorded `algorithm_version`, so a historical result stays readable, publishable and auditable
+exactly as it was written.
+
+See [docs/pilgrim-capacity.md](docs/pilgrim-capacity.md).
 
 ## Draw configuration
 

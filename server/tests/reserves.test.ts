@@ -1,4 +1,4 @@
-import { totalDrawSelections } from '@hajj-lottery/shared'
+import { totalDrawPilgrimQuota } from '@hajj-lottery/shared'
 import {
   PrismaClient,
   type Application,
@@ -110,13 +110,14 @@ interface DrawnCommune {
 /**
  * A commune draw carried all the way through execution.
  *
- * Defaults to exactly twice the allocation, which is the smallest pool a draw
- * can now run against: N winners and N reserves come out of the same sample, and
- * a pool that cannot supply both is refused rather than drawn short.
+ * Defaults to one single applicant per pilgrim place, twice over — the smallest
+ * all-singles pool a draw can run against: N winning places and N reserve places
+ * come out of the same sample, and a pool that cannot cover both is refused
+ * rather than drawn short.
  */
 async function drawn(
   allocatedSpots = 2,
-  entries: EntrySpec[] = Array.from({ length: totalDrawSelections(allocatedSpots) }, () => ({})),
+  entries: EntrySpec[] = Array.from({ length: totalDrawPilgrimQuota(allocatedSpots) }, () => ({})),
   commune: { id: string; wilayaId: string } = { id: geo.communeA1.id, wilayaId: geo.wilayaA.id },
 ): Promise<DrawnCommune> {
   const communeDraw = await drawConfigurationService.createCommuneDraw({
@@ -395,7 +396,7 @@ describe('recording that a winner gave up their place', () => {
   })
 
   it('applies to a paired winning application as a whole', async () => {
-    const { communeDraw, winners } = await drawn(1, [{ paired: true }, { paired: true }])
+    const { communeDraw, winners } = await drawn(2, [{ paired: true }, { paired: true }])
     const { cookie } = await superAdmin()
     const winner = winners[0]
     if (!winner?.secondaryParticipantId) throw new Error('Expected a paired winner')
@@ -734,7 +735,7 @@ describe('a reserve who accepts becomes a winner', () => {
   })
 
   it('makes both travellers of a paired reserve winners, or neither', async () => {
-    const { communeDraw } = await drawn(1, [{ paired: true }, { paired: true }])
+    const { communeDraw } = await drawn(2, [{ paired: true }, { paired: true }])
     const { cookie } = await superAdmin()
     await vacate(communeDraw.id, 1, cookie)
     const reserve = await prisma.drawReserve.findFirstOrThrow({ where: { reservePosition: 1 } })
@@ -827,7 +828,7 @@ describe('a reserve who accepts becomes a winner', () => {
   })
 
   it('rolls the whole promotion back when one of a pair cannot be promoted', async () => {
-    const { communeDraw } = await drawn(1, [{ paired: true }, { paired: true }])
+    const { communeDraw } = await drawn(2, [{ paired: true }, { paired: true }])
     const { cookie } = await superAdmin()
     await vacate(communeDraw.id, 1, cookie)
     const reserve = await prisma.drawReserve.findFirstOrThrow({ where: { reservePosition: 1 } })

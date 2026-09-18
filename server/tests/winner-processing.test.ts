@@ -110,6 +110,22 @@ async function lockedPool(
 /** `n` single applicants with no history — every weight is 1. */
 const singles = (n: number): RegisterOptions[] => Array.from({ length: n }, () => ({}))
 
+/*
+ * A note on mixed fixtures, since it is easy to write a flaky one.
+ *
+ * A draw fills two quotas of N pilgrim places from indivisible groups of 1 or 2,
+ * so the only way it can fail is to reach a final single place with nothing but
+ * pairs left. Whether that happens depends on the draw order, which means a
+ * mixed pool can pass or fail the same test depending on the CSPRNG.
+ *
+ * A pool with **at least 2N single applicants** can never reach that state: the
+ * whole draw spends 2N places, so fewer than 2N singles can have been consumed
+ * whenever one place remains, and one is therefore always left to fill it. Every
+ * mixed fixture below that is expected to complete satisfies that; the ones that
+ * are expected to refuse deliberately do not. An all-pairs pool with an even N is
+ * safe for the other reason: its capacity only ever steps down by two.
+ */
+
 const superAdmin = () => createAdminAndSignIn(app, prisma, { role: AdminRole.SUPER_ADMIN })
 const wilayaAdmin = (wilayaId: string) =>
   createAdminAndSignIn(app, prisma, { role: AdminRole.WILAYA_ADMIN, wilayaId })
@@ -146,9 +162,15 @@ describe('executing a draw', () => {
     const pool = await prisma.drawPool.findUniqueOrThrow({ where: { id: poolId } })
 
     expect(result.winnerCount).toBe(2)
+    // All singles, so applications and places coincide here — recorded in both
+    // units regardless, because the pool that made them coincide is a property
+    // of this fixture and not of the draw.
+    expect(result.winnerPilgrimCount).toBe(2)
+    expect(result.reserveCount).toBe(2)
+    expect(result.reservePilgrimCount).toBe(2)
     expect(result.drawPoolId).toBe(poolId)
     expect(result.poolHash).toBe(pool.snapshotHash)
-    expect(result.algorithmVersion).toBe('weighted-csprng-v1')
+    expect(result.algorithmVersion).toBe('weighted-csprng-capacity-v2')
     expect(result.totalWeightAtDraw).toBe(pool.totalWeight)
     expect(await prisma.drawWinner.count({ where: { drawResultId: result.id } })).toBe(2)
     // Two places produce two winners and two reserves from one sample, so the
@@ -244,6 +266,34 @@ describe('executing a draw', () => {
     const after = await prisma.communeDraw.findUniqueOrThrow({ where: { id: communeDraw.id } })
     expect(after.status).toBe('LOCKED')
     expect(await prisma.drawResult.count()).toBe(0)
+  })
+
+  it('refuses when a final place could only be filled by splitting a pair', async () => {
+    // One place, one reserve place, and a pool of one single applicant and one
+    // paired application. The single fills the winning place — the pair cannot,
+    // a pair has no way to take half a place — and the reserve place then has
+    // only that pair left for it. There is no complete draw here.
+    //
+    // Refused, in full. Nothing is split, the quota is not overspent, the
+    // reserve list is not left one place short, and no winner is recorded: the
+    // commune draw stays LOCKED and retryable once the pool can actually cover
+    // the places. See docs/pilgrim-capacity.md.
+    const { communeDraw } = await lockedPool([{}, { paired: true }], 1)
+
+    await expect(drawExecutionService.execute(communeDraw.id)).rejects.toMatchObject({
+      status: 409,
+      code: 'QUOTA_NOT_EXACTLY_FILLABLE',
+    })
+
+    const after = await prisma.communeDraw.findUniqueOrThrow({ where: { id: communeDraw.id } })
+    expect(after.status).toBe('LOCKED')
+    expect(await prisma.drawResult.count()).toBe(0)
+    expect(await prisma.drawWinner.count()).toBe(0)
+    expect(await prisma.drawReserve.count()).toBe(0)
+    expect(await prisma.winnerArchive.count()).toBe(0)
+    expect(await prisma.participant.count({ where: { hasWonHajj: true } })).toBe(0)
+    // And no application was told anything about an outcome.
+    expect(await prisma.application.count({ where: { status: 'ELIGIBLE' } })).toBe(2)
     expect(await prisma.drawReserve.count()).toBe(0)
     expect(await prisma.participant.count({ where: { hasWonHajj: true } })).toBe(0)
   })
@@ -358,8 +408,10 @@ describe('lifetime exclusion', () => {
   })
 
   it('marks both travellers of a paired application', async () => {
-    // Two paired entries for one place: one wins, the other becomes reserve #1.
-    const { communeDraw } = await lockedPool([{ paired: true }, { paired: true }], 1)
+    // Two paired entries for *two* places: one pair fills both winning places,
+    // the other becomes reserve #1 and covers both reserved places. A one place
+    // commune could not use either of them — a pair cannot take half a place.
+    const { communeDraw } = await lockedPool([{ paired: true }, { paired: true }], 2)
 
     await drawExecutionService.execute(communeDraw.id)
 
@@ -375,7 +427,7 @@ describe('lifetime exclusion', () => {
   })
 
   it('excludes nobody for having been drawn as a reserve', async () => {
-    const { communeDraw } = await lockedPool([{ paired: true }, { paired: true }], 1)
+    const { communeDraw } = await lockedPool([{ paired: true }, { paired: true }], 2)
 
     await drawExecutionService.execute(communeDraw.id)
 
@@ -404,7 +456,7 @@ describe('lifetime exclusion', () => {
   })
 
   it('archives every winning individual exactly once', async () => {
-    const { communeDraw } = await lockedPool([{ paired: true }, {}, {}, {}], 2)
+    const { communeDraw } = await lockedPool([{ paired: true }, ...singles(4)], 2)
 
     await drawExecutionService.execute(communeDraw.id)
 
@@ -473,9 +525,11 @@ describe('lifetime exclusion', () => {
   })
 })
 
-describe('spot semantics: entries, not people', () => {
-  it('counts a paired application as one place and two winners', async () => {
-    // Every entry paired, so however the draw falls, two places is four people.
+describe('spot semantics: pilgrim places, filled by whole applications', () => {
+  it('spends one place per pilgrim, so a pair of places is one paired application', async () => {
+    // Every entry paired, so two places is exactly one winning application and
+    // two winning people. Under the old entry-counting draw this same pool
+    // awarded two paired applications — four people — to a two place commune.
     const { communeDraw } = await lockedPool(
       [{ paired: true }, { paired: true }, { paired: true }, { paired: true }],
       2,
@@ -484,16 +538,17 @@ describe('spot semantics: entries, not people', () => {
     await drawExecutionService.execute(communeDraw.id)
 
     const result = await prisma.drawResult.findUniqueOrThrow({ where: { communeDrawId: communeDraw.id } })
-    expect(result.winnerCount).toBe(2)
-    expect(await prisma.drawWinner.count()).toBe(2)
-    expect(await prisma.application.count({ where: { status: 'SELECTED' } })).toBe(2)
+    expect(result.winnerCount).toBe(1)
+    expect(result.winnerPilgrimCount).toBe(2)
+    expect(await prisma.drawWinner.count()).toBe(1)
+    expect(await prisma.application.count({ where: { status: 'SELECTED' } })).toBe(1)
 
-    // More individuals than places, which is expected and correct.
-    expect(await prisma.participant.count({ where: { hasWonHajj: true } })).toBe(4)
-    expect(await prisma.winnerArchive.count()).toBe(4)
+    // Two people for two places — the allocation, exactly, not twice it.
+    expect(await prisma.participant.count({ where: { hasWonHajj: true } })).toBe(2)
+    expect(await prisma.winnerArchive.count()).toBe(2)
   })
 
-  it('counts a paired reserve as one position and no places at all', async () => {
+  it('reserves the same number of places, and excludes nobody for holding one', async () => {
     const { communeDraw } = await lockedPool(
       [{ paired: true }, { paired: true }, { paired: true }, { paired: true }],
       2,
@@ -501,12 +556,70 @@ describe('spot semantics: entries, not people', () => {
 
     await drawExecutionService.execute(communeDraw.id)
 
-    // Two reserve positions covering four people, and not one of those four
-    // holds a place or a lifetime exclusion. Reserves do not occupy spots.
-    expect(await prisma.drawReserve.count()).toBe(2)
-    expect(await prisma.application.count({ where: { status: 'RESERVE' } })).toBe(2)
-    expect(await prisma.participant.count({ where: { hasWonHajj: true } })).toBe(4)
+    const result = await prisma.drawResult.findUniqueOrThrow({ where: { communeDrawId: communeDraw.id } })
+    // One reserve application covering both reserved places, and not one of its
+    // two travellers holds a place or a lifetime exclusion. Reserves cover
+    // places; they do not occupy them.
+    expect(result.reserveCount).toBe(1)
+    expect(result.reservePilgrimCount).toBe(2)
+    expect(await prisma.drawReserve.count()).toBe(1)
+    expect(await prisma.application.count({ where: { status: 'RESERVE' } })).toBe(1)
+    expect(await prisma.participant.count({ where: { hasWonHajj: true } })).toBe(2)
+    expect(await prisma.winnerArchive.count()).toBe(2)
+  })
+
+  it('fills a mixed pool to the place exactly, whatever the mix of sizes drawn', async () => {
+    // Four singles and three pairs for four places. The number of winning
+    // applications depends on the draw — anywhere from two to four — and the
+    // number of winning pilgrims does not.
+    const { communeDraw } = await lockedPool(
+      [...singles(4), { paired: true }, { paired: true }, { paired: true }],
+      4,
+    )
+
+    await drawExecutionService.execute(communeDraw.id)
+
+    const result = await prisma.drawResult.findUniqueOrThrow({ where: { communeDrawId: communeDraw.id } })
+    expect(result.winnerPilgrimCount).toBe(4)
+    expect(result.reservePilgrimCount).toBe(4)
+    expect(result.winnerCount).toBeLessThanOrEqual(4)
+    expect(result.winnerCount).toBeGreaterThanOrEqual(2)
+    // One archive row per winning pilgrim, so the allocation and the number of
+    // people excluded for life are the same number.
     expect(await prisma.winnerArchive.count()).toBe(4)
+    expect(await prisma.participant.count({ where: { hasWonHajj: true } })).toBe(4)
+  })
+
+  it('never splits a paired application across the two halves of the draw', async () => {
+    const { communeDraw } = await lockedPool(
+      [...singles(4), { paired: true }, { paired: true }, { paired: true }],
+      4,
+    )
+
+    await drawExecutionService.execute(communeDraw.id)
+
+    // Both travellers of a winning pair are archived, and neither traveller of a
+    // reserved pair is. There is no application anywhere with one of each.
+    const winners = await prisma.drawWinner.findMany()
+    const archived = new Set(
+      (await prisma.winnerArchive.findMany({ select: { participantId: true } })).map(
+        (row) => row.participantId,
+      ),
+    )
+
+    for (const winner of winners) {
+      expect(archived.has(winner.primaryParticipantId)).toBe(true)
+      if (winner.secondaryParticipantId) {
+        expect(archived.has(winner.secondaryParticipantId)).toBe(true)
+      }
+    }
+
+    for (const reserve of await prisma.drawReserve.findMany()) {
+      expect(archived.has(reserve.primaryParticipantId)).toBe(false)
+      if (reserve.secondaryParticipantId) {
+        expect(archived.has(reserve.secondaryParticipantId)).toBe(false)
+      }
+    }
   })
 })
 
@@ -533,7 +646,8 @@ describe('participation history', () => {
   })
 
   it('records both travellers of a paired entry', async () => {
-    const { communeDraw } = await lockedPool([{ paired: true }, { paired: true }], 1)
+    // Two places, so one pair wins them both and the other covers the reserve.
+    const { communeDraw } = await lockedPool([{ paired: true }, { paired: true }], 2)
 
     await drawExecutionService.execute(communeDraw.id)
 
@@ -707,6 +821,7 @@ describe('a draw runs once, and only from a locked pool', () => {
       data: {
         communeDrawId: communeDraw.id,
         entryCount: 1,
+        pilgrimCount: 1,
         totalWeight: 1,
         allocatedSpots: 1,
         snapshotHash: 'f'.repeat(64),
@@ -803,16 +918,23 @@ describe('a failed execution leaves nothing behind', () => {
       data: {
         communeDrawId: decoyDraw.id,
         entryCount: 1,
+        pilgrimCount: 1,
         totalWeight: 1,
         allocatedSpots: 1,
         snapshotHash: 'a'.repeat(64),
       },
     })
+    // Recorded as a pre-capacity result deliberately: it has no winner or
+    // reserve rows at all, which the capacity trigger would refuse for a
+    // capacity-aware draw and tolerates for a historical one.
     const decoyResult = await prisma.drawResult.create({
       data: {
         communeDrawId: decoyDraw.id,
         drawPoolId: decoyPool.id,
         winnerCount: 1,
+        winnerPilgrimCount: 1,
+        reserveCount: 0,
+        reservePilgrimCount: 0,
         totalWeightAtDraw: 1,
         poolHash: 'a'.repeat(64),
         algorithmVersion: 'weighted-csprng-v1',
@@ -898,6 +1020,9 @@ describe('a completed result is immutable', () => {
           communeDrawId: communeDraw.id,
           drawPoolId: poolId,
           winnerCount: 1,
+          winnerPilgrimCount: 1,
+          reserveCount: 0,
+          reservePilgrimCount: 0,
           totalWeightAtDraw: 1,
           poolHash: 'b'.repeat(64),
           algorithmVersion: 'weighted-csprng-v1',
@@ -906,6 +1031,94 @@ describe('a completed result is immutable', () => {
         },
       }),
     ).rejects.toThrow()
+  })
+
+  it('refuses a capacity-aware result that does not award exactly the allocation', async () => {
+    // The quota invariant as a **database** fact, not an application belief.
+    // Written by hand, bypassing the service entirely: a deferred constraint
+    // trigger recomputes the places awarded from the winner and reserve rows at
+    // COMMIT and compares them against the pool's own frozen `allocated_spots`.
+    const communeDraw = await drawConfigurationService.createCommuneDraw({
+      drawYearId: drawYear.id,
+      communeId: geo.communeB1.id,
+      allocatedSpots: 2,
+    })
+    await prisma.communeDraw.update({ where: { id: communeDraw.id }, data: { status: 'LOCKED' } })
+    const pool = await prisma.drawPool.create({
+      data: {
+        communeDrawId: communeDraw.id,
+        entryCount: 2,
+        pilgrimCount: 2,
+        totalWeight: 2,
+        allocatedSpots: 2,
+        snapshotHash: 'c'.repeat(64),
+      },
+    })
+
+    // Claims two places awarded and two reserved, but holds no winner or reserve
+    // rows at all. Refused — a result must describe its own rows.
+    await expect(
+      prisma.drawResult.create({
+        data: {
+          communeDrawId: communeDraw.id,
+          drawPoolId: pool.id,
+          winnerCount: 2,
+          winnerPilgrimCount: 2,
+          reserveCount: 2,
+          reservePilgrimCount: 2,
+          totalWeightAtDraw: 2,
+          poolHash: pool.snapshotHash,
+          algorithmVersion: 'weighted-csprng-capacity-v2',
+          startedAt: new Date(),
+          completedAt: new Date(),
+        },
+      }),
+    ).rejects.toThrow()
+
+    expect(await prisma.drawResult.count({ where: { communeDrawId: communeDraw.id } })).toBe(0)
+  })
+
+  it('lets a pre-capacity result stand, so history stays writable and readable', async () => {
+    // The same row, recorded under the algorithm that actually produced it, is
+    // accepted. A v1 draw spent its quota in application records, so judging it
+    // by the pilgrim rule would report a fault in a faithful record — and would
+    // make a historical result impossible to restore.
+    const communeDraw = await drawConfigurationService.createCommuneDraw({
+      drawYearId: drawYear.id,
+      communeId: geo.communeB1.id,
+      allocatedSpots: 2,
+    })
+    await prisma.communeDraw.update({ where: { id: communeDraw.id }, data: { status: 'LOCKED' } })
+    const pool = await prisma.drawPool.create({
+      data: {
+        communeDrawId: communeDraw.id,
+        entryCount: 2,
+        pilgrimCount: 2,
+        totalWeight: 2,
+        allocatedSpots: 2,
+        snapshotHash: 'd'.repeat(64),
+      },
+    })
+
+    const legacy = await prisma.drawResult.create({
+      data: {
+        communeDrawId: communeDraw.id,
+        drawPoolId: pool.id,
+        winnerCount: 2,
+        winnerPilgrimCount: 3,
+        reserveCount: 2,
+        reservePilgrimCount: 3,
+        totalWeightAtDraw: 2,
+        poolHash: pool.snapshotHash,
+        algorithmVersion: 'weighted-csprng-v1',
+        startedAt: new Date(),
+        completedAt: new Date(),
+      },
+    })
+
+    // Three winning pilgrims on a two place commune: wrong under today's rule,
+    // and exactly what the old one produced.
+    expect(legacy.winnerPilgrimCount).toBe(3)
   })
 
   it('refuses a stored event outside the range it was drawn from', async () => {
@@ -1001,20 +1214,23 @@ describe('executing over HTTP', () => {
     const executed = await executeVia(communeDraw.id, cookie)
 
     expect(executed.status).toBe(201)
+    // The places, not the row counts: this pool holds one paired application, so
+    // how many *applications* fill two places depends on what was drawn — one
+    // pair, or two singles. The pilgrim figures do not depend on it.
     expect(executed.body).toMatchObject({
-      winnerCount: 2,
-      reserveCount: 2,
-      activeWinnerCount: 2,
+      winnerPilgrimCount: 2,
+      reservePilgrimCount: 2,
+      activePilgrimCount: 2,
       allocatedSpots: 2,
       entryCount: 5,
-      algorithmVersion: 'weighted-csprng-v1',
-      notSelectedCount: 1,
+      algorithmVersion: 'weighted-csprng-capacity-v2',
     })
-    expect(executed.body.winners).toHaveLength(2)
-    expect(executed.body.reserves).toHaveLength(2)
-    // Four selections, four events: the reserve half of the draw is recorded
-    // with the same randomness as the first.
-    expect(executed.body.events).toHaveLength(4)
+    expect(executed.body.winnerCount).toBe(executed.body.winners.length)
+    expect(executed.body.reserveCount).toBe(executed.body.reserves.length)
+    expect(executed.body.activeWinnerCount).toBe(executed.body.winnerCount)
+    // One event per selection, across both halves: the reserve half of the draw
+    // is recorded with the same randomness as the first.
+    expect(executed.body.events).toHaveLength(executed.body.winnerCount + executed.body.reserveCount)
     expect(executed.body.poolHash).toMatch(/^[0-9a-f]{64}$/)
 
     // Every winner and every reserve starts out exactly as the draw left them.
@@ -1023,7 +1239,7 @@ describe('executing over HTTP', () => {
     )
     expect(
       executed.body.reserves.map((reserve: { reservePosition: number }) => reserve.reservePosition),
-    ).toEqual([1, 2])
+    ).toEqual(Array.from({ length: executed.body.reserveCount }, (_, index) => index + 1))
     expect(executed.body.reserves.every((reserve: { status: string }) => reserve.status === 'WAITING')).toBe(
       true,
     )
@@ -1032,9 +1248,12 @@ describe('executing over HTTP', () => {
     expect(read.status).toBe(200)
     expect(read.body).toMatchObject({
       id: executed.body.id,
-      winnerCount: 2,
-      reserveCount: 2,
-      activeWinnerCount: 2,
+      winnerCount: executed.body.winnerCount,
+      winnerPilgrimCount: 2,
+      reserveCount: executed.body.reserveCount,
+      reservePilgrimCount: 2,
+      activeWinnerCount: executed.body.winnerCount,
+      activePilgrimCount: 2,
       winningParticipantCount: executed.body.winningParticipantCount,
       poolHash: executed.body.poolHash,
     })
@@ -1055,7 +1274,8 @@ describe('executing over HTTP', () => {
     // Every term of the draw comes from the database. The body is not read.
     expect(executed.status).toBe(201)
     expect(executed.body.winnerCount).toBe(2)
-    expect(executed.body.algorithmVersion).toBe('weighted-csprng-v1')
+    expect(executed.body.winnerPilgrimCount).toBe(2)
+    expect(executed.body.algorithmVersion).toBe('weighted-csprng-capacity-v2')
     expect(await prisma.drawWinner.count()).toBe(2)
   })
 
@@ -1097,6 +1317,20 @@ describe('executing over HTTP', () => {
     expect(again.status).toBe(409)
     expect(again.body.code).toBe('DRAW_ALREADY_COMPLETED')
     expect(await prisma.drawResult.count()).toBe(1)
+  })
+
+  it('reports an unfillable final place over HTTP, completing nothing', async () => {
+    const { communeDraw } = await lockedPool([{}, { paired: true }], 1)
+    const { cookie } = await superAdmin()
+
+    const response = await executeVia(communeDraw.id, cookie)
+
+    expect(response.status).toBe(409)
+    expect(response.body.code).toBe('QUOTA_NOT_EXACTLY_FILLABLE')
+    expect(await prisma.drawResult.count()).toBe(0)
+    expect((await prisma.communeDraw.findUniqueOrThrow({ where: { id: communeDraw.id } })).status).toBe(
+      'LOCKED',
+    )
   })
 
   it('reports insufficient entries without completing anything', async () => {
@@ -1177,7 +1411,10 @@ describe('reading a result is scoped', () => {
   })
 
   it('exposes no participant identity in a result', async () => {
-    const { communeDraw } = await lockedPool([{ paired: true }, {}], 1)
+    // Two places rather than one: a paired application cannot take a single
+    // place, so a one place commune with only a pair and a single to choose from
+    // has no complete draw at all.
+    const { communeDraw } = await lockedPool([{ paired: true }, ...singles(4)], 2)
     const { cookie } = await superAdmin()
     await executeVia(communeDraw.id, cookie)
 
@@ -1206,7 +1443,7 @@ describe('reading a result is scoped', () => {
 describe('integrity properties hold in the database', () => {
   it('holds every invariant a completed draw is supposed to have', async () => {
     const { communeDraw, poolId } = await lockedPool(
-      [{ paired: true }, {}, {}, { streakYears: 3 }, { paired: true }, {}, {}],
+      [{ paired: true }, {}, {}, { streakYears: 3 }, { paired: true }, {}, {}, {}, {}],
       3,
     )
 
@@ -1223,22 +1460,39 @@ describe('integrity properties hold in the database', () => {
     expect(await prisma.drawResult.count({ where: { communeDrawId: communeDraw.id } })).toBe(1)
     expect(result.drawPoolId).toBe(poolId)
 
-    // Winner count equals the selected count equals the allocation.
+    /** The pilgrim places a set of selections covers. */
+    const placesIn = (rows: { secondaryParticipantId: string | null }[]): number =>
+      rows.reduce((total, row) => total + (row.secondaryParticipantId ? 2 : 1), 0)
+
+    // **The quota invariant.** The pool holds two paired applications, so how
+    // many *applications* fill three places is decided by the draw — two or
+    // three of them. How many *places* they fill is not.
+    expect(result.winnerPilgrimCount).toBe(3)
+    expect(placesIn(result.winners)).toBe(3)
+    expect(result.winnerPilgrimCount).toBeLessThanOrEqual(3)
     expect(result.winners).toHaveLength(result.winnerCount)
-    expect(result.winnerCount).toBe(3)
-    expect(await prisma.application.count({ where: { status: 'SELECTED' } })).toBe(3)
+    expect(result.winnerCount).toBeLessThanOrEqual(3)
+    expect(await prisma.application.count({ where: { status: 'SELECTED' } })).toBe(result.winnerCount)
 
-    // Selection order is unique and contiguous from 1.
+    // Selection order is unique and contiguous from 1, however many selections
+    // filling the quota took.
     const orders = result.winners.map((winner) => winner.selectionOrder).sort((a, b) => a - b)
-    expect(orders).toEqual([1, 2, 3])
+    expect(orders).toEqual(Array.from({ length: result.winnerCount }, (_, index) => index + 1))
 
-    // As many reserves as places, occupying positions 1..N and the selections
-    // straight after the winners — and none of them holds a place.
-    expect(result.reserves).toHaveLength(3)
-    expect(result.reserves.map((r) => r.reservePosition).sort((a, b) => a - b)).toEqual([1, 2, 3])
-    expect(result.reserves.map((r) => r.selectionOrder).sort((a, b) => a - b)).toEqual([4, 5, 6])
+    // The reserve list covers as many places as the winners do, occupying
+    // positions 1..N and the selections straight after the winners — and none of
+    // them holds a place.
+    expect(result.reservePilgrimCount).toBe(3)
+    expect(placesIn(result.reserves)).toBe(3)
+    expect(result.reserves).toHaveLength(result.reserveCount)
+    expect(result.reserves.map((r) => r.reservePosition).sort((a, b) => a - b)).toEqual(
+      Array.from({ length: result.reserveCount }, (_, index) => index + 1),
+    )
+    expect(result.reserves.map((r) => r.selectionOrder).sort((a, b) => a - b)).toEqual(
+      Array.from({ length: result.reserveCount }, (_, index) => result.winnerCount + index + 1),
+    )
     expect(result.reserves.every((r) => r.status === 'WAITING')).toBe(true)
-    expect(await prisma.application.count({ where: { status: 'RESERVE' } })).toBe(3)
+    expect(await prisma.application.count({ where: { status: 'RESERVE' } })).toBe(result.reserveCount)
 
     // No entry is both a winner and a reserve: one sample, without replacement.
     const winnerEntryIds = new Set(result.winners.map((winner) => winner.drawPoolEntryId))
@@ -1248,7 +1502,7 @@ describe('integrity properties hold in the database', () => {
     for (const winner of result.winners) expect(poolEntryIds.has(winner.drawPoolEntryId)).toBe(true)
     for (const reserve of result.reserves) expect(poolEntryIds.has(reserve.drawPoolEntryId)).toBe(true)
     for (const event of result.events) expect(poolEntryIds.has(event.selectedPoolEntryId)).toBe(true)
-    expect(result.events).toHaveLength(6)
+    expect(result.events).toHaveLength(result.winnerCount + result.reserveCount)
 
     // Every winning individual is archived, and archived exactly once — a paired
     // winner contributing one entry and two people.
@@ -1258,6 +1512,9 @@ describe('integrity properties hold in the database', () => {
     )
     expect(result.archivedWinners).toHaveLength(expectedIndividuals)
     expect(new Set(result.archivedWinners.map((row) => row.participantId)).size).toBe(expectedIndividuals)
+    // Which, since a place is a pilgrim, is the allocation itself: one archive
+    // row per place awarded, no more and no fewer.
+    expect(expectedIndividuals).toBe(3)
 
     // Nobody selected is left unexcluded, and nobody unselected is excluded.
     const excluded = await prisma.participant.findMany({ where: { hasWonHajj: true }, select: { id: true } })

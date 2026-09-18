@@ -480,11 +480,16 @@ describe('the lottery is audited', () => {
     expect(entry).toMatchObject({ actorUserId: user.id, targetId: result.id, communeId: geo.communeA1.id })
     expect(entry.metadata).toMatchObject({
       poolHash: result.poolHash,
-      algorithmVersion: 'weighted-csprng-v1',
+      algorithmVersion: 'weighted-csprng-capacity-v2',
       winnerCount: 1,
       // The reserve list is part of what the draw produced, so the record of
       // running it says how long the list is.
       reserveCount: 1,
+      // And in both units, so "did this draw award the right number of places?"
+      // is answerable from the trail alone rather than by reading the result.
+      allocatedSpots: 1,
+      winnerPilgrimCount: 1,
+      reservePilgrimCount: 1,
     })
 
     // No winner is named, and no random value is repeated: the immutable

@@ -153,15 +153,29 @@ export class ResultPublicationService {
     result: {
       id: string
       winnerCount: number
+      winnerPilgrimCount: number
+      reserveCount: number
+      reservePilgrimCount: number
+      algorithmVersion: string
       drawPoolId: string
       poolHash: string
-      drawPool: { id: string; snapshotHash: string; entryCount: number; allocatedSpots: number } | null
+      drawPool: {
+        id: string
+        snapshotHash: string
+        entryCount: number
+        pilgrimCount: number
+        allocatedSpots: number
+      } | null
     } | null,
   ): Promise<ResultIntegrityFacts> {
     const base = {
       communeDrawStatus: communeDraw.status,
       result: result && {
         winnerCount: result.winnerCount,
+        winnerPilgrimCount: result.winnerPilgrimCount,
+        reserveCount: result.reserveCount,
+        reservePilgrimCount: result.reservePilgrimCount,
+        algorithmVersion: result.algorithmVersion,
         drawPoolId: result.drawPoolId,
         poolHash: result.poolHash,
       },
@@ -175,11 +189,12 @@ export class ResultPublicationService {
         ...base,
         drawWinnerCount: 0,
         drawReserveCount: 0,
+        drawWinnerPilgrimCount: 0,
+        drawReservePilgrimCount: 0,
         selectionEventCount: 0,
         selectionOrderBounds: null,
         reservePositionBounds: null,
         reserveSelectionOrderBounds: null,
-        expectedWinningParticipants: 0,
         promotedReserveParticipants: 0,
         archivedWinnerCount: 0,
         excludedWinnerCount: 0,
@@ -192,6 +207,7 @@ export class ResultPublicationService {
       drawWinnerCount,
       pairedWinnerCount,
       drawReserveCount,
+      pairedReserveCount,
       selectionEventCount,
       selectionOrder,
       reserveOrder,
@@ -206,6 +222,9 @@ export class ResultPublicationService {
       tx.drawWinner.count({ where: { drawResultId: result.id } }),
       tx.drawWinner.count({ where: { drawResultId: result.id, secondaryParticipantId: { not: null } } }),
       tx.drawReserve.count({ where: { drawResultId: result.id } }),
+      tx.drawReserve.count({
+        where: { drawResultId: result.id, secondaryParticipantId: { not: null } },
+      }),
       tx.drawSelectionEvent.count({ where: { drawResultId: result.id } }),
       tx.drawWinner.aggregate({
         where: { drawResultId: result.id },
@@ -247,6 +266,10 @@ export class ResultPublicationService {
       ...base,
       drawWinnerCount,
       drawReserveCount,
+      // A paired selection covers two places, a single one covers one — the
+      // conversion between the two units, applied to the rows themselves.
+      drawWinnerPilgrimCount: drawWinnerCount + pairedWinnerCount,
+      drawReservePilgrimCount: drawReserveCount + pairedReserveCount,
       selectionEventCount,
       selectionOrderBounds: toBounds(selectionOrder._min.selectionOrder, selectionOrder._max.selectionOrder),
       reservePositionBounds: toBounds(reserveOrder._min.reservePosition, reserveOrder._max.reservePosition),
@@ -254,8 +277,6 @@ export class ResultPublicationService {
         reserveOrder._min.selectionOrder,
         reserveOrder._max.selectionOrder,
       ),
-      // A paired entry wins for two people, a single one for one.
-      expectedWinningParticipants: drawWinnerCount + pairedWinnerCount,
       promotedReserveParticipants: promotedReserveCount + pairedPromotedReserveCount,
       archivedWinnerCount,
       excludedWinnerCount,

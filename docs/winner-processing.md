@@ -69,7 +69,7 @@ BEGIN
   2. claim LOCKED → COMPLETED       (conditional; 0 rows means give up)
   3. load the pool and its entries  (inside this transaction)
   4. verify the snapshot hash, aggregates and version
-  5. refuse if entries < allocated spots
+  5. refuse if the pool's pilgrim capacity < 2 x allocated places
   6. run the selection              (pure, CSPRNG)
   7. insert the result, winners and selection events
   8. insert the winner archive, one row per winning person
@@ -96,25 +96,35 @@ influence who wins.
 | `DrawSelectionEvent` | selection          | `CHECK(0 <= random_value < active_total_weight)`                |
 | `WinnerArchive`      | winning **person** | `UNIQUE(participant_id)` — one win per life                     |
 
-A draw for `N` places selects `2N` entries in one continuous sample: the first
-`N` become `DrawWinner` rows and the rest become the ordered reserve list. There
-is one selection event for each of the `2N`, so the reserve order is as checkable
-as the winner order. See
+A draw for `N` **pilgrim places** fills `2N` places in one continuous sample: the
+selections that fill the first `N` become `DrawWinner` rows and the rest become
+the ordered reserve list. How many selections each half took depends on how many
+of them were paired applications — see
+[pilgrim-capacity.md](pilgrim-capacity.md) — and there is one selection event for
+every one of them, so the reserve order is as checkable as the winner order. See
 [reserves-and-replacements.md](reserves-and-replacements.md) — a reserve holds no
 place, gets no archive row and is **not** excluded from future draws by having
 been drawn as one.
 
 `DrawResult` carries the pool's hash, the total weight it drew from, and
-`algorithm_version` — a fixed identifier like `weighted-csprng-v1`, never a moving
-label like "latest". A result whose algorithm cannot be pinned down is not
+`algorithm_version` — a fixed identifier like `weighted-csprng-capacity-v2`, never
+a moving label like "latest". A result whose algorithm cannot be pinned down is not
 reproducible, and reproducibility is the whole claim.
 
 It has **no status column**: a result row exists only when a draw completed, so a
 status could only ever read `COMPLETED`. The lifecycle lives on the commune draw,
 and a second copy of it here could disagree with the first.
 
-Nothing stores the number of _winning people_ either — it is `COUNT(*)` over the
-archive, and a stored copy could drift from the rows it summarizes.
+It does store the draw in **both units**: `winner_count` and `reserve_count` are
+application records, `winner_pilgrim_count` and `reserve_pilgrim_count` are the
+places they fill. That is not a redundant copy of one figure — they are two
+different numbers, the second is the one the allocation is measured in, and a
+deferred constraint trigger checks both against the rows actually written before
+the transaction may commit. See [pilgrim-capacity.md](pilgrim-capacity.md).
+
+The number of _winning people_ is still not stored separately: it is `COUNT(*)`
+over the archive, which for a completed capacity-aware draw is
+`winner_pilgrim_count` — one archive row per place awarded.
 
 ### Identity stays out
 
@@ -124,25 +134,30 @@ API identifies a winner by their application reference, exactly as the pool
 listing does. Who a winner _is_ becomes a question for publication and
 notification, which do not exist.
 
-## Spots count entries, not people
+## Spots count pilgrims; entries fill them
 
-This distinction is load-bearing:
+This distinction is load-bearing, and getting it the wrong way round was a real
+defect — see [pilgrim-capacity.md](pilgrim-capacity.md):
 
 ```
-allocated_spots = 10
-  9 single + 1 paired selected
+allocated_spots = 10          (ten pilgrim places)
+  9 single + 1 paired would be 11 pilgrims — over the allocation, so not a draw
 
-  →  10 winning entries        (winner_count = 10, spots are full)
-  →  11 winning people         (11 archive rows, 11 lifetime exclusions)
+  8 single + 1 paired selected
+  →   9 winning entries       (winner_count = 9)
+  →  10 winning people        (winner_pilgrim_count = 10, places are full)
 ```
 
 A paired application is **one** lottery entry — it was drawn once, with one weight
-— and **two** winners, because lifetime exclusion applies to people. Both
-travellers get `has_won_hajj = true` and their own archive row; only the primary
-would be a bug, and a test asserts both.
+— and **two** winners, because both travellers occupy a place and because lifetime
+exclusion applies to people. Both get `has_won_hajj = true` and their own archive
+row; only the primary would be a bug, and a test asserts both.
 
-So `winnerCount` may be smaller than `winningParticipantCount`, and that is
-correct rather than a discrepancy to reconcile.
+So `winnerCount` is normally _smaller_ than the allocation while
+`winnerPilgrimCount` equals it exactly, and that is correct rather than a
+discrepancy to reconcile. A paired application is never split across the two
+halves of the draw, and never half-awarded: at each step only groups that fit the
+remaining capacity may be selected at all.
 
 ### Duplicate participants are refused, never deduplicated
 

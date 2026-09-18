@@ -22,22 +22,29 @@
 import type { EntryType } from './application.js'
 
 /**
- * Reserve positions created per allocated spot.
+ * Reserve *pilgrim places* held in contingency per allocated spot.
  *
- * One, by the approved domain rule: ten places produce ten winners and ten
- * ordered reserves. A constant rather than a literal 2 scattered through the
- * engine, the integrity gate and the documentation, so the rule has one home.
+ * One, by the approved domain rule: twelve places produce twelve winning
+ * pilgrims and twelve reserve pilgrims. A constant rather than a literal 2
+ * scattered through the engine, the integrity gate and the documentation, so
+ * the rule has one home.
+ *
+ * Pilgrims, not application records — see `totalDrawPilgrimQuota` and
+ * docs/pilgrim-capacity.md. Six paired reserve applications fill a twelve
+ * pilgrim reserve quota with six reserve positions.
  */
-export const RESERVE_POSITIONS_PER_SPOT = 1
+export const RESERVE_PILGRIMS_PER_SPOT = 1
 
 /**
- * How many entries one draw selects in total: the winners, then the reserves.
+ * How many pilgrims one draw places in total: the winners, then the reserves.
  *
- * This is the number the lottery engine is asked for, and — since sampling is
- * without replacement — also the minimum number of entries a pool must hold.
+ * The two quotas the lottery engine fills, summed. Since a selected group is
+ * indivisible and carries one *or two* pilgrims, this is **not** a number of
+ * entries: it is the minimum *pilgrim capacity* a pool must hold, which a pool
+ * of the same size in rows may or may not reach.
  */
-export function totalDrawSelections(allocatedSpots: number): number {
-  return allocatedSpots * (1 + RESERVE_POSITIONS_PER_SPOT)
+export function totalDrawPilgrimQuota(allocatedSpots: number): number {
+  return allocatedSpots * (1 + RESERVE_PILGRIMS_PER_SPOT)
 }
 
 /**

@@ -228,11 +228,20 @@ wrong fingerprint and confirms the draw refuses it.
 
 ### Insufficient entries: a policy boundary
 
-Since Step 19 a draw for `N` places selects `2N` entries — `N` winners and `N`
-reserves, in one continuous sample — so the pool must hold at least `2N`. See
-[reserves-and-replacements.md](reserves-and-replacements.md); the split into
-halves happens in `LotteryService`, and `lib/lottery.ts` is simply asked for a
-larger sample.
+Since Step 19 a draw for `N` places fills `2N` places — `N` winning and `N`
+reserved — in one continuous sample, so the pool must **cover** at least `2N`
+places. Places, not entries: the quota is spent in pilgrims and a paired
+application fills two of them, so a pool of `2N` entries covers anywhere from `2N`
+to `4N` places and only the pilgrim figure answers this. See
+[pilgrim-capacity.md](pilgrim-capacity.md) for the capacity rule and
+[reserves-and-replacements.md](reserves-and-replacements.md) for the reserve half;
+the split into halves happens in `LotteryService`, and `lib/lottery.ts` is asked
+for both quotas at once.
+
+There is a second, narrower refusal that no up-front check can predict: a final
+single place left with only paired applications able to take it. That is
+`QUOTA_NOT_EXACTLY_FILLABLE`, and it too writes nothing — see
+[pilgrim-capacity.md](pilgrim-capacity.md).
 
 Freezing accepts a pool smaller than that on purpose — 100 places with 20
 eligible applicants is a valid pool, and registration never refuses somebody for

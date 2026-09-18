@@ -1,10 +1,11 @@
-import { LOTTERY_ALGORITHM_VERSION, totalDrawSelections } from '@hajj-lottery/shared'
+import { LOTTERY_ALGORITHM_VERSION, pilgrimCountOf, totalDrawPilgrimQuota } from '@hajj-lottery/shared'
 import type { EntryType, PrismaClient } from '@prisma/client'
 
 import { hashPool, SNAPSHOT_VERSION } from '../lib/draw-pool-hash.js'
 import { ApiError, ConflictError, NotFoundError } from '../lib/errors.js'
 import {
-  weightedSampleWithoutReplacement,
+  UnfillableQuotaError,
+  weightedCapacitySample,
   type RandomIntSource,
   type SelectionEvent,
 } from '../lib/lottery.js'
@@ -39,6 +40,14 @@ export interface SelectedEntry {
   applicationReference: string
   entryType: EntryType
   weight: number
+  /**
+   * The pilgrim places this entry occupies: 1 for SINGLE, 2 for PAIRED.
+   *
+   * Derived from the frozen `entryType`, not stored separately — the quota is
+   * spent in these, and they are what makes a winning list of eleven
+   * applications fill twelve places exactly.
+   */
+  pilgrimCount: number
   /** 1-based position in the order the entries were drawn. */
   selectionOrder: number
   /**
@@ -54,14 +63,16 @@ export interface SelectedEntry {
 /**
  * One selected entry in the reserve half of the same draw.
  *
- * `selectionOrder` continues straight on from the winners — reserve 1 of a ten
- * place draw is selection 11 — because there was only ever one sample. The two
- * numbers are kept apart because they answer different questions: the selection
- * order says where in the lottery this entry came out, and the reserve position
- * says who gets asked next.
+ * `selectionOrder` continues straight on from the winners — reserve 1 is the
+ * selection immediately after the last winner — because there was only ever one
+ * sample. It is *not* derivable from the allocation any more: how many
+ * selections the winning half took depends on how many of them were pairs. The
+ * two numbers are kept apart because they answer different questions: the
+ * selection order says where in the lottery this entry came out, and the reserve
+ * position says who gets asked next.
  */
 export interface SelectedReserve extends SelectedEntry {
-  /** 1..N, the order reserves are called in. */
+  /** 1-based, the order reserves are called in. */
   reservePosition: number
 }
 
@@ -82,16 +93,31 @@ export interface DrawSelection {
   /** The pool's frozen fingerprint, re-verified before the draw ran. */
   snapshotHash: string
   entryCount: number
+  /** The pilgrims the whole pool could place. Always at least `2 * allocatedSpots`. */
+  poolPilgrimCount: number
   totalWeight: number
-  /** The number of places. Half the entries selected — see `selected`. */
+  /**
+   * The number of **pilgrim places** the commune allocated. The winners fill it
+   * exactly and the reserves cover the same number again; neither half's entry
+   * count is this number, and expecting it to be was the defect this replaced.
+   */
   allocatedSpots: number
+  /** The winning entries' pilgrims, summed. Exactly `allocatedSpots`. */
+  winnerPilgrimCount: number
+  /** The reserve entries' pilgrims, summed. Exactly `allocatedSpots` too. */
+  reservePilgrimCount: number
   /** Which implementation produced this selection. Recorded with every result. */
   algorithmVersion: string
-  /** The winning entries: selections 1..N, in the order they were drawn. */
+  /**
+   * The winning entries, in the order they were drawn — however many it took to
+   * fill the pilgrim quota, which is between `allocatedSpots / 2` and
+   * `allocatedSpots` of them.
+   */
   selected: SelectedEntry[]
   /**
-   * The reserve list: selections N+1..2N of the *same* sample, in the order
-   * they were drawn.
+   * The reserve list: the selections of the *same* sample that follow the last
+   * winner, in the order they were drawn, covering the same number of pilgrim
+   * places again.
    *
    * Not a second draw, not the losers sorted by weight, and not something
    * produced later when somebody drops out. The ordering a replacement will
@@ -116,12 +142,20 @@ export interface DrawSelection {
  * cryptographically secure random source, and returns the selected entries in
  * order. That is all it does.
  *
- * A commune with N places draws 2N entries in one continuous sample: the first
- * N are the winners, the next N are the reserves, in the order they came out.
- * The split is a slice of one result, not two draws — which is what makes the
- * reserve order provably the lottery's rather than somebody's arrangement of the
- * people who did not win. Nothing sorts the remainder by weight, and nothing
- * regenerates a reserve list later; see docs/reserves-and-replacements.md. It writes nothing: no winners, no `has_won_hajj`,
+ * A commune with N pilgrim places draws 2N *places* in one continuous sample:
+ * the first N are filled by the winners, the next N by the reserves, in the
+ * order they came out. **Places, not applications** — the unit of selection is
+ * an application carrying one or two pilgrims, and the unit of capacity is a
+ * pilgrim, so a twelve place commune may produce eleven winning applications
+ * and still fill twelve places exactly. At each step only the applications that
+ * fit entirely inside the remaining capacity may be drawn, which is what keeps
+ * a paired registration from ever being split; see docs/pilgrim-capacity.md.
+ *
+ * The split between the halves is a slice of one result, not two draws — which
+ * is what makes the reserve order provably the lottery's rather than somebody's
+ * arrangement of the people who did not win. Nothing sorts the remainder by
+ * weight, and nothing regenerates a reserve list later; see
+ * docs/reserves-and-replacements.md. It writes nothing: no winners, no `has_won_hajj`,
  * no lifecycle change, no audit row, not even a log line. `COMPLETED` does not
  * exist on the commune draw lifecycle, and a selection this service produces
  * has not concluded anything.
@@ -158,7 +192,8 @@ export class LotteryService {
 
   /**
    * Draws this commune draw's places *and its reserve list* from the frozen
-   * pool — one sample, twice the allocation — and persists nothing.
+   * pool — one sample, twice the allocation in pilgrim places — and persists
+   * nothing.
    *
    * Reads only. Every refusal happens before a single random number is drawn,
    * so a draw either runs against a complete, verified snapshot or does not run
@@ -216,44 +251,96 @@ export class LotteryService {
 
     this.assertSnapshotIntact(communeDraw, pool)
 
-    const winnerCount = pool.allocatedSpots
-    // N winners and N reserves, drawn as one sample. The reserve list has to be
-    // produced by the same draw as the winners — a list assembled afterwards,
-    // however honestly, could not be shown to have been.
-    const selectionCount = totalDrawSelections(winnerCount)
+    // The allocation is a number of *pilgrim places*, not of applications. The
+    // winners fill it exactly, and the reserve list covers the same number of
+    // places again — drawn as one continuous sample, because a reserve list
+    // assembled afterwards, however honestly, could not be shown to have been.
+    const pilgrimQuota = pool.allocatedSpots
+    const requiredPilgrims = totalDrawPilgrimQuota(pilgrimQuota)
 
-    // A pool that cannot supply both halves is refused, never truncated. This is
-    // stricter than it was before reserves existed, and deliberately so: a
-    // commune drawing ten winners and five reserves would have a contingency
-    // list that runs out, and which five of the ten places were the protected
-    // ones would have been decided by nobody. Freezing still permits such a pool
-    // — whether an undersubscribed commune should draw at all is a policy
-    // question the engine will not answer silently.
-    if (pool.entryCount < selectionCount) {
+    // The algorithm sees each entry through the three fields it may act on —
+    // identity, weight, and how many places it occupies — and hands the whole
+    // row back. `pilgrimCount` is derived from the frozen `entryType`, so it is
+    // part of the immutable input the snapshot hash already covers.
+    const candidates = pool.entries.map((entry) => ({
+      ...entry,
+      pilgrimCount: pilgrimCountOf(entry.entryType),
+    }))
+    const poolPilgrimCount = candidates.reduce((sum, entry) => sum + entry.pilgrimCount, 0)
+
+    // A pool that cannot supply both halves is refused, never truncated —
+    // counted in pilgrims, since that is what a place is measured in. A pool of
+    // 2N *entries* can hold anywhere from 2N to 4N places, and only this figure
+    // says whether a draw and its reserve list can both be filled. Freezing
+    // still permits an undersubscribed pool: whether such a commune should draw
+    // at all is a policy question the engine will not answer silently.
+    if (poolPilgrimCount < requiredPilgrims) {
       throw new ConflictError(
         'INSUFFICIENT_DRAW_ENTRIES',
-        `This pool holds ${pool.entryCount} entries; a draw for ${winnerCount} places needs ` +
-          `${selectionCount} — ${winnerCount} winners and ${winnerCount} reserves`,
+        `This pool's ${pool.entryCount} applications cover ${poolPilgrimCount} pilgrim place(s); ` +
+          `a draw for ${pilgrimQuota} place(s) needs ${requiredPilgrims} — ${pilgrimQuota} for the ` +
+          `winners and ${pilgrimQuota} for the reserves`,
       )
     }
 
-    // The pool rows already carry `id` and `weight`, so the algorithm sees each
-    // entry through the two fields it is allowed to choose on and hands the
-    // whole row back. One call, one continuous sample without replacement: the
-    // split into winners and reserves below is where the sample is cut, not a
-    // second draw.
-    const selection = weightedSampleWithoutReplacement(pool.entries, selectionCount, this.random)
+    // One call, one continuous sample without replacement. The two quotas are
+    // where the sample is cut, not a second draw: selection numbering runs
+    // straight through, and a pair that could not fit the last winning place is
+    // a full candidate again for the reserve quota, which starts with its own
+    // capacity.
+    const selection = (() => {
+      try {
+        return weightedCapacitySample(candidates, [pilgrimQuota, pilgrimQuota], this.random)
+      } catch (error) {
+        // The one failure the domain has to name: a single place left and every
+        // remaining application a pair. Nothing is split, nothing overspent,
+        // and nothing is written — the commune draw stays LOCKED.
+        if (error instanceof UnfillableQuotaError) {
+          throw new ConflictError(
+            'QUOTA_NOT_EXACTLY_FILLABLE',
+            `${error.message}. Retrying draws a fresh sample; a pool with more single applicants ` +
+              'is what makes an exact fill reliably reachable.',
+          )
+        }
+        throw error
+      }
+    })()
 
-    const drawn = selection.selected.map((entry, index) => ({
+    const [winningEntries = [], reserveEntries = []] = selection.phases
+
+    const drawn = [...winningEntries, ...reserveEntries].map((entry, index) => ({
       drawPoolEntryId: entry.id,
       applicationId: entry.applicationId,
       applicationReference: entry.applicationReference,
       entryType: entry.entryType,
       weight: entry.weight,
+      pilgrimCount: entry.pilgrimCount,
       selectionOrder: index + 1,
       primaryParticipantId: entry.primaryParticipantId,
       secondaryParticipantId: entry.secondaryParticipantId,
     }))
+
+    const selected = drawn.slice(0, winningEntries.length)
+    const reserves = drawn.slice(winningEntries.length).map((entry, index) => ({
+      ...entry,
+      reservePosition: index + 1,
+    }))
+
+    const winnerPilgrimCount = pilgrimsOf(selected)
+    const reservePilgrimCount = pilgrimsOf(reserves)
+
+    // The algorithm fills each quota exactly or throws, so neither of these can
+    // disagree. Asserted because a draw that placed the wrong number of people
+    // would be indistinguishable from a correct one afterwards, and this is the
+    // last moment before winner processing starts writing.
+    if (winnerPilgrimCount !== pilgrimQuota || reservePilgrimCount !== pilgrimQuota) {
+      throw new ApiError(
+        500,
+        'INTERNAL_ERROR',
+        `A draw for ${pilgrimQuota} places selected ${winnerPilgrimCount} winning and ` +
+          `${reservePilgrimCount} reserve pilgrims`,
+      )
+    }
 
     return {
       communeDrawId: communeDraw.id,
@@ -262,14 +349,14 @@ export class LotteryService {
       communeCode: communeDraw.commune.code,
       snapshotHash: pool.snapshotHash,
       entryCount: pool.entryCount,
+      poolPilgrimCount,
       totalWeight: pool.totalWeight,
       allocatedSpots: pool.allocatedSpots,
+      winnerPilgrimCount,
+      reservePilgrimCount,
       algorithmVersion: LOTTERY_ALGORITHM_VERSION,
-      selected: drawn.slice(0, winnerCount),
-      reserves: drawn.slice(winnerCount).map((entry) => ({
-        ...entry,
-        reservePosition: entry.selectionOrder - winnerCount,
-      })),
+      selected,
+      reserves,
       pooledApplicationIds: pool.entries.map((entry) => entry.applicationId),
       events: selection.events,
       selectedAt: new Date().toISOString(),
@@ -296,6 +383,7 @@ export class LotteryService {
     pool: {
       id: string
       entryCount: number
+      pilgrimCount: number
       totalWeight: number
       allocatedSpots: number
       snapshotHash: string
@@ -335,6 +423,15 @@ export class LotteryService {
       refuse(`its entries weigh ${loadedWeight}, not the recorded ${pool.totalWeight}`)
     }
 
+    // The capacity aggregate, checked exactly like the other two. The draw's
+    // quota is spent against this figure, so a pool whose stored pilgrim count
+    // disagreed with its entries could place the wrong number of people while
+    // every other check passed.
+    const loadedPilgrims = pool.entries.reduce((sum, entry) => sum + pilgrimCountOf(entry.entryType), 0)
+    if (loadedPilgrims !== pool.pilgrimCount) {
+      refuse(`its entries cover ${loadedPilgrims} pilgrim places, not the recorded ${pool.pilgrimCount}`)
+    }
+
     const recomputed = hashPool({
       communeDrawId: communeDraw.id,
       communeId: communeDraw.communeId,
@@ -349,6 +446,11 @@ export class LotteryService {
       refuse('its contents no longer match its snapshot hash')
     }
   }
+}
+
+/** The pilgrim places a set of drawn entries occupies. */
+function pilgrimsOf(entries: readonly { pilgrimCount: number }[]): number {
+  return entries.reduce((sum, entry) => sum + entry.pilgrimCount, 0)
 }
 
 export const lotteryService = new LotteryService()

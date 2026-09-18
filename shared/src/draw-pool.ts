@@ -77,6 +77,13 @@ export interface PoolValidationDto {
   allocatedSpots: number
   /** How many applications would enter the pool. */
   applicationCount: number
+  /**
+   * The pilgrims those applications carry — one per single entry, two per
+   * paired. What the draw's quota is actually spent in, and so the number to
+   * compare against `totalDrawPilgrimQuota(allocatedSpots)`; the application
+   * count alone says nothing about whether a draw can run.
+   */
+  pilgrimCount: number
   /** Their weights summed. */
   totalWeight: number
   blockers: PoolBlocker[]
@@ -94,6 +101,12 @@ export interface DrawPoolSummaryDto {
   drawYear: number
   communeCode: string
   entryCount: number
+  /**
+   * The pilgrims the frozen entries carry, stored and verified alongside
+   * `entryCount` at freeze time. The draw's capacity precondition reads this:
+   * a pool of 2N entries does not necessarily hold 2N pilgrim places.
+   */
+  pilgrimCount: number
   totalWeight: number
   allocatedSpots: number
   snapshotHash: string

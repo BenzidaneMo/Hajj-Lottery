@@ -514,6 +514,7 @@ describe('freezing a pool', () => {
       actingAdministratorId: user.id,
       communeDrawId: communeDraw.id,
       entryCount: 1,
+      pilgrimCount: 1,
       alreadyFrozen: false,
     })
     expect(event.snapshotHash).toMatch(/^[0-9a-f]{64}$/)
@@ -592,6 +593,7 @@ describe('the frozen pool is immutable', () => {
         data: {
           communeDrawId: communeDraw.id,
           entryCount: 1,
+          pilgrimCount: 1,
           totalWeight: 1,
           allocatedSpots: 12,
           snapshotHash: 'x'.repeat(64),

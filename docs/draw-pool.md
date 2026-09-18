@@ -89,7 +89,14 @@ Commune C: 100 spots,   20 eligible applications  →   20 entries
 ```
 
 The pool holds **every** eligible application, not a subset, and never fewer
-than exist. `entry_count >= allocated_spots` is **not** required: a pool
+than exist. `pilgrim_count` is stored and verified beside them, covering the
+places those entries fill — one per single entry, two per paired — because the
+draw spends its quota against that figure rather than the row count. It is derived
+from each entry's frozen `entry_type`, which the fingerprint below already covers,
+so it adds nothing to the hash and no existing pool's fingerprint changes. See
+[pilgrim-capacity.md](pilgrim-capacity.md).
+
+`entry_count >= allocated_spots` is **not** required: a pool
 smaller than the allocation is valid, and nothing here selects those 20
 applicants. What a draw does with a surplus is the draw engine's decision.
 

@@ -1,4 +1,4 @@
-import { totalDrawSelections } from '@hajj-lottery/shared'
+import { totalDrawPilgrimQuota } from '@hajj-lottery/shared'
 import { PrismaClient, type Application, type Commune, type CommuneDraw, type DrawYear } from '@prisma/client'
 import request from 'supertest'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -169,7 +169,7 @@ async function completedDraws(specs: DrawSpec[]): Promise<CompletedDraw[]> {
  * drawn short. See docs/reserves-and-replacements.md.
  */
 function defaultEntries(allocatedSpots: number): RegisterOptions[] {
-  return Array.from({ length: totalDrawSelections(allocatedSpots) }, () => ({}))
+  return Array.from({ length: totalDrawPilgrimQuota(allocatedSpots) }, () => ({}))
 }
 
 async function completedDraw(
@@ -270,16 +270,29 @@ describe('mapping internal state to what the public is told', () => {
 describe('the publication integrity rules, in isolation', () => {
   const whole: ResultIntegrityFacts = {
     communeDrawStatus: 'COMPLETED',
-    result: { winnerCount: 3, drawPoolId: 'pool-1', poolHash: 'hash-1' },
-    pool: { id: 'pool-1', snapshotHash: 'hash-1', entryCount: 9, allocatedSpots: 3 },
+    // Four pilgrim places, filled by three applications on each side: two
+    // singles and a pair. The two units are deliberately different numbers here
+    // — a fixture where they coincided would let a rule compare the wrong one
+    // and still pass.
+    result: {
+      winnerCount: 3,
+      winnerPilgrimCount: 4,
+      reserveCount: 3,
+      reservePilgrimCount: 4,
+      algorithmVersion: 'weighted-csprng-capacity-v2',
+      drawPoolId: 'pool-1',
+      poolHash: 'hash-1',
+    },
+    pool: { id: 'pool-1', snapshotHash: 'hash-1', entryCount: 9, pilgrimCount: 12, allocatedSpots: 4 },
     drawWinnerCount: 3,
     drawReserveCount: 3,
-    // Six selections for three places: the winners, then the reserve list.
+    drawWinnerPilgrimCount: 4,
+    drawReservePilgrimCount: 4,
+    // Six selections for four places: the winners, then the reserve list.
     selectionEventCount: 6,
     selectionOrderBounds: { min: 1, max: 3 },
     reservePositionBounds: { min: 1, max: 3 },
     reserveSelectionOrderBounds: { min: 4, max: 6 },
-    expectedWinningParticipants: 4,
     promotedReserveParticipants: 0,
     archivedWinnerCount: 4,
     excludedWinnerCount: 4,
@@ -319,6 +332,76 @@ describe('the publication integrity rules, in isolation', () => {
       participationRecordCount: 4,
     })
     expect(broken.length).toBeGreaterThan(1)
+  })
+
+  // --- Pilgrim capacity ---
+
+  it('measures the allocation in pilgrim places, not in winning applications', () => {
+    // Three winning applications for a four place commune is correct, and the
+    // rule must not read the entry count as the allocation — that misreading is
+    // the defect the capacity draw exists to fix.
+    expect(assessResultIntegrity(whole)).toEqual([])
+
+    const overAwarded = assessResultIntegrity({
+      ...whole,
+      drawWinnerPilgrimCount: 5,
+      result: { ...whole.result!, winnerPilgrimCount: 5 },
+      archivedWinnerCount: 5,
+      excludedWinnerCount: 5,
+    })
+    expect(overAwarded).toContain('ALLOCATION_MISMATCH')
+  })
+
+  it('catches a result whose recorded pilgrim count disagrees with its winners', () => {
+    // The one way a faked figure could satisfy the allocation check, so it is
+    // compared against the rows independently.
+    const lying = assessResultIntegrity({ ...whole, result: { ...whole.result!, winnerPilgrimCount: 6 } })
+    expect(lying).toContain('WINNER_PILGRIM_COUNT_MISMATCH')
+
+    const lyingReserves = assessResultIntegrity({
+      ...whole,
+      result: { ...whole.result!, reservePilgrimCount: 6 },
+    })
+    expect(lyingReserves).toContain('RESERVE_PILGRIM_COUNT_MISMATCH')
+  })
+
+  it('requires the reserve list to cover the places it protects, in pilgrims', () => {
+    // Two reserve applications covering three places protects three of four —
+    // a contingency list that runs out before the places do.
+    const short = assessResultIntegrity({
+      ...whole,
+      drawReserveCount: 2,
+      drawReservePilgrimCount: 3,
+      result: { ...whole.result!, reserveCount: 2, reservePilgrimCount: 3 },
+      reservePositionBounds: { min: 1, max: 2 },
+      reserveSelectionOrderBounds: { min: 4, max: 5 },
+      selectionEventCount: 5,
+    })
+    expect(short).toContain('RESERVE_ALLOCATION_MISMATCH')
+  })
+
+  it('judges a pre-capacity result by the rule it actually ran under', () => {
+    // A historical draw spent its quota in application records, so three winning
+    // applications *is* its three allocated places even though one of them is a
+    // pair carrying a fourth pilgrim. Publishing it must still be possible:
+    // rewriting the record to satisfy a later rule would destroy the evidence of
+    // what that lottery did.
+    const legacy: ResultIntegrityFacts = {
+      ...whole,
+      result: {
+        ...whole.result!,
+        algorithmVersion: 'weighted-csprng-v1',
+        winnerPilgrimCount: 4,
+        reservePilgrimCount: 4,
+      },
+      pool: { ...whole.pool!, allocatedSpots: 3 },
+    }
+
+    expect(assessResultIntegrity(legacy)).toEqual([])
+    // And it is still held to *its* allocation rule.
+    expect(assessResultIntegrity({ ...legacy, pool: { ...legacy.pool!, allocatedSpots: 4 } })).toContain(
+      'ALLOCATION_MISMATCH',
+    )
   })
 })
 
@@ -603,8 +686,11 @@ describe('public results', () => {
     expect(second.body).toEqual(first.body)
   })
 
-  it('treats a paired application as one winning entry covering two people', async () => {
-    const { communeDraw } = await completedDraw(geo.communeA1, [{ paired: true }, { paired: true }], 1)
+  it('treats a paired application as one winning entry filling two places', async () => {
+    // Two places, drawn from two paired applications: one wins both places, the
+    // other covers both reserved places. One winning *record*, two winning
+    // pilgrims, and the allocation is the pilgrim figure.
+    const { communeDraw } = await completedDraw(geo.communeA1, [{ paired: true }, { paired: true }], 2)
     await publish(communeDraw.id)
 
     const response = await request(app).get(
@@ -615,7 +701,10 @@ describe('public results', () => {
     expect(response.body.winners).toHaveLength(1)
     expect(response.body.winners[0].entryType).toBe('PAIRED')
     expect(response.body.winners[0].participantCount).toBe(2)
-    // Spots count entries; people can exceed them.
+    // The published allocation and the published pilgrim count agree, which is
+    // what lets a citizen check the result adds up. The record count does not,
+    // and is not meant to.
+    expect(response.body.allocatedSpots).toBe(2)
     expect(response.body.winningParticipantCount).toBe(2)
   })
 
@@ -623,7 +712,7 @@ describe('public results', () => {
     const { communeDraw, registered } = await completedDraw(
       geo.communeA1,
       [{ paired: true }, { paired: true }],
-      1,
+      2,
     )
     await publish(communeDraw.id)
     const [entry] = registered

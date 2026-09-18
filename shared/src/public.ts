@@ -133,7 +133,11 @@ export interface PublicWinnerDto {
   selectionOrder: number
   applicationReference: string
   entryType: EntryType
-  /** 1 for SINGLE, 2 for PAIRED. Spots count entries; a pair is one entry. */
+  /**
+   * 1 for SINGLE, 2 for PAIRED — the pilgrim places this one entry occupies.
+   * The quota is spent in these, which is why the winner list can be shorter
+   * than the allocation and still fill it exactly.
+   */
   participantCount: number
   /**
    * Whether this entry still holds the place it won.
@@ -185,13 +189,18 @@ export interface PublicResultSummaryDto {
   drawYear: number
   wilaya: PublicPlaceDto
   commune: PublicPlaceDto
-  /** The commune's places, as they stood when the pool was frozen. */
+  /** The commune's pilgrim places, as they stood when the pool was frozen. */
   allocatedSpots: number
-  /** Winning applications. A paired application is one. */
+  /**
+   * Winning **applications**. A paired application is one, so this is normally
+   * *fewer* than the allocation rather than equal to it.
+   */
   winnerCount: number
   /**
-   * Winning individuals, which can exceed `winnerCount`: ten places filled by
-   * nine single and one paired application is ten entries and eleven people.
+   * Winning **pilgrims** — the number the allocation is measured in, and so the
+   * one a citizen should compare against `allocatedSpots`. Twelve places filled
+   * by ten single and one paired application is eleven applications and twelve
+   * pilgrims.
    */
   winningParticipantCount: number
   publishedAt: string

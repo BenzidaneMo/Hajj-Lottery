@@ -21,8 +21,35 @@ import type { DrawReserveDto, WinnerAbandonmentDto, WinnerOutcome } from './rese
  * ran it. Deliberately a fixed version rather than a moving label like "latest":
  * a result whose algorithm cannot be pinned down is not reproducible, and
  * reproducibility is the whole claim.
+ *
+ * `capacity-v2` is the pilgrim-capacity draw: the quota is spent in pilgrims
+ * and only groups that fit the remaining capacity may be selected. `v1` spent
+ * it in application records, which is the defect this replaced — see
+ * docs/pilgrim-capacity.md.
  */
-export const LOTTERY_ALGORITHM_VERSION = 'weighted-csprng-v1'
+export const LOTTERY_ALGORITHM_VERSION = 'weighted-csprng-capacity-v2'
+
+/**
+ * The selection implementation that predates pilgrim capacity.
+ *
+ * Kept named rather than deleted because results produced by it still exist and
+ * must stay readable, publishable and auditable exactly as they were recorded.
+ * Nothing produces one any more.
+ */
+export const LEGACY_ENTRY_COUNT_ALGORITHM_VERSION = 'weighted-csprng-v1'
+
+/**
+ * Whether a result's algorithm spent its quota in pilgrims rather than in
+ * application records.
+ *
+ * The integrity gate and the database's own capacity trigger both branch on
+ * this, so a historical draw is judged by the rules it actually ran under. A
+ * v1 result with a paired winner has more winning pilgrims than allocated
+ * places; that is a faithful record of what happened, not a fault to report.
+ */
+export function isPilgrimCapacityAlgorithm(algorithmVersion: string): boolean {
+  return algorithmVersion !== LEGACY_ENTRY_COUNT_ALGORITHM_VERSION
+}
 
 /**
  * One winning entry.
@@ -72,27 +99,51 @@ export interface DrawResultDto {
   id: string
   drawYear: number
   communeCode: string
-  /** Winning entries — equal to the commune's allocated spots. */
+  /**
+   * Winning **applications**. Not the allocation: a twelve place commune whose
+   * draw selected ten single and one paired application has eleven winning
+   * applications and twelve winning pilgrims.
+   */
   winnerCount: number
   /**
-   * Reserve positions, also equal to the allocated spots. A draw selects 2N
-   * entries in one continuous sample: N winners, then N ordered reserves.
+   * The pilgrims those winning applications place — **equal to
+   * `allocatedSpots`** for a completed capacity-aware draw. This is the
+   * invariant the quota is about; `winnerCount` is not.
+   */
+  winnerPilgrimCount: number
+  /**
+   * Reserve **positions**. A draw fills a reserve pilgrim quota equal to the
+   * allocation from the same continuous sample, so this is however many
+   * applications that took — not the allocation.
    */
   reserveCount: number
+  /** The pilgrims the reserve list covers — equal to `allocatedSpots` too. */
+  reservePilgrimCount: number
   /**
-   * Places currently held: original winners who have not abandoned, plus
-   * reserves who were called and accepted. Equal to `winnerCount` for a draw
-   * whose every abandonment has been replaced, and lower while one is open.
+   * Winning applications currently holding their place: original winners who
+   * have not abandoned, plus reserves who were called and accepted. Equal to
+   * `winnerCount` for a draw whose every abandonment has been replaced.
    *
-   * A replacement does not add a place, so this never exceeds `winnerCount`.
+   * Applications, so a place given up by a pair and taken by a single applicant
+   * leaves this unchanged while `activePilgrimCount` falls — which is exactly
+   * the situation the two numbers exist to keep distinguishable.
    */
   activeWinnerCount: number
   /**
-   * People who won, which can exceed `winnerCount`: ten places filled by nine
-   * single and one paired application is ten winning entries and eleven winning
-   * individuals. Spots count entries, not people.
+   * Pilgrim places currently held. Equal to `allocatedSpots` while nothing has
+   * been given up, and — because a replacement group need not be the same size
+   * as the one it replaces — not guaranteed to return to it. See
+   * docs/pilgrim-capacity.md on replacement.
+   */
+  activePilgrimCount: number
+  /**
+   * People this draw has made lifetime winners: the winning applications'
+   * pilgrims, plus anybody promoted from the reserve list since. Equal to
+   * `winnerPilgrimCount` until a promotion happens, and above it afterwards —
+   * an abandoned winner is still a winner and is never un-archived.
    */
   winningParticipantCount: number
+  /** The commune's pilgrim places. The quota the draw was run against. */
   allocatedSpots: number
   /** The pool the draw ran against. */
   entryCount: number

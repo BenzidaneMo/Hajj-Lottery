@@ -1,4 +1,4 @@
-import type { PoolBlocker, PoolBlockerCode } from '@hajj-lottery/shared'
+import { pilgrimCountOf, type PoolBlocker, type PoolBlockerCode } from '@hajj-lottery/shared'
 import { Prisma, type DrawPool, type PrismaClient } from '@prisma/client'
 
 import { ApiError, ConflictError } from '../lib/errors.js'
@@ -28,6 +28,16 @@ export interface PoolValidation {
   communeDraw: CommuneDrawWithPlace
   entries: HashableEntry[]
   totalWeight: number
+  /**
+   * The pilgrim places the candidate entries cover — one per single entry, two
+   * per paired. Reported so an operator can see whether the pool can actually
+   * fill the allocation *and* its reserve list, which the application count
+   * alone does not say.
+   *
+   * Not a blocker. Freezing deliberately permits an undersubscribed pool; the
+   * refusal belongs at execution, where the policy question surfaces.
+   */
+  pilgrimCount: number
   blockers: PoolBlocker[]
   /** An existing pool, when one has already been frozen. */
   existingPool: DrawPool | null
@@ -46,6 +56,8 @@ export interface PoolFreezeEvent {
   communeDrawId: string
   drawPoolId: string
   entryCount: number
+  /** The pilgrim places those entries cover, beside the count of entries. */
+  pilgrimCount: number
   totalWeight: number
   snapshotHash: string
   alreadyFrozen: boolean
@@ -151,6 +163,11 @@ export class DrawPoolService {
     if (candidates.length === 0) add('NO_ELIGIBLE_APPLICATIONS')
 
     const entries: HashableEntry[] = []
+    // Accumulated here rather than derived from `entries` afterwards, because
+    // `HashableEntry.entryType` is a plain string by design — the hash module
+    // stays decoupled from the domain enum — and the application rows are where
+    // the typed value actually is.
+    let pilgrimCount = 0
 
     for (const application of candidates) {
       const reference = application.applicationReference
@@ -215,6 +232,7 @@ export class DrawPoolService {
         secondaryParticipantId: application.secondaryParticipantId,
         weight: application.calculatedWeight,
       })
+      pilgrimCount += pilgrimCountOf(application.entryType)
     }
 
     const totalWeight = entries.reduce((sum, entry) => sum + entry.weight, 0)
@@ -224,6 +242,7 @@ export class DrawPoolService {
       communeDraw,
       entries,
       totalWeight,
+      pilgrimCount,
       blockers,
       existingPool,
     }
@@ -264,6 +283,7 @@ export class DrawPoolService {
         communeDrawId,
         drawPoolId: pool.id,
         entryCount: pool.entryCount,
+        pilgrimCount: pool.pilgrimCount,
         totalWeight: pool.totalWeight,
         snapshotHash: pool.snapshotHash,
         alreadyFrozen,
@@ -287,7 +307,7 @@ export class DrawPoolService {
       )
     }
 
-    const { communeDraw, entries, totalWeight } = validation
+    const { communeDraw, entries, totalWeight, pilgrimCount } = validation
 
     const snapshotHash = hashPool({
       communeDrawId: communeDraw.id,
@@ -316,6 +336,10 @@ export class DrawPoolService {
           data: {
             communeDrawId: communeDraw.id,
             entryCount: entries.length,
+            // The snapshot's capacity, stored beside its other aggregates. The
+            // draw spends the allocation against this figure, so it has to be
+            // fixed by the same act that fixes everything else about the pool.
+            pilgrimCount,
             totalWeight,
             allocatedSpots: communeDraw.allocatedSpots,
             snapshotHash,
@@ -338,15 +362,23 @@ export class DrawPoolService {
         // The stored aggregates must describe the rows that were actually
         // written, not the array they came from. Nothing can repair them
         // afterwards, so they are checked while a rollback is still possible.
-        const written = await tx.drawPoolEntry.aggregate({
-          where: { drawPoolId: created.id },
-          _count: { _all: true },
-          _sum: { weight: true },
-        })
+        const [written, writtenPairs] = await Promise.all([
+          tx.drawPoolEntry.aggregate({
+            where: { drawPoolId: created.id },
+            _count: { _all: true },
+            _sum: { weight: true },
+          }),
+          tx.drawPoolEntry.count({ where: { drawPoolId: created.id, entryType: 'PAIRED' } }),
+        ])
 
         if (
           written._count._all !== created.entryCount ||
-          (written._sum.weight ?? 0) !== created.totalWeight
+          (written._sum.weight ?? 0) !== created.totalWeight ||
+          // Every entry places one pilgrim, and a paired one places a second.
+          // Checked against the rows rather than against the array they came
+          // from, exactly like the other two aggregates — a stored capacity that
+          // disagreed with the entries would let the draw spend the wrong quota.
+          written._count._all + writtenPairs !== created.pilgrimCount
         ) {
           throw new ApiError(500, 'INTERNAL_ERROR', 'Draw pool totals did not match its entries')
         }
@@ -365,6 +397,7 @@ export class DrawPoolService {
               communeDrawId: communeDraw.id,
               drawYear: communeDraw.drawYear.year,
               entryCount: created.entryCount,
+              pilgrimCount: created.pilgrimCount,
               totalWeight: created.totalWeight,
               allocatedSpots: created.allocatedSpots,
               snapshotHash: created.snapshotHash,

@@ -427,10 +427,14 @@ model CommuneDraw {
   drawYearId String @map("draw_year_id")
   communeId  String @map("commune_id")
 
-  /// How many winners this commune's draw may select. A positive integer,
-  /// bounded by a CHECK constraint. Never inferred from the applicant count:
-  /// 843 eligible applications for 12 places is the normal case, and so is
-  /// 100 places for 20 applicants.
+  /// How many **pilgrim places** this commune's draw awards. A positive
+  /// integer, bounded by a CHECK constraint. Never inferred from the applicant
+  /// count: 843 eligible applications for 12 places is the normal case, and so
+  /// is 100 places for 20 applicants.
+  ///
+  /// Places, not winning applications. A paired registration is one application
+  /// occupying two of these, so a 12 place draw may produce fewer than 12
+  /// winners — see docs/pilgrim-capacity.md.
   allocatedSpots Int @map("allocated_spots")
 
   status CommuneDrawStatus @default(DRAFT)
@@ -487,8 +491,18 @@ model DrawPool {
   entryCount  Int @map("entry_count")
   totalWeight Int @map("total_weight")
 
+  /// The pilgrim places those applications cover: one per SINGLE entry, two per
+  /// PAIRED. Stored and verified beside `entry_count` for the same reason, and
+  /// load-bearing for a different one — the draw's quota is spent in places, so
+  /// a pool of 2N entries covering fewer than 2N places cannot run a draw for N
+  /// places at all. Derived from `entry_type`, which the snapshot hash already
+  /// covers, so it adds nothing to the hash and no existing pool's fingerprint
+  /// changes. See docs/pilgrim-capacity.md.
+  pilgrimCount Int @map("pilgrim_count")
+
   /// The commune's allocation as it stood at the moment of freezing, so the
-  /// terms of the draw are legible from the snapshot alone.
+  /// terms of the draw are legible from the snapshot alone. A number of pilgrim
+  /// places, never of application records.
   allocatedSpots Int @map("allocated_spots")
 
   /// SHA-256 over a deterministic serialization of the pool — see
@@ -584,9 +598,24 @@ model DrawResult {
   drawPool   DrawPool @relation(fields: [drawPoolId], references: [id], onDelete: Restrict)
 
   /// How many entries were selected. Entries, not people: a paired application
-  /// is one winning entry and two winning individuals. Equal to the commune's
-  /// allocated spots for a completed draw.
+  /// is one winning entry and two winning individuals. Deliberately **not**
+  /// equal to the commune's allocated spots — that is a pilgrim figure, and
+  /// `winner_pilgrim_count` below is the one it matches.
   winnerCount Int @map("winner_count")
+
+  /// The pilgrim places those winning entries fill. **Exactly the pool's
+  /// `allocated_spots`** for a capacity-aware draw, which a deferred constraint
+  /// trigger checks against the winner rows themselves before commit. This is
+  /// the invariant the quota is about; the entry count above is not.
+  winnerPilgrimCount Int @map("winner_pilgrim_count")
+
+  /// The reserve list, in both units. `reserve_count` is rows and is what the
+  /// reserve-shape trigger bounds `reserve_position` by — it used to be derived
+  /// from `winner_count`, which stopped being the same number the moment a
+  /// quota was measured in places. `reserve_pilgrim_count` equals
+  /// `allocated_spots` like the winners' does.
+  reserveCount         Int @map("reserve_count")
+  reservePilgrimCount  Int @map("reserve_pilgrim_count")
 
   /// The pool's total weight as the draw saw it. Stored so the selection events
   /// can be replayed without reading the pool back.

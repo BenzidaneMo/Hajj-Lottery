@@ -1,9 +1,10 @@
-import type {
-  BatchCandidateDto,
-  BatchExecutionOutcomeDto,
-  BatchExecutionResultDto,
-  BatchNotReadyReason,
-  BatchValidationDto,
+import {
+  totalDrawPilgrimQuota,
+  type BatchCandidateDto,
+  type BatchExecutionOutcomeDto,
+  type BatchExecutionResultDto,
+  type BatchNotReadyReason,
+  type BatchValidationDto,
 } from '@hajj-lottery/shared'
 import type { Commune, CommuneDraw, DrawPool, DrawResult, PrismaClient, User, Wilaya } from '@prisma/client'
 
@@ -62,11 +63,14 @@ export class BatchDrawExecutionService {
   /**
    * Discovers which commune draws in one year are ready for a batch run.
    *
-   * A coarse, cheap check — locked, a pool exists, and the pool holds at
-   * least twice the allocation. It deliberately does not re-verify the pool's
-   * hash or aggregates: that is `execute()`'s job, and duplicating it here
-   * would be a second verification engine the two could disagree about.
-   * "Ready" here is a preview; execution is still the final word.
+   * A coarse, cheap check — locked, a pool exists, and the pool covers at
+   * least twice the allocation in *pilgrim places*. It deliberately does not
+   * re-verify the pool's hash or aggregates: that is `execute()`'s job, and
+   * duplicating it here would be a second verification engine the two could
+   * disagree about. "Ready" here is a preview; execution is still the final
+   * word — and it is the only thing that can discover the one failure no cheap
+   * check can predict, a final place left with only paired applications able to
+   * take it (see docs/pilgrim-capacity.md).
    */
   async validate(user: User, drawYearId: string): Promise<BatchValidationDto> {
     const candidates = await this.candidatesForYear(user, drawYearId)
@@ -90,7 +94,10 @@ export class BatchDrawExecutionService {
         notReady.push({ ...candidate, reason: 'NO_POOL' })
         continue
       }
-      if (draw.pool.entryCount < 2 * draw.allocatedSpots) {
+      // Pilgrim places, not entries: a pool of 2N applications covers anywhere
+      // from 2N to 4N places, and it is places the draw's quota is spent in.
+      // The stored `pilgrimCount` keeps this as cheap as the row count was.
+      if (draw.pool.pilgrimCount < totalDrawPilgrimQuota(draw.allocatedSpots)) {
         notReady.push({ ...candidate, reason: 'INSUFFICIENT_ENTRIES' })
         continue
       }

@@ -67,10 +67,13 @@ export const executeDraw: RequestHandler = async (req, res) => {
     ...toResultDto(execution.communeDraw, {
       id: execution.drawResultId,
       winnerCount: execution.selection.selected.length,
+      winnerPilgrimCount: execution.selection.winnerPilgrimCount,
       reserveCount: execution.reserveCount,
+      reservePilgrimCount: execution.selection.reservePilgrimCount,
       // Every place is held: nobody can have given one up in the moment
       // between the draw concluding and this response.
       activeWinnerCount: execution.selection.selected.length,
+      activePilgrimCount: execution.selection.winnerPilgrimCount,
       winningParticipantCount: execution.winningParticipantCount,
       allocatedSpots: execution.selection.allocatedSpots,
       entryCount: execution.selection.entryCount,
@@ -152,19 +155,32 @@ export async function readResultDto(communeDraw: CommuneDrawWithPlace): Promise<
 
   const publication = await resultPublicationService.findPublication(communeDraw.id)
 
-  const abandonedCount = result.winners.filter((winner) => winner.abandonment !== null).length
-  const promotedCount = result.reserves.filter((reserve) => holdsAPlace(reserve.status)).length
+  const abandoned = result.winners.filter((winner) => winner.abandonment !== null)
+  const promoted = result.reserves.filter((reserve) => holdsAPlace(reserve.status))
+  // Pilgrims, counted through the same `secondaryParticipantId` the winner and
+  // reserve DTOs read: a place given up by a pair frees two, and a single
+  // applicant promoted into it fills one. The two units can genuinely diverge
+  // here, which is exactly why both are reported.
+  const pilgrimsIn = (rows: { secondaryParticipantId: string | null }[]): number =>
+    rows.reduce((sum, row) => sum + (row.secondaryParticipantId ? 2 : 1), 0)
 
   return toResultDto(communeDraw, {
     publishedAt: publication?.publishedAt.toISOString() ?? null,
     id: result.id,
     winnerCount: result.winnerCount,
+    winnerPilgrimCount: result.winnerPilgrimCount,
     reserveCount: result.reserves.length,
+    reservePilgrimCount: result.reservePilgrimCount,
     // Places held right now: the original winners who have not given theirs up,
     // plus the reserves who took the ones that were. A replacement fills a
-    // place rather than adding one, so this returns to the allocation and
-    // never exceeds it.
-    activeWinnerCount: result.winnerCount - abandonedCount + promotedCount,
+    // vacated place rather than adding one, so the *application* count returns
+    // to the allocation and never exceeds it.
+    activeWinnerCount: result.winnerCount - abandoned.length + promoted.length,
+    // In pilgrims this is not guaranteed to return to the allocation: a
+    // two-pilgrim place given up and filled by a single applicant leaves one
+    // place unfilled, and that is a real administrative fact rather than an
+    // arithmetic slip. See docs/pilgrim-capacity.md on replacement.
+    activePilgrimCount: result.winnerPilgrimCount - pilgrimsIn(abandoned) + pilgrimsIn(promoted),
     winningParticipantCount: result._count.archivedWinners,
     allocatedSpots: result.drawPool.allocatedSpots,
     entryCount: result.drawPool.entryCount,
@@ -219,8 +235,11 @@ function toResultDto(
   result: {
     id: string
     winnerCount: number
+    winnerPilgrimCount: number
     reserveCount: number
+    reservePilgrimCount: number
     activeWinnerCount: number
+    activePilgrimCount: number
     winningParticipantCount: number
     allocatedSpots: number
     entryCount: number
@@ -240,8 +259,11 @@ function toResultDto(
     drawYear: communeDraw.drawYear.year,
     communeCode: communeDraw.commune.code,
     winnerCount: result.winnerCount,
+    winnerPilgrimCount: result.winnerPilgrimCount,
     reserveCount: result.reserveCount,
+    reservePilgrimCount: result.reservePilgrimCount,
     activeWinnerCount: result.activeWinnerCount,
+    activePilgrimCount: result.activePilgrimCount,
     winningParticipantCount: result.winningParticipantCount,
     allocatedSpots: result.allocatedSpots,
     entryCount: result.entryCount,

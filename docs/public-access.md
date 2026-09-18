@@ -295,10 +295,10 @@ is exactly the window in which that is worth something.
   "commune": { "code": "16001", "nameAr": "…", "nameFr": "…", "nameEn": "…" },
   "allocatedSpots": 12,
   "entryCount": 843,
-  "winnerCount": 12,
-  "winningParticipantCount": 14,
+  "winnerCount": 10,
+  "winningParticipantCount": 12,
   "poolHash": "9f2c…",
-  "algorithmVersion": "weighted-csprng-v1",
+  "algorithmVersion": "weighted-csprng-capacity-v2",
   "drawnAt": "2027-04-11T10:02:44.108Z",
   "publishedAt": "2027-04-13T08:00:00.000Z",
   "winners": [
@@ -343,11 +343,13 @@ documented policy change with its own consent question — not a field somebody 
 parameter. A weight is how many years that household was passed over, and
 publishing it publishes that.
 
-**Paired applications are one winning application.** `winnerCount` counts entries,
-`winningParticipantCount` counts people, and the second can exceed the first: ten
-places filled by nine single and one paired application is ten winning entries and
-eleven pilgrims. The secondary applicant's identity is never exposed — a paired
-entry is one row with `participantCount: 2`.
+**Paired applications are one winning application filling two places.**
+`winnerCount` counts entries, `winningParticipantCount` counts pilgrims, and the
+second is the one to read against `allocatedSpots`: twelve places filled by ten
+single and one paired application is eleven winning entries and twelve pilgrims.
+The record count is normally _smaller_ than the allocation, which is correct — see
+[pilgrim-capacity.md](pilgrim-capacity.md). The secondary applicant's identity is
+never exposed; a paired entry is one row with `participantCount: 2`.
 
 **`entryCount` is published; live applicant counts are not.** How many applications
 a draw chose from is the transparency this system exists for, it comes from a

@@ -1,6 +1,9 @@
 # Reserves and replacements
 
-A commune with `N` places does not draw `N` entries. It draws `2N` — `N` winners
+A commune with `N` pilgrim places does not draw `N` entries. It fills `2N`
+places — `N` winning and `N` reserved — however many applications that takes (see
+[pilgrim-capacity.md](pilgrim-capacity.md)). In the all-single case that is `2N`
+entries: `N` winners
 and, immediately afterwards, `N` reserves — in one continuous weighted sample.
 When a winner later gives up their place, the next reserve is called for it.
 
@@ -30,16 +33,21 @@ done anything in particular.
 
 The reserve list is produced by the original lottery and by nothing else.
 
-- `lib/lottery.ts` is unchanged. It is still a pure weighted sample without
-  replacement, still takes every random value through an injected
-  `RandomIntSource`, and still knows nothing about winners or reserves.
-- `LotteryService.drawFrom` asks it for `totalDrawSelections(allocatedSpots)`
-  entries — `2N` — and slices the result: the first `N` are winners, the rest are
-  reserves in the order they came out. The slice is where the two halves are
-  distinguished; the draw itself does not distinguish them.
-- One `DrawSelectionEvent` is written per selection, so all `2N` are backed by
-  the `activeTotalWeight` and `randomValue` that produced them. The reserve order
-  is as checkable as the winner order.
+- `lib/lottery.ts` is still a pure weighted sample without replacement, still
+  takes every random value through an injected `RandomIntSource`, and still knows
+  nothing about winners or reserves. It is asked for two **pilgrim-place quotas**
+  rather than one count of entries, and fills them in order from one continuous
+  sample — see [pilgrim-capacity.md](pilgrim-capacity.md).
+- `LotteryService.drawFrom` passes `[N, N]` and reads the two phases back: the
+  selections that filled the first are the winners, the rest are reserves in the
+  order they came out. The cut is where the two halves are distinguished; the draw
+  itself does not distinguish them. **Without replacement across the boundary** —
+  a winner is gone from what the reserve quota draws from — while a paired
+  application that could not fit a final winning place was never removed and is a
+  full candidate again once the reserve quota opens with its own capacity.
+- One `DrawSelectionEvent` is written per selection, so every one of them is
+  backed by the `activeTotalWeight` and `randomValue` that produced it. The
+  reserve order is as checkable as the winner order.
 
 What this is not:
 
@@ -51,12 +59,15 @@ What this is not:
   shown to be the lottery's own ordering, however honestly it was made. That is
   the entire reason reserves are drawn now rather than then.
 
-`RESERVE_POSITIONS_PER_SPOT` (shared) is `1`, and `totalDrawSelections()` is the
-one place the `2N` rule is expressed.
+`RESERVE_PILGRIMS_PER_SPOT` (shared) is `1`, and `totalDrawPilgrimQuota()` is the
+one place the `2N` rule is expressed. Both are named in pilgrims because that is
+what they count: six paired reserve applications are a complete reserve list for a
+twelve place commune.
 
 ## The insufficient-pool policy
 
-A draw for `N` places now requires a frozen pool of at least `2N` entries.
+A draw for `N` places now requires a frozen pool covering at least `2N` pilgrim
+places — which is `2N` entries only if every one of them is a single applicant.
 Anything less is `409 INSUFFICIENT_DRAW_ENTRIES`, the commune draw stays `LOCKED`,
 and nothing is written.
 
@@ -272,8 +283,10 @@ and a trigger draws the line down the middle of the row:
 
 Also enforced in the database:
 
-- reserve positions occupy `1..N` and selection orders `N+1..2N`, checked against
-  the result's own `winner_count`;
+- reserve positions occupy `1..reserve_count` and selection orders follow every
+  winner's, checked against the result's own recorded `winner_count` and
+  `reserve_count` — which are two different numbers once a pair is drawn, and used
+  to be one (see [pilgrim-capacity.md](pilgrim-capacity.md));
 - a pool entry cannot be both a winner and a reserve — a trigger on each table, so
   neither can be populated first and then contradicted;
 - one abandonment per winning entry (`UNIQUE(draw_winner_id)`);

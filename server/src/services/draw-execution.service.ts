@@ -41,6 +41,9 @@ export interface DrawExecutionEvent {
   winnerCount: number
   winningParticipantCount: number
   reserveCount: number
+  /** Places filled, winners and reserves alike — both equal to the allocation. */
+  winnerPilgrimCount: number
+  reservePilgrimCount: number
   at: string
 }
 
@@ -50,7 +53,10 @@ export interface DrawExecution {
   communeDraw: CommuneDrawWithPlace
   selection: DrawSelection
   winningParticipantCount: number
-  /** Reserve positions recorded. Equal to the allocation, like the winners. */
+  /**
+   * Reserve positions recorded — however many applications it took to cover the
+   * allocation in pilgrim places, which is not itself the allocation.
+   */
   reserveCount: number
   notSelectedCount: number
   historyRecordsCreated: number
@@ -159,11 +165,20 @@ export class DrawExecutionService {
 
       const completedAt = new Date()
 
+      // Four counts, because two units are in play and conflating them is the
+      // defect this schema now rules out: `winnerCount`/`reserveCount` are
+      // application records, `winnerPilgrimCount`/`reservePilgrimCount` are the
+      // places they fill. A deferred constraint trigger checks both pilgrim
+      // figures against the rows actually written and against the pool's own
+      // allocation before this transaction may commit.
       const result = await tx.drawResult.create({
         data: {
           communeDrawId: communeDraw.id,
           drawPoolId: selection.drawPoolId,
           winnerCount: selection.selected.length,
+          winnerPilgrimCount: selection.winnerPilgrimCount,
+          reserveCount: selection.reserves.length,
+          reservePilgrimCount: selection.reservePilgrimCount,
           totalWeightAtDraw: selection.totalWeight,
           poolHash: selection.snapshotHash,
           algorithmVersion: selection.algorithmVersion,
@@ -311,6 +326,11 @@ export class DrawExecutionService {
             winnerCount: selection.selected.length,
             winningParticipantCount: winners.length,
             reserveCount: selection.reserves.length,
+            // Both units in the trail, so "did this draw award the right number
+            // of places?" is answerable from the audit log alone.
+            allocatedSpots: selection.allocatedSpots,
+            winnerPilgrimCount: selection.winnerPilgrimCount,
+            reservePilgrimCount: selection.reservePilgrimCount,
             totalWeightAtDraw: selection.totalWeight,
             entryCount: selection.entryCount,
           },
@@ -325,6 +345,10 @@ export class DrawExecutionService {
         winnerCount: selection.selected.length,
         reserveCount: selection.reserves.length,
         winningParticipantCount: winners.length,
+        // The invariant the whole change is about, checked against the rows
+        // rather than the arrays: the places awarded must be exactly the places
+        // the commune was allocated.
+        allocatedSpots: selection.allocatedSpots,
         finalizedApplications: finalizedSelected.count + finalizedReserve.count + finalizedNotSelected.count,
         pooledApplications: selection.pooledApplicationIds.length,
         historyRecords: pooled.length,
@@ -351,6 +375,8 @@ export class DrawExecutionService {
           winnerCount: selection.selected.length,
           winningParticipantCount: winners.length,
           reserveCount: selection.reserves.length,
+          winnerPilgrimCount: selection.winnerPilgrimCount,
+          reservePilgrimCount: selection.reservePilgrimCount,
           at: completedAt.toISOString(),
         },
       }
@@ -463,14 +489,21 @@ export class DrawExecutionService {
       winnerCount: number
       reserveCount: number
       winningParticipantCount: number
+      allocatedSpots: number
       finalizedApplications: number
       pooledApplications: number
       historyRecords: number
     },
   ): Promise<void> {
-    const [winners, reserves, events, archived] = await Promise.all([
+    const [winners, pairedWinners, reserves, pairedReserves, events, archived] = await Promise.all([
       tx.drawWinner.count({ where: { drawResultId } }),
+      // A paired winning application holds two places, so the pilgrim total is
+      // the row count plus the paired ones. Counted from the winner rows' own
+      // `secondary_participant_id` rather than joined out of the pool — it is
+      // the same copy-at-write column the result's own DTO reads.
+      tx.drawWinner.count({ where: { drawResultId, secondaryParticipantId: { not: null } } }),
       tx.drawReserve.count({ where: { drawResultId } }),
+      tx.drawReserve.count({ where: { drawResultId, secondaryParticipantId: { not: null } } }),
       tx.drawSelectionEvent.count({ where: { drawResultId } }),
       tx.winnerArchive.count({ where: { drawResultId } }),
     ])
@@ -478,9 +511,15 @@ export class DrawExecutionService {
     const complete =
       winners === expected.winnerCount &&
       reserves === expected.reserveCount &&
+      // The places awarded are exactly the places allocated — the reason any of
+      // this changed. Entries may be fewer; pilgrims may not be fewer or more.
+      winners + pairedWinners === expected.allocatedSpots &&
+      reserves + pairedReserves === expected.allocatedSpots &&
       // One event per selection, across both halves of the sample.
       events === expected.winnerCount + expected.reserveCount &&
+      // One archive row per winning *person*, which is the same figure again.
       archived === expected.winningParticipantCount &&
+      archived === expected.allocatedSpots &&
       expected.finalizedApplications === expected.pooledApplications &&
       expected.historyRecords >= expected.pooledApplications
 
@@ -505,7 +544,7 @@ export class DrawExecutionService {
     return this.db.drawResult.findUnique({
       where: { communeDrawId },
       include: {
-        drawPool: { select: { entryCount: true, allocatedSpots: true } },
+        drawPool: { select: { entryCount: true, pilgrimCount: true, allocatedSpots: true } },
         winners: {
           select: {
             selectionOrder: true,

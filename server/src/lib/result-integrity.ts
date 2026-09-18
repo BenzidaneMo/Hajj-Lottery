@@ -1,4 +1,4 @@
-import type { CommuneDrawStatus } from '@hajj-lottery/shared'
+import { isPilgrimCapacityAlgorithm, type CommuneDrawStatus } from '@hajj-lottery/shared'
 
 /**
  * Whether a concluded draw is whole enough to be announced.
@@ -30,8 +30,17 @@ export const RESULT_INTEGRITY_ISSUES = [
   'POOL_HASH_MISMATCH',
   /** Winner rows do not match the count the result claims. */
   'WINNER_COUNT_MISMATCH',
-  /** A draw allocating N places did not record N reserve positions. */
+  /** Reserve rows do not match the count the result claims. */
   'RESERVE_COUNT_MISMATCH',
+  /** The winning entries' pilgrims do not match the figure the result claims. */
+  'WINNER_PILGRIM_COUNT_MISMATCH',
+  /** The reserve entries' pilgrims do not match the figure the result claims. */
+  'RESERVE_PILGRIM_COUNT_MISMATCH',
+  /**
+   * The draw did not reserve exactly as many pilgrim places as the commune
+   * allocated — so the contingency list does not cover the places it protects.
+   */
+  'RESERVE_ALLOCATION_MISMATCH',
   /** The randomness behind the selections is incomplete. */
   'SELECTION_EVENT_MISSING',
   /** Selection order is not the contiguous 1..n sequence a draw produces. */
@@ -45,7 +54,15 @@ export const RESULT_INTEGRITY_ISSUES = [
   'WINNER_ARCHIVE_MISMATCH',
   /** An archived winner is not excluded from future draws. */
   'WINNER_EXCLUSION_MISSING',
-  /** The draw selected a different number of entries than the pool allocated. */
+  /**
+   * The draw awarded a different number of pilgrim places than the pool
+   * allocated — the invariant the whole quota is about.
+   *
+   * For a result recorded by the pre-capacity algorithm this compares the
+   * *entry* count instead, because that is the rule that draw actually ran
+   * under. Judging a historical result by a later rule would report a fault in a
+   * faithful record.
+   */
   'ALLOCATION_MISMATCH',
   /** The participation ledger is missing years for people who were in the pool. */
   'PARTICIPATION_HISTORY_INCOMPLETE',
@@ -65,6 +82,15 @@ export interface ResultIntegrityFacts {
   /** Null when the commune draw has no result at all. */
   result: {
     winnerCount: number
+    /** The places those winners fill, as the result recorded them. */
+    winnerPilgrimCount: number
+    reserveCount: number
+    reservePilgrimCount: number
+    /**
+     * Which implementation ran the draw. Read here because the quota rules
+     * differ between them and a historical result must be judged by its own.
+     */
+    algorithmVersion: string
     drawPoolId: string
     poolHash: string
   } | null
@@ -73,12 +99,21 @@ export interface ResultIntegrityFacts {
     id: string
     snapshotHash: string
     entryCount: number
+    /** The pilgrim places the whole frozen pool covers. */
+    pilgrimCount: number
     allocatedSpots: number
   } | null
   /** Rows in `draw_winners` for this result. */
   drawWinnerCount: number
   /** Rows in `draw_reserves` for this result. */
   drawReserveCount: number
+  /**
+   * The pilgrim places the winner and reserve rows actually cover, counted from
+   * those rows rather than read off the result — which is what makes the
+   * comparison against the result's own figures worth making.
+   */
+  drawWinnerPilgrimCount: number
+  drawReservePilgrimCount: number
   /** Rows in `draw_selection_events` for this result — winners and reserves. */
   selectionEventCount: number
   /**
@@ -100,15 +135,6 @@ export interface ResultIntegrityFacts {
    */
   reservePositionBounds: { min: number; max: number } | null
   reserveSelectionOrderBounds: { min: number; max: number } | null
-  /**
-   * People the winning entries win for: one per SINGLE entry, two per PAIRED.
-   * Derived from the winner rows, so it is what the result actually says rather
-   * than what the archive claims.
-   *
-   * Abandoned winners are still counted. Giving up a place does not un-archive
-   * anybody, so an abandonment must not make the archive look short.
-   */
-  expectedWinningParticipants: number
   /**
    * People promoted from the reserve list, who hold archive rows of their own.
    * Zero for a draw nobody has dropped out of, which is nearly all of them.
@@ -152,12 +178,33 @@ export function assessResultIntegrity(facts: ResultIntegrityFacts): ResultIntegr
   // bypassed those triggers.
   if (result.poolHash !== pool.snapshotHash) issues.push('POOL_HASH_MISMATCH')
 
-  if (facts.drawWinnerCount !== result.winnerCount) issues.push('WINNER_COUNT_MISMATCH')
+  const capacityAware = isPilgrimCapacityAlgorithm(result.algorithmVersion)
 
-  // A draw produces as many reserves as it does winners. Fewer would mean a
+  if (facts.drawWinnerCount !== result.winnerCount) issues.push('WINNER_COUNT_MISMATCH')
+  if (facts.drawReserveCount !== result.reserveCount) issues.push('RESERVE_COUNT_MISMATCH')
+
+  // The result must describe its own rows in both units. A recorded pilgrim
+  // figure that disagrees with the winners it was computed from is the one way
+  // the quota check below could be satisfied by a result that did not satisfy
+  // it — so it is checked independently rather than trusted.
+  if (facts.drawWinnerPilgrimCount !== result.winnerPilgrimCount) {
+    issues.push('WINNER_PILGRIM_COUNT_MISMATCH')
+  }
+  if (facts.drawReservePilgrimCount !== result.reservePilgrimCount) {
+    issues.push('RESERVE_PILGRIM_COUNT_MISMATCH')
+  }
+
+  // A draw reserves as many pilgrim places as it awards. Fewer would mean a
   // commune whose contingency list runs out before its places do, with nobody
   // having decided which places were the protected ones.
-  if (facts.drawReserveCount !== result.winnerCount) issues.push('RESERVE_COUNT_MISMATCH')
+  //
+  // Places, not positions: six paired reserve applications cover twelve places
+  // and are a complete reserve list for a twelve place commune. For a
+  // pre-capacity result the two figures coincide, and the equivalent check is
+  // the reserve *row* count against the winner row count.
+  const reservedPlaces = capacityAware ? facts.drawReservePilgrimCount : facts.drawReserveCount
+  const awardedPlaces = capacityAware ? facts.drawWinnerPilgrimCount : facts.drawWinnerCount
+  if (reservedPlaces !== awardedPlaces) issues.push('RESERVE_ALLOCATION_MISMATCH')
 
   // One event per selection, across both halves: the reserve order is drawn and
   // is as checkable as the winner order. A missing event would mean part of the
@@ -187,15 +234,32 @@ export function assessResultIntegrity(facts: ResultIntegrityFacts): ResultIntegr
   }
 
   // A draw awards exactly the places the pool was frozen with. Fewer would mean
-  // a commune announcing an allocation it did not fill; more is impossible and
-  // would mean the result was assembled by something other than the engine.
-  if (result.winnerCount !== pool.allocatedSpots) issues.push('ALLOCATION_MISMATCH')
+  // a commune announcing an allocation it did not fill; more would mean it
+  // awarded places it was never given, which is the defect pilgrim capacity
+  // exists to make impossible.
+  //
+  // In pilgrims, because that is what an allocation is. The winning *entry*
+  // count is deliberately not compared: eleven applications filling twelve
+  // places is correct and normal. A pre-capacity result is held to the rule it
+  // ran under instead — its entry count against the allocation — so a faithful
+  // historical record stays publishable.
+  if (capacityAware) {
+    if (facts.drawWinnerPilgrimCount !== pool.allocatedSpots) issues.push('ALLOCATION_MISMATCH')
+  } else if (result.winnerCount !== pool.allocatedSpots) {
+    issues.push('ALLOCATION_MISMATCH')
+  }
 
   // The archive holds everyone this draw made a winner: the people the winning
   // entries won for, plus anybody promoted from the reserve list since. An
   // abandoned winner is still in that first group — a place given up was still
   // awarded, and nothing un-archives anybody.
-  if (facts.archivedWinnerCount !== facts.expectedWinningParticipants + facts.promotedReserveParticipants) {
+  // `drawWinnerPilgrimCount` is that first group: one person per SINGLE entry,
+  // two per PAIRED, counted from the winner rows. It is the same figure the
+  // allocation is checked against, which is not a coincidence — a draw awards
+  // one place per winning pilgrim, and each of them gets exactly one archive
+  // row. Abandoned winners are still counted: giving up a place does not
+  // un-archive anybody, so an abandonment must not make the archive look short.
+  if (facts.archivedWinnerCount !== facts.drawWinnerPilgrimCount + facts.promotedReserveParticipants) {
     issues.push('WINNER_ARCHIVE_MISMATCH')
   }
   // Lifetime exclusion and the archive are written in one transaction, so a

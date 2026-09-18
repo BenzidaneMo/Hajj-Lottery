@@ -9,7 +9,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { createApp } from '../src/app.js'
 import {
   MAX_TOTAL_ACTIVE_WEIGHT,
-  weightedSampleWithoutReplacement,
+  UnfillableQuotaError,
+  weightedCapacitySample,
+  type CapacitySelection,
   type LotteryEntry,
   type RandomIntSource,
 } from '../src/lib/lottery.js'
@@ -75,11 +77,45 @@ function constant(value: number): RandomIntSource {
 /** A source that answers with the bound itself — the one value it may not. */
 const outOfRangeSource: RandomIntSource = { randomInt: (maxExclusive) => maxExclusive }
 
-const entry = (id: string, weight: number): LotteryEntry => ({ id, weight })
+/**
+ * One entry. `pilgrims` defaults to 1 — a single applicant — so the tests that
+ * are about the weighted mapping rather than about capacity read as they did
+ * before groups had sizes, and the ones that are about capacity say so.
+ */
+const entry = (id: string, weight: number, pilgrims = 1): LotteryEntry => ({
+  id,
+  weight,
+  pilgrimCount: pilgrims,
+})
+
+/** A paired application: one lottery group, two pilgrim places. */
+const pair = (id: string, weight: number): LotteryEntry => entry(id, weight, 2)
+
+/**
+ * One quota, filled. The single-phase case, which for an all-singles pool is
+ * exactly "select this many entries" — the behaviour every assertion below about
+ * the weighted mapping is really about.
+ */
+function fill<E extends LotteryEntry>(
+  entries: readonly E[],
+  quota: number,
+  random: RandomIntSource,
+): { selected: E[]; events: CapacitySelection<E>['events']; initialTotalWeight: number } {
+  const selection = weightedCapacitySample(entries, [quota], random)
+  return {
+    selected: selection.phases[0] ?? [],
+    events: selection.events,
+    initialTotalWeight: selection.initialTotalWeight,
+  }
+}
+
+/** The pilgrim places a set of selected entries covers. */
+const places = (entries: readonly LotteryEntry[]): number =>
+  entries.reduce((sum, e) => sum + e.pilgrimCount, 0)
 
 /** Which single entry a given random value selects. */
 function drawnWith(entries: readonly LotteryEntry[], randomValue: number): string | undefined {
-  return weightedSampleWithoutReplacement(entries, 1, constant(randomValue)).selected[0]?.id
+  return fill(entries, 1, constant(randomValue)).selected[0]?.id
 }
 
 // --- Fixtures ---------------------------------------------------------------
@@ -189,20 +225,20 @@ describe('weighted selection maps a random value onto an entry', () => {
   })
 
   it('refuses the total itself, which is outside [0, total)', () => {
-    expect(() => weightedSampleWithoutReplacement(abc, 1, outOfRangeSource)).toThrow(/outside \[0, 10\)/)
+    expect(() => fill(abc, 1, outOfRangeSource)).toThrow(/outside \[0, 10\)/)
   })
 
   it('refuses a negative or fractional value from the source', () => {
-    expect(() => weightedSampleWithoutReplacement(abc, 1, constant(-1))).toThrow(/outside/)
-    expect(() => weightedSampleWithoutReplacement(abc, 1, constant(2.5))).toThrow(/outside/)
+    expect(() => fill(abc, 1, constant(-1))).toThrow(/outside/)
+    expect(() => fill(abc, 1, constant(2.5))).toThrow(/outside/)
   })
 
   it('splits two equal weights down the middle', () => {
-    const pair = [entry('A', 1), entry('B', 1)]
+    const twoEqual = [entry('A', 1), entry('B', 1)]
 
-    expect(drawnWith(pair, 0)).toBe('A')
-    expect(drawnWith(pair, 1)).toBe('B')
-    expect(() => weightedSampleWithoutReplacement(pair, 1, constant(2))).toThrow(/outside \[0, 2\)/)
+    expect(drawnWith(twoEqual, 0)).toBe('A')
+    expect(drawnWith(twoEqual, 1)).toBe('B')
+    expect(() => fill(twoEqual, 1, constant(2))).toThrow(/outside \[0, 2\)/)
   })
 
   it('handles a highly uneven pool without losing the small entry', () => {
@@ -242,7 +278,7 @@ describe('sampling without replacement', () => {
     const entries = [entry('A', 1), entry('B', 2), entry('C', 3)]
     const source = scripted(0, 2)
 
-    const { selected, events } = weightedSampleWithoutReplacement(entries, 2, source)
+    const { selected, events } = fill(entries, 2, source)
 
     // 6 in play, 0 → A. Then 5 in play (B owns 0-1, C owns 2-4), 2 → C.
     expect(selected.map((e) => e.id)).toEqual(['A', 'C'])
@@ -253,7 +289,7 @@ describe('sampling without replacement', () => {
   it('never selects the same entry twice', () => {
     const entries = Array.from({ length: 40 }, (_, i) => entry(`e${i}`, (i % 7) + 1))
 
-    const { selected } = weightedSampleWithoutReplacement(entries, 40, cryptoRandomIntSource)
+    const { selected } = fill(entries, 40, cryptoRandomIntSource)
 
     expect(new Set(selected.map((e) => e.id)).size).toBe(40)
   })
@@ -261,7 +297,7 @@ describe('sampling without replacement', () => {
   it('preserves selection order in the result and its events', () => {
     const entries = [entry('A', 1), entry('B', 1), entry('C', 1)]
 
-    const { selected, events } = weightedSampleWithoutReplacement(entries, 3, scripted(2, 1, 0))
+    const { selected, events } = fill(entries, 3, scripted(2, 1, 0))
 
     expect(selected.map((e) => e.id)).toEqual(['C', 'B', 'A'])
     expect(events.map((e) => e.selectedEntryId)).toEqual(['C', 'B', 'A'])
@@ -271,7 +307,7 @@ describe('sampling without replacement', () => {
   it('records the arithmetic behind every selection', () => {
     const entries = [entry('A', 4), entry('B', 6)]
 
-    const { events, initialTotalWeight } = weightedSampleWithoutReplacement(entries, 2, scripted(5, 0))
+    const { events, initialTotalWeight } = fill(entries, 2, scripted(5, 0))
 
     expect(initialTotalWeight).toBe(10)
     expect(events).toEqual([
@@ -281,7 +317,7 @@ describe('sampling without replacement', () => {
   })
 
   it('draws a single entry from a single-entry pool', () => {
-    const { selected, events } = weightedSampleWithoutReplacement([entry('only', 7)], 1, scripted(6))
+    const { selected, events } = fill([entry('only', 7)], 1, scripted(6))
 
     expect(selected.map((e) => e.id)).toEqual(['only'])
     expect(events[0]?.totalActiveWeight).toBe(7)
@@ -290,7 +326,7 @@ describe('sampling without replacement', () => {
   it('can draw the whole pool when the allocation equals its size', () => {
     const entries = [entry('A', 1), entry('B', 2), entry('C', 3)]
 
-    const { selected } = weightedSampleWithoutReplacement(entries, 3, cryptoRandomIntSource)
+    const { selected } = fill(entries, 3, cryptoRandomIntSource)
 
     expect(new Set(selected.map((e) => e.id))).toEqual(new Set(['A', 'B', 'C']))
   })
@@ -299,9 +335,236 @@ describe('sampling without replacement', () => {
     const entries = [entry('A', 1), entry('B', 2), entry('C', 3)]
     const before = structuredClone(entries)
 
-    weightedSampleWithoutReplacement(entries, 2, cryptoRandomIntSource)
+    fill(entries, 2, cryptoRandomIntSource)
 
     expect(entries).toEqual(before)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Pilgrim capacity
+// ---------------------------------------------------------------------------
+
+/**
+ * The quota is spent in pilgrim places and only whole groups are selected.
+ *
+ * Every test here is about one property: the places awarded equal the quota
+ * exactly, and a paired application is either selected whole or not at all.
+ * Nothing is truncated, nothing is split, and the quota is never overspent.
+ * See docs/pilgrim-capacity.md.
+ */
+describe('a quota is filled in pilgrim places, by whole groups', () => {
+  /** `n` single applicants, all weight 1 — the simplest fillable pool. */
+  const allSingles = (n: number) => Array.from({ length: n }, (_, i) => entry(`s${i}`, 1))
+  /** `n` paired applications, all weight 1. */
+  const allPairs = (n: number) => Array.from({ length: n }, (_, i) => pair(`p${i}`, 1))
+
+  it('fills a quota of singles one place at a time', () => {
+    const { selected } = fill(allSingles(20), 12, cryptoRandomIntSource)
+
+    expect(places(selected)).toBe(12)
+    expect(selected).toHaveLength(12)
+  })
+
+  it('fills a quota of pairs two places at a time — six applications, twelve places', () => {
+    const { selected } = fill(allPairs(20), 12, cryptoRandomIntSource)
+
+    expect(places(selected)).toBe(12)
+    // The number of *records* is half the quota, and that is correct. A draw
+    // that returned twelve paired applications here would have awarded
+    // twenty-four places to a twelve place commune.
+    expect(selected).toHaveLength(6)
+  })
+
+  it('never overspends the quota on a mixed population, however it is drawn', () => {
+    // The population from the original defect report: nine singles and three
+    // pairs. Selecting twelve *records* from this awards up to fifteen places.
+    //
+    // A property test rather than a fixed expectation, because the failure was a
+    // *class* of error: whatever the CSPRNG does, the outcome is one of exactly
+    // two things — twelve places filled, or a refusal. Thirteen, fourteen or
+    // fifteen places is what must never happen, and neither is a split pair.
+    const population = [...allSingles(9), ...allPairs(3)]
+    let filled = 0
+    let refused = 0
+
+    for (let run = 0; run < 300; run += 1) {
+      try {
+        const { selected } = fill(population, 12, cryptoRandomIntSource)
+        expect(places(selected)).toBe(12)
+        // Every selected group is whole: its size is 1 or 2 as it entered, and
+        // nothing halves a pair to make the arithmetic work.
+        expect(selected.every((e) => e.pilgrimCount === 1 || e.pilgrimCount === 2)).toBe(true)
+        filled += 1
+      } catch (error) {
+        // The only other legal outcome: refused, having written nothing. Nine
+        // singles spent one at a time can strand the final place with only pairs
+        // left, and this is the case that must fail loudly rather than quietly
+        // overspend. See docs/pilgrim-capacity.md.
+        expect(error).toBeInstanceOf(UnfillableQuotaError)
+        expect((error as UnfillableQuotaError).remainingCapacity).toBe(1)
+        refused += 1
+      }
+    }
+
+    expect(filled + refused).toBe(300)
+    // Not a distribution assertion: only that the ordinary case is reachable, so
+    // this test is exercising a working draw and not merely the refusal path.
+    expect(filled).toBeGreaterThan(0)
+  })
+
+  it('always fills a quota of singles, and always fills an even quota of pairs', () => {
+    // The two populations where no ordering can strand a place, so these are
+    // exact rather than "one of two outcomes".
+    for (let run = 0; run < 50; run += 1) {
+      expect(places(fill(allSingles(20), 12, cryptoRandomIntSource).selected)).toBe(12)
+      expect(places(fill(allPairs(20), 12, cryptoRandomIntSource).selected)).toBe(12)
+    }
+  })
+
+  it('skips a pair that cannot fit the last place and takes a single instead', () => {
+    // One place left, and the pair is not a candidate for it — not weighted
+    // down, simply not eligible this round. So the range the source is asked for
+    // covers the remaining single alone, which is the arithmetic an auditor
+    // replays to confirm the pair was never in the draw for that place.
+    const entries = [entry('s0', 1), entry('s1', 1), pair('too-big', 1)]
+
+    const { selected, events } = fill(entries, 2, scripted(0, 0))
+
+    expect(places(selected)).toBe(2)
+    expect(selected.map((e) => e.id)).toEqual(['s0', 's1'])
+    // Three entries in play for the first selection, one for the second.
+    expect(events.map((e) => e.totalActiveWeight)).toEqual([3, 1])
+  })
+
+  it('walks past several pairs in a row to reach the single that fits', () => {
+    // Three pairs unselected with one place left. None of them is drawn and none
+    // is removed; the single that fits is selected, and the quota closes exactly.
+    const entries = [entry('single-a', 1), ...allPairs(3), entry('single-b', 1)]
+
+    const { selected, events } = fill(entries, 2, scripted(0, 0))
+
+    expect(places(selected)).toBe(2)
+    expect(selected.map((e) => e.id)).toEqual(['single-a', 'single-b'])
+    // Five candidates, then one: the three pairs dropped out of the range for
+    // the final place all at once.
+    expect(events.map((e) => e.totalActiveWeight)).toEqual([5, 1])
+  })
+
+  it('refuses rather than split a pair when no group fits the last place', () => {
+    // One single and four pairs, eight places. Scripted so the single is spent
+    // early: 1 + 2 + 2 + 2 = 7, one place left, and only a pair to fill it.
+    const entries = [entry('only-single', 1), ...allPairs(4)]
+
+    expect(() => fill(entries, 8, scripted(0, 0, 0, 0))).toThrow(UnfillableQuotaError)
+
+    try {
+      fill(entries, 8, scripted(0, 0, 0, 0))
+      throw new Error('expected the quota to be unfillable')
+    } catch (error) {
+      expect(error).toBeInstanceOf(UnfillableQuotaError)
+      expect((error as UnfillableQuotaError).remainingCapacity).toBe(1)
+      expect((error as UnfillableQuotaError).quotaIndex).toBe(0)
+      // Named plainly: nothing was split, nothing overspent, nothing invented.
+      expect((error as Error).message).toMatch(/without splitting a paired registration/)
+    }
+  })
+
+  it('refuses an odd quota a pool of pairs alone can never fill', () => {
+    expect(() => fill(allPairs(10), 7, cryptoRandomIntSource)).toThrow(UnfillableQuotaError)
+  })
+
+  it('does not treat a group size as a preference', () => {
+    // Capacity decides who is eligible; it never touches a weight. With three
+    // places open both groups are candidates, and the random value maps onto
+    // their *weights* exactly as it would if both were single applicants: the
+    // pair owns [0, 9), the single owns [9, 10).
+    const entries = [pair('heavy-pair', 9), entry('light-single', 1)]
+
+    expect(fill(entries, 3, constant(0)).selected.map((e) => e.id)).toEqual(['heavy-pair', 'light-single'])
+    expect(fill(entries, 3, scripted(9, 0)).selected.map((e) => e.id)).toEqual(['light-single', 'heavy-pair'])
+    // And the weights that come back are the ones that went in, untouched — a
+    // pair is not scaled, halved or penalised for occupying two places.
+    expect(fill(entries, 3, constant(0)).selected[0]?.weight).toBe(9)
+    expect(fill(entries, 3, scripted(9, 0)).selected[1]?.weight).toBe(9)
+  })
+
+  it('reproduces the same selection from the same entries and random values', () => {
+    const entries = [entry('a', 3), pair('b', 5), entry('c', 1), pair('d', 2), entry('e', 4)]
+
+    const first = weightedCapacitySample(entries, [3, 3], scripted(0, 0, 0, 0, 0, 0))
+    const again = weightedCapacitySample(entries, [3, 3], scripted(0, 0, 0, 0, 0, 0))
+
+    expect(first.phases.map((phase) => phase.map((e) => e.id))).toEqual(
+      again.phases.map((phase) => phase.map((e) => e.id)),
+    )
+    expect(first.events).toEqual(again.events)
+  })
+})
+
+describe('the winner and reserve quotas are one continuous sample', () => {
+  it('draws the reserves from what the winners left, never from the whole pool again', () => {
+    const entries = Array.from({ length: 8 }, (_, i) => entry(`s${i}`, 1))
+
+    const { phases } = weightedCapacitySample(entries, [3, 3], cryptoRandomIntSource)
+    const [winners = [], reserves = []] = phases
+
+    expect(places(winners)).toBe(3)
+    expect(places(reserves)).toBe(3)
+    // Without replacement *across* the boundary: a winner is gone from the pool
+    // the reserve quota draws from, so no entry can hold both.
+    const winnerIds = new Set(winners.map((e) => e.id))
+    expect(reserves.some((reserve) => winnerIds.has(reserve.id))).toBe(false)
+    expect(new Set([...winners, ...reserves].map((e) => e.id)).size).toBe(6)
+  })
+
+  it('numbers every selection once, straight through both quotas', () => {
+    const entries = Array.from({ length: 6 }, (_, i) => entry(`s${i}`, 1))
+
+    const { phases, events } = weightedCapacitySample(entries, [2, 2], cryptoRandomIntSource)
+
+    expect(events.map((e) => e.selectionNumber)).toEqual([1, 2, 3, 4])
+    expect(events.map((e) => e.selectedEntryId)).toEqual(phases.flat().map((e) => e.id))
+    // The active total falls monotonically across the boundary — evidence that
+    // the reserve quota continued the sample rather than restarting it.
+    expect(events.map((e) => e.totalActiveWeight)).toEqual([6, 5, 4, 3])
+  })
+
+  it('offers a pair the reserve quota that the winner quota could not fit', () => {
+    // The boundary case worth stating outright. One place left of the winner
+    // quota, so the pair is skipped — and skipped is not removed. The reserve
+    // quota opens with its own two places, and the pair is a full candidate for
+    // them again, at the weight it always had.
+    const entries = [entry('s0', 1), entry('s1', 1), entry('s2', 1), pair('the-pair', 1)]
+
+    const { phases, events } = weightedCapacitySample(entries, [3, 2], scripted(0, 0, 0, 0))
+    const [winners = [], reserves = []] = phases
+
+    expect(winners.map((e) => e.id)).toEqual(['s0', 's1', 's2'])
+    expect(reserves.map((e) => e.id)).toEqual(['the-pair'])
+    expect(places(reserves)).toBe(2)
+    // Third winning selection: one place left, so only the two remaining
+    // singles were candidates and the pair was not in the range.
+    expect(events[2]?.totalActiveWeight).toBe(1)
+    // First reserve selection: two places open, so the pair is back.
+    expect(events[3]?.totalActiveWeight).toBe(1)
+  })
+
+  it('reports which quota ran out of fitting groups', () => {
+    // Three singles fill the winner quota exactly, leaving two pairs. The reserve
+    // quota takes one of them, and its last place then has only a pair for it.
+    const entries = [entry('s0', 1), entry('s1', 1), entry('s2', 1), pair('p0', 1), pair('p1', 1)]
+
+    try {
+      weightedCapacitySample(entries, [3, 3], scripted(0, 0, 0, 0))
+      throw new Error('expected the reserve quota to be unfillable')
+    } catch (error) {
+      expect(error).toBeInstanceOf(UnfillableQuotaError)
+      // The reserve quota, named — the winners were already complete, and an
+      // operator needs to know which half of the draw could not be filled.
+      expect((error as UnfillableQuotaError).quotaIndex).toBe(1)
+      expect((error as UnfillableQuotaError).remainingCapacity).toBe(1)
+    }
   })
 })
 
@@ -309,16 +572,17 @@ describe('the engine refuses input it cannot draw fairly', () => {
   it('refuses an empty pool', () => {
     const empty: LotteryEntry[] = []
 
-    expect(() => weightedSampleWithoutReplacement(empty, 1, cryptoRandomIntSource)).toThrow(/empty pool/)
+    expect(() => fill(empty, 1, cryptoRandomIntSource)).toThrow(/empty pool/)
   })
 
   it('refuses more winners than entries rather than truncating', () => {
     const entries = [entry('A', 1), entry('B', 1)]
 
-    // Silently returning both would answer a policy question — see the service,
-    // which turns this into INSUFFICIENT_DRAW_ENTRIES.
-    expect(() => weightedSampleWithoutReplacement(entries, 3, cryptoRandomIntSource)).toThrow(
-      /Refusing to draw 3 winners from 2 entries/,
+    // Silently placing both would answer a policy question — see the service,
+    // which turns this into INSUFFICIENT_DRAW_ENTRIES. Counted in pilgrim
+    // places, which is what a quota is measured in.
+    expect(() => fill(entries, 3, cryptoRandomIntSource)).toThrow(
+      /Refusing to place 3 pilgrims from a pool holding 2/,
     )
   })
 
@@ -326,42 +590,32 @@ describe('the engine refuses input it cannot draw fairly', () => {
     const entries = [entry('A', 1)]
 
     for (const count of [0, -1, 1.5, Number.NaN]) {
-      expect(() => weightedSampleWithoutReplacement(entries, count, cryptoRandomIntSource)).toThrow(
-        /positive integer/,
-      )
+      expect(() => fill(entries, count, cryptoRandomIntSource)).toThrow(/positive integer/)
     }
   })
 
   it('refuses a zero, negative or fractional weight', () => {
     for (const weight of [0, -3, 1.5]) {
-      expect(() =>
-        weightedSampleWithoutReplacement([entry('A', 1), entry('B', weight)], 1, cryptoRandomIntSource),
-      ).toThrow(/not a positive integer/)
+      expect(() => fill([entry('A', 1), entry('B', weight)], 1, cryptoRandomIntSource)).toThrow(
+        /not a positive integer/,
+      )
     }
   })
 
   it('refuses a duplicated entry', () => {
     const entries = [entry('A', 1), entry('B', 2), entry('A', 3)]
 
-    expect(() => weightedSampleWithoutReplacement(entries, 1, cryptoRandomIntSource)).toThrow(
-      /same entry twice: A/,
-    )
+    expect(() => fill(entries, 1, cryptoRandomIntSource)).toThrow(/same entry twice: A/)
   })
 
   it('refuses an entry with no identifier', () => {
-    expect(() => weightedSampleWithoutReplacement([entry('', 1)], 1, cryptoRandomIntSource)).toThrow(
-      /no identifier/,
-    )
+    expect(() => fill([entry('', 1)], 1, cryptoRandomIntSource)).toThrow(/no identifier/)
   })
 
   it('accepts a total exactly at the random source’s ceiling', () => {
     const entries = [entry('A', MAX_TOTAL_ACTIVE_WEIGHT - 1), entry('B', 1)]
 
-    const { selected, initialTotalWeight } = weightedSampleWithoutReplacement(
-      entries,
-      1,
-      scripted(MAX_TOTAL_ACTIVE_WEIGHT - 1),
-    )
+    const { selected, initialTotalWeight } = fill(entries, 1, scripted(MAX_TOTAL_ACTIVE_WEIGHT - 1))
 
     expect(initialTotalWeight).toBe(MAX_TOTAL_ACTIVE_WEIGHT)
     expect(selected.map((e) => e.id)).toEqual(['B'])
@@ -370,15 +624,11 @@ describe('the engine refuses input it cannot draw fairly', () => {
   it('refuses a total beyond it rather than losing precision', () => {
     const entries = [entry('A', MAX_TOTAL_ACTIVE_WEIGHT), entry('B', 1)]
 
-    expect(() => weightedSampleWithoutReplacement(entries, 1, cryptoRandomIntSource)).toThrow(
-      /beyond the random source's range/,
-    )
+    expect(() => fill(entries, 1, cryptoRandomIntSource)).toThrow(/beyond the random source's range/)
   })
 
   it('refuses a weight outside safe integer arithmetic', () => {
-    expect(() => weightedSampleWithoutReplacement([entry('A', 2 ** 53)], 1, cryptoRandomIntSource)).toThrow(
-      /not a positive integer/,
-    )
+    expect(() => fill([entry('A', 2 ** 53)], 1, cryptoRandomIntSource)).toThrow(/not a positive integer/)
   })
 })
 
@@ -699,6 +949,7 @@ describe('only a locked draw with an intact pool may be drawn', () => {
       data: {
         communeDrawId: communeDraw.id,
         entryCount: 1,
+        pilgrimCount: 1,
         totalWeight: 1,
         allocatedSpots: 1,
         snapshotHash: 'f'.repeat(64),
@@ -730,6 +981,7 @@ describe('only a locked draw with an intact pool may be drawn', () => {
       data: {
         communeDrawId: communeDraw.id,
         entryCount: 7,
+        pilgrimCount: 7,
         totalWeight: 7,
         allocatedSpots: 1,
         snapshotHash: 'a'.repeat(64),
@@ -760,6 +1012,7 @@ describe('only a locked draw with an intact pool may be drawn', () => {
       data: {
         communeDrawId: communeDraw.id,
         entryCount: 1,
+        pilgrimCount: 1,
         totalWeight: 1,
         allocatedSpots: 1,
         snapshotHash: 'b'.repeat(64),
