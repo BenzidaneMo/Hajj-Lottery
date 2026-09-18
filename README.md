@@ -70,6 +70,7 @@ npm run --workspace server start
 | `npm run reset-commune-draw --workspace server -- --wilaya=27 --commune=2701` | **Development tool, not a feature.** Undoes one commune's pool freeze and/or draw execution — no production route does this, on purpose                                        |
 | `npm run reopen-registration --workspace server`                              | **Development tool.** Undoes `REGISTRATION_CLOSED` for further manual testing — also has no production route                                                                   |
 | `npm run reset-participants --workspace server -- --yes`                      | **Development tool.** Wipes every participant/application/pool/result/import batch — a dry run without `--yes`; geography, draw years, commune-draw config and admins are kept |
+| `npm run ready-commune-draws --workspace server -- --year=2027`               | **Development tool.** Moves every `DRAFT` commune draw straight to `READY` (optionally scoped to one year) — skips clicking "Ready" one commune at a time before batch freeze/execute |
 
 > **Windows PowerShell note:** plain `npm` resolves to `npm.ps1`, which in some npm/PowerShell
 > combinations silently drops everything after `--` — a command like
