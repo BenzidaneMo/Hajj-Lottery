@@ -27,10 +27,15 @@ export function createApp() {
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     }),
   )
-  // Every endpoint here takes a small JSON body — the largest is a two-person
-  // registration form. Capping globally is what actually bounds an oversized
-  // request, since the parser runs before any router could impose its own.
-  app.use(express.json({ limit: '32kb' }))
+  // Almost every endpoint here takes a small JSON body — a two-person
+  // registration form is typical. The one exception is the batch pool-freeze/
+  // draw-execution routes, which send a `communeDrawIds` array that can name
+  // every commune in the country at once: 1541 cuids is already ~43kb.
+  // Capping globally (rather than per-router) is what actually bounds an
+  // oversized request, since the parser runs before any router could impose
+  // its own — so the limit has to cover that one legitimate large body,
+  // comfortably under Express's own 100kb default.
+  app.use(express.json({ limit: '100kb' }))
   app.use(cookieParser())
   app.use(verifyRequestOrigin)
 

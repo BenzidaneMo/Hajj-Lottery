@@ -632,7 +632,7 @@ describe('request hygiene', () => {
   it('rejects an oversized body without reaching the handler', async () => {
     const response = await submit({
       ...singleBody(),
-      primary: applicant(NATIONAL_IDS.ahmed, { firstNameLatin: 'x'.repeat(64 * 1024) }),
+      primary: applicant(NATIONAL_IDS.ahmed, { firstNameLatin: 'x'.repeat(128 * 1024) }),
     })
 
     expect(response.status).toBe(413)
