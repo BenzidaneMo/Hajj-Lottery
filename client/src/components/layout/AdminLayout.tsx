@@ -37,7 +37,7 @@ export function AdminLayout() {
   }
 
   return (
-    <div className="flex min-h-screen bg-muted/40">
+    <div className="flex min-h-screen bg-muted">
       <SkipLink />
 
       <div className="hidden border-e border-border md:block">
