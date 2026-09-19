@@ -7,6 +7,9 @@ dist-ssr/
 build/
 *.tsbuildinfo
 
+# Local desktop-app packaging output (e.g. ad hoc Pake builds), never checked in
+release/
+
 # Environment
 .env
 .env.local
