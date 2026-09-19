@@ -54,6 +54,38 @@ npm run build         # builds shared, server, then client in order
 npm run --workspace server start
 ```
 
+With `NODE_ENV=production` set, `server` also serves the client's build directly
+(static files plus an `index.html` fallback for client-side routes), so the whole
+app answers from one HTTP origin instead of two separate dev processes.
+
+## Showcase: Cloudflare Quick Tunnel
+
+To demo a local build to people outside your network — e.g. sharing a link on
+Facebook/LinkedIn — expose that one origin with a temporary
+[Cloudflare Quick Tunnel](https://github.com/cloudflare/cloudflared). Add one line
+to `.env` first (the tunnel's hostname is random and can't be listed in
+`CLIENT_ORIGIN` ahead of time):
+
+```
+TRUSTED_ORIGIN_SUFFIXES=".trycloudflare.com"
+```
+
+```powershell
+npm run build
+$env:NODE_ENV = "production"
+npm run --workspace server start
+# in another terminal, once the server above is listening:
+cloudflared tunnel --url http://localhost:4000
+```
+
+`cloudflared` prints a random `https://xxxx.trycloudflare.com` URL — share that.
+It only works while the PC, the server, and the tunnel all keep running, and a new
+URL is issued each time; this is a showcase convenience, not a deployment. `/admin`
+is intentionally reachable through it too — see
+[docs/showcase-tunnel.md](docs/showcase-tunnel.md) for the full walkthrough
+(prerequisites, demo data, what to sign into `/admin` with, and a validation
+checklist), and for the small CORS/cookie/rate-limit details this setup depends on.
+
 ## Other scripts
 
 | Command                                                                       | Description                                                                                                                                                                                                       |

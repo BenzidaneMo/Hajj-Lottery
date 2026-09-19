@@ -1,6 +1,6 @@
 import type { RequestHandler } from 'express'
 
-import { allowedOrigins } from '../config/env.js'
+import { isAllowedOrigin } from '../config/env.js'
 import { ApiError } from '../lib/errors.js'
 
 const STATE_CHANGING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
@@ -26,7 +26,7 @@ export const verifyRequestOrigin: RequestHandler = (req, _res, next) => {
   }
 
   const origin = req.get('origin')
-  if (origin && !allowedOrigins.includes(origin)) {
+  if (origin && !isAllowedOrigin(origin)) {
     next(new ApiError(403, 'FORBIDDEN_ORIGIN', 'Request origin is not allowed'))
     return
   }

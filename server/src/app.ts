@@ -1,8 +1,12 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import cookieParser from 'cookie-parser'
 import cors from 'cors'
 import express from 'express'
 
-import { allowedOrigins } from './config/env.js'
+import { isAllowedOrigin, isProduction } from './config/env.js'
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js'
 import { verifyRequestOrigin } from './middleware/verify-request-origin.js'
 import { adminRouter } from './routes/admin.js'
@@ -17,12 +21,23 @@ import { wilayasRouter } from './routes/wilayas.js'
 export function createApp() {
   const app = express()
 
+  // A single hop of trust: whatever connects directly to this process. In
+  // local development nothing sits in front, so this is a no-op. Behind a
+  // Cloudflare Tunnel (or any reverse proxy), `cloudflared` is the only thing
+  // that can reach this port, and it forwards the real visitor IP via
+  // X-Forwarded-For — without this, express-rate-limit would key every
+  // tunnelled visitor's requests off the same loopback address.
+  app.set('trust proxy', 1)
+
   // Credentialed CORS must name its origins explicitly — `origin: '*'` is
   // rejected by browsers alongside credentials, and would be a serious hole
-  // if it were not.
+  // if it were not. `isAllowedOrigin` is the same check `verifyRequestOrigin`
+  // uses, so the two never disagree about what is trusted.
   app.use(
     cors({
-      origin: [...allowedOrigins],
+      origin: (origin, callback) => {
+        callback(null, !origin || isAllowedOrigin(origin))
+      },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     }),
@@ -54,9 +69,29 @@ export function createApp() {
   // state. Grouped under one prefix so a CDN and a WAF have a path to point at.
   app.use('/api/public', createPublicRouter())
 
-  // Order matters: unmatched /api routes 404 as JSON, then every error —
-  // thrown or forwarded — leaves through the single handler.
+  // Order matters: unmatched /api routes 404 as JSON before anything below
+  // gets a chance to treat them as a client-side route.
   app.use('/api', notFoundHandler)
+
+  // Serving the client's production build from this same origin is what lets
+  // a single Cloudflare Tunnel (or any single-port deployment) expose the
+  // whole app as one HTTPS host, with the frontend calling `/api/...`
+  // same-origin rather than a separate public API hostname — see
+  // docs/showcase-tunnel.md. Gated on NODE_ENV=production so the ordinary
+  // two-process dev workflow (`dev:client` + `dev:server`) is untouched, and
+  // on the build actually existing so an API-only production run (no
+  // `client/dist`) still works exactly as before.
+  const clientDist = fileURLToPath(new URL('../../client/dist', import.meta.url))
+  if (isProduction && fs.existsSync(clientDist)) {
+    app.use(express.static(clientDist))
+    // React Router's browser history needs every unmatched GET (a deep link
+    // or a refresh on e.g. /admin/dashboard) to still return index.html.
+    app.get('*', (_req, res) => {
+      res.sendFile(path.join(clientDist, 'index.html'))
+    })
+  }
+
+  // Every error — thrown or forwarded — leaves through this single handler.
   app.use(errorHandler)
 
   return app
