@@ -1,0 +1,545 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Hajj Lottery Schema</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root{
+  --bg:#f6f5f0;
+  --surface:#ffffff;
+  --surface-2:#eaf0e8;
+  --text:#1b241d;
+  --text-dim:#5c6a5c;
+  --border:#c7d0c3;
+  --edge:#8a978a;
+  --accent:#a9761f;
+  --accent-soft:#c99a3f;
+  --accent-2:#2f6b4f;
+  --shadow:0 1px 2px rgba(20,30,20,.06);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#12160f;
+    --surface:#1a2016;
+    --surface-2:#20281c;
+    --text:#e7ecdf;
+    --text-dim:#98a68f;
+    --border:#37402f;
+    --edge:#5f6d58;
+    --accent:#dba748;
+    --accent-soft:#c99a3f;
+    --accent-2:#69b78a;
+    --shadow:0 1px 2px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#12160f;
+  --surface:#1a2016;
+  --surface-2:#20281c;
+  --text:#e7ecdf;
+  --text-dim:#98a68f;
+  --border:#37402f;
+  --edge:#5f6d58;
+  --accent:#dba748;
+  --accent-soft:#c99a3f;
+  --accent-2:#69b78a;
+  --shadow:0 1px 2px rgba(0,0,0,.4);
+}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:Archivo,system-ui,sans-serif;padding-inline:20px;padding-block:28px 40px;}
+.wrap{max-width:1180px;margin:0 auto;}
+h1{font-size:26px;font-weight:700;letter-spacing:-.01em;margin:0 0 8px;}
+.sub{font-size:14.5px;line-height:1.55;color:var(--text-dim);max-width:760px;margin:0 0 22px;}
+.sub code{font-family:'IBM Plex Mono',monospace;font-size:.92em;background:var(--surface-2);padding:1px 5px;border-radius:4px;color:var(--text);}
+
+.legend{
+  display:flex;flex-wrap:wrap;gap:22px;
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  padding:14px 18px;margin-bottom:18px;box-shadow:var(--shadow);
+}
+.legend h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-dim);margin:0 0 8px;font-weight:600;}
+.legend-group{min-width:230px;}
+.legend-row{display:flex;align-items:center;gap:8px;font-size:12.5px;margin-bottom:6px;color:var(--text);}
+.legend-row:last-child{margin-bottom:0;}
+.glyph{font-family:'IBM Plex Mono',monospace;font-weight:600;width:16px;text-align:center;flex:none;}
+.g-pk{color:var(--accent-2);}
+.g-uq{color:var(--accent-2);}
+.g-fk{color:var(--text-dim);}
+.g-fk1{color:var(--accent);font-weight:700;}
+.swatch{width:26px;height:0;border-top:2px solid var(--edge);flex:none;}
+.swatch.dash{border-top-style:dashed;}
+.swatch.acc{border-top-color:var(--accent);border-top-width:2.5px;}
+
+.diagram-frame{
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  box-shadow:var(--shadow);overflow:auto;max-height:82vh;padding:8px;
+}
+svg#erd{display:block;font-family:'IBM Plex Mono',monospace;}
+svg#erd text{user-select:none;}
+.col-label{font-family:Archivo,sans-serif;font-weight:700;font-size:14px;letter-spacing:.02em;fill:var(--text-dim);text-transform:uppercase;}
+.node-box{fill:var(--surface);stroke:var(--border);stroke-width:1.3;}
+.node-box.hot{stroke:var(--accent);stroke-width:2;}
+.node-head{fill:var(--surface-2);}
+.node-title{font-family:Archivo,sans-serif;font-weight:700;font-size:12.5px;fill:var(--text);}
+.row-field{font-size:10.3px;fill:var(--text);}
+.row-ref{font-size:9px;fill:var(--text-dim);}
+.row-ref.uniq{fill:var(--accent);font-weight:600;}
+.edge-path{fill:none;stroke:var(--edge);stroke-width:1.3;opacity:.55;transition:opacity .15s, stroke-width .15s;}
+.edge-path.uniq{stroke:var(--accent);stroke-width:1.6;opacity:.7;}
+.edge-path.active{opacity:1;stroke-width:2.4;}
+.edge-path.dim{opacity:.08;}
+.edge-tag{font-size:8px;fill:var(--accent);font-weight:700;}
+.edge-tag-bg{fill:var(--surface);opacity:.85;}
+.node-hitbox{fill:transparent;cursor:pointer;}
+
+.footnote{font-size:12px;color:var(--text-dim);margin-top:14px;line-height:1.5;}
+</style>
+
+<div class="wrap">
+  <h1>Hajj Lottery Schema</h1>
+  <p class="sub">Entity-relationship map of <code>prisma/schema.prisma</code> — 24 tables spanning Algeria's geographic hierarchy, participant identity, annual applications, the per-commune draw pipeline, governance, and legacy paper-register imports. Hover a table to trace its relationships. Read-only reference: nothing in the repository was changed to produce this.</p>
+
+  <div class="legend">
+    <div class="legend-group">
+      <h2>Table rows</h2>
+      <div class="legend-row"><span class="glyph g-pk">●</span> Primary key</div>
+      <div class="legend-row"><span class="glyph g-uq">◇</span> Unique business key</div>
+      <div class="legend-row"><span class="glyph g-fk">→</span> Foreign key (many-to-one)</div>
+      <div class="legend-row"><span class="glyph g-fk1">→</span> Foreign key, also unique (one-to-one)</div>
+    </div>
+    <div class="legend-group">
+      <h2>Relationship lines</h2>
+      <div class="legend-row"><span class="swatch"></span> Required reference</div>
+      <div class="legend-row"><span class="swatch dash"></span> Optional (nullable) reference</div>
+      <div class="legend-row"><span class="swatch acc"></span> One-to-one relationship</div>
+      <div class="legend-row">Arrowhead points at the referenced (&quot;one&quot;) table.</div>
+    </div>
+  </div>
+
+  <figure style="margin:0;">
+    <div class="diagram-frame">
+      <svg id="erd" role="img" aria-label="Entity-relationship diagram of the Hajj Lottery database, showing 24 tables grouped into Geography, Identity and Access, Applications and History, Draw Configuration, Draw Execution, Outcomes, Governance, and Legacy Import, connected by foreign-key relationships."></svg>
+    </div>
+    <figcaption class="footnote">Boxes are grouped by domain (columns), left to right roughly in the order data flows: geography and identity feed applications, applications feed the per-commune draw pipeline, and every privileged action lands in the governance trail. Participant, Commune and User are the most-referenced tables — nearly every other table points back to one of them.</figcaption>
+  </figure>
+</div>
+
+<script>
+(function(){
+  var SVGNS = 'http://www.w3.org/2000/svg';
+  function el(tag, attrs, parent){
+    var e = document.createElementNS(SVGNS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+
+  // ---- column data: [{label, nodes:[{id,title,fields:[{k,tag,ref}]}]}] ----
+  var COLS = [
+    {label:'Geography', nodes:[
+      {id:'wilaya', title:'Wilaya', fields:[
+        {k:'id', tag:'pk'},
+        {k:'code', tag:'uq'},
+        {k:'nameFr'}
+      ]},
+      {id:'commune', title:'Commune', fields:[
+        {k:'id', tag:'pk'},
+        {k:'wilayaId', tag:'fk', ref:'Wilaya'},
+        {k:'code (·wilaya)', tag:'uq'},
+        {k:'nameFr'}
+      ]}
+    ]},
+    {label:'Identity & Access', nodes:[
+      {id:'participant', title:'Participant', fields:[
+        {k:'id', tag:'pk'},
+        {k:'nationalId', tag:'uq'},
+        {k:'name (ar / latin)'},
+        {k:'hasWonHajj'}
+      ]},
+      {id:'user', title:'User', fields:[
+        {k:'id', tag:'pk'},
+        {k:'username', tag:'uq'},
+        {k:'role'},
+        {k:'wilayaId', tag:'fk?', ref:'Wilaya'},
+        {k:'communeId', tag:'fk?', ref:'Commune'}
+      ]},
+      {id:'session', title:'Session', fields:[
+        {k:'id', tag:'pk'},
+        {k:'tokenHash', tag:'uq'},
+        {k:'userId', tag:'fk', ref:'User'}
+      ]}
+    ]},
+    {label:'Applications & History', nodes:[
+      {id:'application', title:'Application', fields:[
+        {k:'id', tag:'pk'},
+        {k:'applicationReference', tag:'uq'},
+        {k:'drawYear'},
+        {k:'communeId', tag:'fk', ref:'Commune'},
+        {k:'primaryParticipantId', tag:'fk', ref:'Participant'},
+        {k:'secondaryParticipantId', tag:'fk?', ref:'Participant'},
+        {k:'status'}
+      ]},
+      {id:'appParticipant', title:'ApplicationParticipant', fields:[
+        {k:'(drawYear, participantId)', tag:'pk'},
+        {k:'applicationId', tag:'fk', ref:'Application'},
+        {k:'role'}
+      ]},
+      {id:'partHistory', title:'ParticipationHistory', fields:[
+        {k:'id', tag:'pk'},
+        {k:'participantId', tag:'fk', ref:'Participant'},
+        {k:'communeId', tag:'fk', ref:'Commune'},
+        {k:'drawYear'},
+        {k:'participated / won'}
+      ]}
+    ]},
+    {label:'Draw Configuration', nodes:[
+      {id:'drawYear', title:'DrawYear', fields:[
+        {k:'id', tag:'pk'},
+        {k:'year', tag:'uq'},
+        {k:'status'}
+      ]},
+      {id:'communeDraw', title:'CommuneDraw', fields:[
+        {k:'id', tag:'pk'},
+        {k:'drawYearId', tag:'fk', ref:'DrawYear'},
+        {k:'communeId', tag:'fk', ref:'Commune'},
+        {k:'allocatedSpots'},
+        {k:'status'}
+      ]}
+    ]},
+    {label:'Draw Execution', nodes:[
+      {id:'drawPool', title:'DrawPool', fields:[
+        {k:'id', tag:'pk'},
+        {k:'communeDrawId', tag:'fk1', ref:'CommuneDraw'},
+        {k:'entryCount / totalWeight'},
+        {k:'snapshotHash'}
+      ]},
+      {id:'drawPoolEntry', title:'DrawPoolEntry', fields:[
+        {k:'id', tag:'pk'},
+        {k:'drawPoolId', tag:'fk', ref:'DrawPool'},
+        {k:'applicationId', tag:'fk', ref:'Application'},
+        {k:'primaryParticipantId', tag:'fk', ref:'Participant'},
+        {k:'secondaryParticipantId', tag:'fk?', ref:'Participant'},
+        {k:'weight'}
+      ]},
+      {id:'drawResult', title:'DrawResult', fields:[
+        {k:'id', tag:'pk'},
+        {k:'communeDrawId', tag:'fk1', ref:'CommuneDraw'},
+        {k:'drawPoolId', tag:'fk1', ref:'DrawPool'},
+        {k:'winnerCount'},
+        {k:'algorithmVersion'}
+      ]},
+      {id:'selectionEvent', title:'DrawSelectionEvent', fields:[
+        {k:'id', tag:'pk'},
+        {k:'drawResultId', tag:'fk', ref:'DrawResult'},
+        {k:'selectedPoolEntryId', tag:'fk', ref:'PoolEntry'},
+        {k:'selectionOrder / randomValue'}
+      ]}
+    ]},
+    {label:'Outcomes', nodes:[
+      {id:'drawWinner', title:'DrawWinner', fields:[
+        {k:'id', tag:'pk'},
+        {k:'drawResultId', tag:'fk', ref:'DrawResult'},
+        {k:'drawPoolEntryId', tag:'fk1', ref:'PoolEntry'},
+        {k:'applicationId', tag:'fk', ref:'Application'},
+        {k:'primaryParticipantId', tag:'fk', ref:'Participant'},
+        {k:'secondaryParticipantId', tag:'fk?', ref:'Participant'},
+        {k:'selectionOrder'}
+      ]},
+      {id:'drawReserve', title:'DrawReserve', fields:[
+        {k:'id', tag:'pk'},
+        {k:'drawResultId', tag:'fk', ref:'DrawResult'},
+        {k:'drawPoolEntryId', tag:'fk1', ref:'PoolEntry'},
+        {k:'applicationId', tag:'fk', ref:'Application'},
+        {k:'primaryParticipantId', tag:'fk', ref:'Participant'},
+        {k:'secondaryParticipantId', tag:'fk?', ref:'Participant'},
+        {k:'replacesDrawWinnerId', tag:'fk?', ref:'DrawWinner'},
+        {k:'status'}
+      ]},
+      {id:'abandonment', title:'WinnerAbandonment', fields:[
+        {k:'id', tag:'pk'},
+        {k:'drawWinnerId', tag:'fk1', ref:'DrawWinner'},
+        {k:'recordedByUserId', tag:'fk', ref:'User'},
+        {k:'reason'}
+      ]},
+      {id:'winnerArchive', title:'WinnerArchive', fields:[
+        {k:'id', tag:'pk'},
+        {k:'participantId', tag:'fk1', ref:'Participant'},
+        {k:'communeId', tag:'fk', ref:'Commune'},
+        {k:'drawResultId', tag:'fk', ref:'DrawResult'},
+        {k:'drawPoolEntryId', tag:'fk', ref:'PoolEntry'},
+        {k:'source'}
+      ]},
+      {id:'publication', title:'ResultPublication', fields:[
+        {k:'id', tag:'pk'},
+        {k:'drawResultId', tag:'fk1', ref:'DrawResult'},
+        {k:'communeId', tag:'fk', ref:'Commune'},
+        {k:'publishedByUserId', tag:'fk', ref:'User'},
+        {k:'drawYear'}
+      ]}
+    ]},
+    {label:'Governance', nodes:[
+      {id:'auditLog', title:'AuditLog', fields:[
+        {k:'id', tag:'pk'},
+        {k:'actorUserId', tag:'fk?', ref:'User'},
+        {k:'targetType / targetId'},
+        {k:'wilayaId', tag:'fk?', ref:'Wilaya'},
+        {k:'communeId', tag:'fk?', ref:'Commune'},
+        {k:'action'}
+      ]},
+      {id:'approval', title:'ApprovalRequest', fields:[
+        {k:'id', tag:'pk'},
+        {k:'requestedByUserId', tag:'fk', ref:'User'},
+        {k:'reviewedByUserId', tag:'fk?', ref:'User'},
+        {k:'wilayaId', tag:'fk?', ref:'Wilaya'},
+        {k:'communeId', tag:'fk?', ref:'Commune'},
+        {k:'status'}
+      ]}
+    ]}
+  ];
+
+  var LEGACY = [
+    {id:'importBatch', title:'ImportBatch', fields:[
+      {k:'id', tag:'pk'},
+      {k:'sourceChecksum', tag:'uq'},
+      {k:'uploadedByUserId', tag:'fk', ref:'User'},
+      {k:'approvedByUserId', tag:'fk?', ref:'User'},
+      {k:'status'}
+    ]},
+    {id:'importRow', title:'ImportRow', fields:[
+      {k:'id', tag:'pk'},
+      {k:'importBatchId', tag:'fk', ref:'ImportBatch'},
+      {k:'communeId', tag:'fk?', ref:'Commune'},
+      {k:'participantId', tag:'fk?', ref:'Participant'},
+      {k:'participationHistoryId', tag:'fk1?', ref:'History'},
+      {k:'status'}
+    ]},
+    {id:'legacyWinner', title:'LegacyWinner', fields:[
+      {k:'id', tag:'pk'},
+      {k:'participantId', tag:'fk1', ref:'Participant'},
+      {k:'communeId', tag:'fk', ref:'Commune'},
+      {k:'importBatchId', tag:'fk', ref:'ImportBatch'},
+      {k:'importRowId', tag:'fk1', ref:'ImportRow'},
+      {k:'participationHistoryId', tag:'fk1', ref:'History'}
+    ]}
+  ];
+
+  // ---- edges: from/to node ids + row index on the "from" box, plus routing flags ----
+  var EDGES = [
+    {from:'commune',fromRow:1,to:'wilaya', req:1, sameCol:70},
+    {from:'session',fromRow:2,to:'user', req:1, sameCol:70},
+    {from:'user',fromRow:3,to:'wilaya', req:0},
+    {from:'user',fromRow:4,to:'commune', req:0},
+    {from:'application',fromRow:3,to:'commune', req:1},
+    {from:'application',fromRow:4,to:'participant', req:1},
+    {from:'application',fromRow:5,to:'participant', req:0},
+    {from:'appParticipant',fromRow:1,to:'application', req:1},
+    {from:'appParticipant',fromRow:0,to:'participant', req:1},
+    {from:'partHistory',fromRow:1,to:'participant', req:1},
+    {from:'partHistory',fromRow:2,to:'commune', req:1},
+    {from:'communeDraw',fromRow:1,to:'drawYear', req:1, sameCol:70},
+    {from:'communeDraw',fromRow:2,to:'commune', req:1},
+    {from:'drawPool',fromRow:1,to:'communeDraw', req:1, uniq:1},
+    {from:'drawPoolEntry',fromRow:1,to:'drawPool', req:1, sameCol:70},
+    {from:'drawPoolEntry',fromRow:2,to:'application', req:1},
+    {from:'drawPoolEntry',fromRow:3,to:'participant', req:1},
+    {from:'drawPoolEntry',fromRow:4,to:'participant', req:0},
+    {from:'drawResult',fromRow:1,to:'communeDraw', req:1, uniq:1},
+    {from:'drawResult',fromRow:2,to:'drawPool', req:1, uniq:1, sameCol:130},
+    {from:'selectionEvent',fromRow:1,to:'drawResult', req:1, sameCol:70},
+    {from:'selectionEvent',fromRow:2,to:'drawPoolEntry', req:1, sameCol:180},
+    {from:'drawWinner',fromRow:1,to:'drawResult', req:1},
+    {from:'drawWinner',fromRow:2,to:'drawPoolEntry', req:1, uniq:1},
+    {from:'drawWinner',fromRow:3,to:'application', req:1},
+    {from:'drawWinner',fromRow:4,to:'participant', req:1},
+    {from:'drawWinner',fromRow:5,to:'participant', req:0},
+    {from:'drawReserve',fromRow:1,to:'drawResult', req:1},
+    {from:'drawReserve',fromRow:2,to:'drawPoolEntry', req:1, uniq:1},
+    {from:'drawReserve',fromRow:3,to:'application', req:1},
+    {from:'drawReserve',fromRow:4,to:'participant', req:1},
+    {from:'drawReserve',fromRow:5,to:'participant', req:0},
+    {from:'drawReserve',fromRow:6,to:'drawWinner', req:0, sameCol:70},
+    {from:'abandonment',fromRow:1,to:'drawWinner', req:1, uniq:1, sameCol:150},
+    {from:'abandonment',fromRow:2,to:'user', req:1},
+    {from:'winnerArchive',fromRow:1,to:'participant', req:1, uniq:1},
+    {from:'winnerArchive',fromRow:2,to:'commune', req:1},
+    {from:'winnerArchive',fromRow:3,to:'drawResult', req:1},
+    {from:'winnerArchive',fromRow:4,to:'drawPoolEntry', req:1},
+    {from:'publication',fromRow:1,to:'drawResult', req:1, uniq:1},
+    {from:'publication',fromRow:2,to:'commune', req:1},
+    {from:'publication',fromRow:3,to:'user', req:1},
+    {from:'auditLog',fromRow:1,to:'user', req:0},
+    {from:'auditLog',fromRow:3,to:'wilaya', req:0},
+    {from:'auditLog',fromRow:4,to:'commune', req:0},
+    {from:'approval',fromRow:1,to:'user', req:1},
+    {from:'approval',fromRow:2,to:'user', req:0},
+    {from:'approval',fromRow:3,to:'wilaya', req:0},
+    {from:'approval',fromRow:4,to:'commune', req:0},
+    {from:'importBatch',fromRow:2,to:'user', req:1, vert:1},
+    {from:'importBatch',fromRow:3,to:'user', req:0, vert:1},
+    {from:'importRow',fromRow:1,to:'importBatch', req:1},
+    {from:'importRow',fromRow:2,to:'commune', req:0, vert:1},
+    {from:'importRow',fromRow:3,to:'participant', req:0, vert:1},
+    {from:'importRow',fromRow:4,to:'partHistory', req:0, uniq:1, vert:1},
+    {from:'legacyWinner',fromRow:1,to:'participant', req:1, uniq:1, vert:1},
+    {from:'legacyWinner',fromRow:2,to:'commune', req:1, vert:1},
+    {from:'legacyWinner',fromRow:3,to:'importBatch', req:1, sameRow:60},
+    {from:'legacyWinner',fromRow:4,to:'importRow', req:1, uniq:1},
+    {from:'legacyWinner',fromRow:5,to:'partHistory', req:1, uniq:1, vert:1}
+  ];
+
+  // ---- layout constants ----
+  var MARGIN_X = 30, MARGIN_TOP = 56, BW = 250, GX = 100, GY = 34;
+  var HEADER_H = 30, PAD_TOP = 6, ROW_H = 17, PAD_BOTTOM = 7;
+
+  var NODEMAP = {};
+
+  COLS.forEach(function(col, ci){
+    var x = MARGIN_X + ci*(BW+GX);
+    var y = MARGIN_TOP;
+    col.x = x;
+    col.nodes.forEach(function(n){
+      var h = HEADER_H + PAD_TOP + n.fields.length*ROW_H + PAD_BOTTOM;
+      n.x = x; n.y = y; n.w = BW; n.h = h; n.col = ci;
+      NODEMAP[n.id] = n;
+      y += h + GY;
+    });
+    col.bottom = y - GY;
+  });
+
+  var maxBottom = Math.max.apply(null, COLS.map(function(c){ return c.bottom; }));
+  var legacyY = maxBottom + 90;
+  var legacyXs = [COLS[1].x, COLS[2].x, COLS[3].x];
+  LEGACY.forEach(function(n, i){
+    var h = HEADER_H + PAD_TOP + n.fields.length*ROW_H + PAD_BOTTOM;
+    n.x = legacyXs[i]; n.y = legacyY; n.w = BW; n.h = h; n.col = 'legacy';
+    NODEMAP[n.id] = n;
+  });
+  var legacyBottom = Math.max.apply(null, LEGACY.map(function(n){ return n.y + n.h; }));
+
+  var VB_W = MARGIN_X + COLS.length*(BW+GX) - GX + MARGIN_X;
+  var VB_H = legacyBottom + 40;
+
+  var svg = document.getElementById('erd');
+  svg.setAttribute('viewBox', '0 0 ' + VB_W + ' ' + VB_H);
+  svg.setAttribute('width', VB_W);
+  svg.setAttribute('height', VB_H);
+
+  // defs: arrowheads
+  var defs = el('defs', {}, svg);
+  ['neutral','accent'].forEach(function(kind){
+    var m = el('marker', {id:'arrow-'+kind, viewBox:'0 0 10 10', refX:8, refY:5, markerWidth:7, markerHeight:7, orient:'auto-start-reverse'}, defs);
+    el('path', {d:'M0,0 L10,5 L0,10 z', fill: kind==='accent' ? 'var(--accent)' : 'var(--edge)'}, m);
+  });
+
+  var gEdges = el('g', {id:'edges'}, svg);
+  var gNodes = el('g', {id:'nodes'}, svg);
+
+  function rowY(node, rowIdx){
+    return node.y + HEADER_H + PAD_TOP + rowIdx*ROW_H + ROW_H/2;
+  }
+
+  function drawEdge(edge){
+    var a = NODEMAP[edge.from], b = NODEMAP[edge.to];
+    if (!a || !b) return;
+    var fx, fy, tx, ty, d;
+    if (edge.sameCol){
+      fx = a.x + a.w; fy = rowY(a, edge.fromRow);
+      tx = b.x + b.w; ty = rowY(b, 0);
+      var bulge = edge.sameCol;
+      d = 'M'+fx+','+fy+' C'+(fx+bulge)+','+fy+' '+(tx+bulge)+','+ty+' '+tx+','+ty;
+    } else if (edge.sameRow){
+      fx = a.x + a.w/2; fy = a.y;
+      tx = b.x + b.w/2; ty = b.y;
+      var up = edge.sameRow;
+      d = 'M'+fx+','+fy+' C'+fx+','+(fy-up)+' '+tx+','+(ty-up)+' '+tx+','+ty;
+    } else if (edge.vert){
+      fx = a.x + a.w/2; fy = a.y;
+      tx = b.x + b.w/2; ty = b.y + b.h;
+      d = 'M'+fx+','+fy+' C'+fx+','+(fy-220)+' '+tx+','+(ty+220)+' '+tx+','+ty;
+    } else {
+      fx = a.x; fy = rowY(a, edge.fromRow);
+      tx = b.x + b.w; ty = rowY(b, 0);
+      var dx = Math.max(60, (fx-tx)*0.35);
+      d = 'M'+fx+','+fy+' C'+(fx-dx)+','+fy+' '+(tx+dx)+','+ty+' '+tx+','+ty;
+    }
+    var cls = 'edge-path' + (edge.uniq ? ' uniq' : '');
+    var p = el('path', {
+      d: d, class: cls,
+      'stroke-dasharray': edge.req ? '' : '5 4',
+      'marker-end': 'url(#arrow-' + (edge.uniq ? 'accent' : 'neutral') + ')',
+      'data-from': edge.from, 'data-to': edge.to
+    }, gEdges);
+    if (edge.uniq){
+      var mx = (fx+tx)/2, my = (fy+ty)/2;
+      el('rect', {x:mx-9, y:my-6, width:18, height:11, rx:3, class:'edge-tag-bg'}, gEdges);
+      var t = el('text', {x:mx, y:my+3, 'text-anchor':'middle', class:'edge-tag'}, gEdges);
+      t.textContent = '1·1';
+    }
+    return p;
+  }
+
+  EDGES.forEach(drawEdge);
+
+  var TAG_GLYPH = { pk:['●','g-pk'], uq:['◇','g-uq'], fk:['→','g-fk'], 'fk?':['→','g-fk'], fk1:['→','g-fk1'], 'fk1?':['→','g-fk1'] };
+
+  function drawNode(n){
+    var g = el('g', {'data-id': n.id}, gNodes);
+    el('rect', {x:n.x, y:n.y, width:n.w, height:n.h, rx:8, class:'node-box', id:'box-'+n.id}, g);
+    el('path', {d:'M'+n.x+','+(n.y+HEADER_H)+' h'+n.w, stroke:'var(--border)', 'stroke-width':1}, g);
+    el('rect', {x:n.x, y:n.y, width:n.w, height:HEADER_H, rx:8, class:'node-head'}, g);
+    el('rect', {x:n.x, y:n.y+HEADER_H-8, width:n.w, height:8, fill:'var(--surface-2)'}, g);
+    var title = el('text', {x:n.x+12, y:n.y+HEADER_H/2+4, class:'node-title'}, g);
+    title.textContent = n.title;
+
+    n.fields.forEach(function(f, i){
+      var y = n.y + HEADER_H + PAD_TOP + i*ROW_H + ROW_H*0.72;
+      var glyph = TAG_GLYPH[f.tag];
+      if (glyph){
+        var gl = el('text', {x:n.x+12, y:y, class:'glyph-inline ' + glyph[1]}, g);
+        gl.setAttribute('font-family',"'IBM Plex Mono',monospace");
+        gl.setAttribute('font-size','10px');
+        gl.textContent = glyph[0];
+      }
+      var fld = el('text', {x:n.x+27, y:y, class:'row-field'}, g);
+      fld.textContent = f.k;
+      if (f.ref){
+        var refCls = 'row-ref' + ((f.tag==='fk1'||f.tag==='fk1?') ? ' uniq' : '');
+        var rt = el('text', {x:n.x+n.w-11, y:y, 'text-anchor':'end', class:refCls}, g);
+        rt.textContent = f.ref + ((f.tag==='fk1'||f.tag==='fk1?') ? ' ·1:1' : '');
+      }
+    });
+
+    var hit = el('rect', {x:n.x-2, y:n.y-2, width:n.w+4, height:n.h+4, class:'node-hitbox'}, g);
+    hit.addEventListener('mouseenter', function(){
+      document.getElementById('box-'+n.id).classList.add('hot');
+      gEdges.querySelectorAll('.edge-path').forEach(function(p){
+        if (p.getAttribute('data-from')===n.id || p.getAttribute('data-to')===n.id){
+          p.classList.add('active');
+          gEdges.appendChild(p);
+        } else {
+          p.classList.add('dim');
+        }
+      });
+    });
+    hit.addEventListener('mouseleave', function(){
+      document.getElementById('box-'+n.id).classList.remove('hot');
+      gEdges.querySelectorAll('.edge-path').forEach(function(p){
+        p.classList.remove('active');
+        p.classList.remove('dim');
+      });
+    });
+  }
+
+  COLS.forEach(function(col){
+    var lbl = el('text', {x:col.x, y:MARGIN_TOP-22, class:'col-label'}, gNodes);
+    lbl.textContent = col.label;
+    col.nodes.forEach(drawNode);
+  });
+
+  var legacyLbl = el('text', {x:legacyXs[0], y:legacyY-22, class:'col-label'}, gNodes);
+  legacyLbl.textContent = 'Legacy Import';
+  LEGACY.forEach(drawNode);
+})();
+</script>
+</html>
