@@ -32,6 +32,7 @@
     "admin:create": "npm run admin:create --workspace server",
     "seed:mock-applications": "npm run seed:mock-applications --workspace server",
     "reset-commune-draw": "npm run reset-commune-draw --workspace server",
+    "reset-commune-draws": "npm run reset-commune-draws --workspace server",
     "reopen-registration": "npm run reopen-registration --workspace server",
     "reset-participants": "npm run reset-participants --workspace server",
     "ready-commune-draws": "npm run ready-commune-draws --workspace server",

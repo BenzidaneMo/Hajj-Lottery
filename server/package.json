@@ -14,6 +14,7 @@
     "admin:create": "tsx src/scripts/create-admin.ts --explicit",
     "seed:mock-applications": "tsx src/scripts/seed-mock-applications.ts",
     "reset-commune-draw": "tsx src/scripts/reset-commune-draw.ts",
+    "reset-commune-draws": "tsx src/scripts/reset-commune-draws.ts",
     "reopen-registration": "tsx src/scripts/reopen-registration.ts",
     "reset-participants": "tsx src/scripts/reset-participants.ts",
     "ready-commune-draws": "tsx src/scripts/ready-commune-draws.ts",
