@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hajj Lottery Installation</title>
+<meta name="description" content="Installation and deployment guide for the Hajj Lottery platform: local development setup, then a production deployment on a Linux server with PostgreSQL, systemd, a reverse proxy and HTTPS.">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Cairo:wght@600;700&display=swap');
+
+/* The project's own light theme (client/src/index.css): stone neutrals plus the
+   primary-* ramp drawn from the logo. Gold appears once, as the eyebrow rule. */
+:root{
+  color-scheme:light;
+  --bg:#fafaf9;
+  --surface:#ffffff;
+  --text:#1c1917;
+  --text-dim:#57534e;
+  --border:#e7e5e4;
+  --border-strong:#d6d3d1;
+  --muted:#f5f5f4;
+  --primary-50:#eaf6f0;
+  --primary-100:#d2ebdc;
+  --primary-200:#a6d7ba;
+  --primary-600:#128049;
+  --primary-700:#006233;
+  --primary-800:#004d28;
+  --gold:#c9a24a;
+  --code-bg:#1c1917;
+  --code-text:#e7e5e4;
+  --code-dim:#a8a29e;
+  --warn-bg:#fffbeb;
+  --warn-border:#fde68a;
+  --warn-text:#78350f;
+  --shadow:0 1px 2px rgba(28,25,23,.05), 0 1px 3px rgba(28,25,23,.04);
+  --mono:ui-monospace,'Cascadia Code',Consolas,monospace;
+}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:'Plus Jakarta Sans',ui-sans-serif,system-ui,-apple-system,sans-serif;
+  font-size:15px;line-height:1.65;
+}
+a{color:var(--primary-700);text-underline-offset:2px}
+a:hover{color:var(--primary-800)}
+code{font-family:var(--mono);font-size:.88em;background:var(--muted);padding:1px 6px;border-radius:4px}
+
+/* ---- hero ---- */
+.hero{background:linear-gradient(180deg,var(--primary-50),var(--bg));border-bottom:1px solid var(--border)}
+.hero-inner{max-width:1120px;margin:0 auto;padding:44px 16px 36px}
+.eyebrow{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--primary-700);margin:0 0 12px}
+.eyebrow::before{content:'';width:32px;height:2px;border-radius:2px;background:var(--gold)}
+.eyebrow .ar{font-family:Cairo,sans-serif;letter-spacing:0;text-transform:none;font-size:14px}
+h1{font-size:clamp(28px,4vw,38px);line-height:1.2;letter-spacing:-.015em;margin:0 0 12px;color:var(--primary-800)}
+.lead{font-size:16.5px;color:var(--text-dim);max-width:720px;margin:0 0 22px}
+.facts{display:flex;flex-wrap:wrap;gap:10px;margin:0;padding:0;list-style:none}
+.facts li{background:var(--surface);border:1px solid var(--primary-100);border-radius:999px;padding:5px 13px;font-size:13px;color:var(--text-dim)}
+.facts strong{color:var(--primary-800);font-weight:600}
+
+/* ---- layout ---- */
+.layout{max-width:1120px;margin:0 auto;padding:32px 16px 64px;display:grid;grid-template-columns:220px minmax(0,1fr);gap:40px}
+@media (max-width:860px){.layout{grid-template-columns:minmax(0,1fr);gap:20px}}
+.toc{position:sticky;top:20px;align-self:start}
+@media (max-width:860px){.toc{position:static}}
+.toc h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-dim);margin:0 0 10px;font-weight:600}
+.toc{counter-reset:toc}
+.toc ol{list-style:none;margin:0;padding:0}
+.toc ol + h2{margin-top:22px}
+.toc li{counter-increment:toc}
+.toc a{display:flex;gap:10px;padding:6px 10px;border-radius:6px;color:var(--text-dim);text-decoration:none;font-size:13.5px;border-inline-start:2px solid transparent}
+.toc a::before{content:counter(toc,decimal-leading-zero);font-family:var(--mono);font-size:11.5px;color:var(--primary-600);padding-top:2px}
+.toc a:hover{background:var(--surface);color:var(--text)}
+.toc a.active{background:var(--surface);color:var(--primary-800);border-inline-start-color:var(--primary-700);font-weight:600}
+
+/* ---- steps ---- */
+section.step{background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:24px 26px;margin-bottom:18px;scroll-margin-top:16px}
+@media (max-width:560px){section.step{padding:20px 16px}}
+.step-head{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.num{flex:none;width:32px;height:32px;border-radius:50%;background:var(--primary-700);color:#f8faf9;display:grid;place-items:center;font-weight:700;font-size:14px}
+.step h2{font-size:19px;margin:0;color:var(--primary-800);letter-spacing:-.01em}
+.step h3{font-size:14.5px;margin:20px 0 6px;color:var(--text)}
+.step p{margin:8px 0}
+.step ul{margin:8px 0;padding-inline-start:20px}
+.step li{margin:4px 0}
+
+/* ---- code blocks ---- */
+.code{position:relative;margin:12px 0;border-radius:8px;background:var(--code-bg);overflow:hidden}
+.code-label{display:flex;justify-content:space-between;align-items:center;padding:6px 8px 6px 14px;background:#292524;font-size:11.5px;color:var(--code-dim);font-family:var(--mono)}
+.copy{font:inherit;font-size:11.5px;background:transparent;color:var(--code-dim);border:1px solid #44403c;border-radius:5px;padding:2px 9px;cursor:pointer}
+.copy:hover{color:#fff;border-color:#78716c}
+.copy:focus-visible{outline:2px solid var(--primary-200);outline-offset:1px}
+.code pre{margin:0;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.6;color:var(--code-text)}
+.code pre .c{color:var(--code-dim)}
+
+/* ---- callouts ---- */
+.note,.warn{border-radius:8px;padding:11px 14px;margin:14px 0;font-size:14px;border:1px solid}
+.note{background:var(--primary-50);border-color:var(--primary-100);color:#1f3b2c}
+.warn{background:var(--warn-bg);border-color:var(--warn-border);color:var(--warn-text)}
+.note strong,.warn strong{font-weight:700}
+.note code{background:#fff}
+.warn code{background:#fff7d6}
+
+/* ---- tables ---- */
+.table-wrap{overflow-x:auto;margin:12px 0;border:1px solid var(--border);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:start;padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:var(--primary-50);color:var(--primary-800);font-weight:600;font-size:12.5px;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+td code{white-space:nowrap}
+.req{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;background:var(--primary-100);color:var(--primary-800)}
+.opt{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;background:var(--muted);color:var(--text-dim)}
+
+/* ---- checklist ---- */
+.checks{list-style:none;padding:0;margin:10px 0}
+.checks li{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px dashed var(--border)}
+.checks li:last-child{border-bottom:none}
+.checks li::before{content:'';flex:none;width:16px;height:16px;margin-top:4px;border-radius:4px;border:1.5px solid var(--primary-600);background:var(--primary-50)}
+
+details{border:1px solid var(--border);border-radius:8px;margin:10px 0;background:var(--surface)}
+details[open]{border-color:var(--border-strong)}
+summary{cursor:pointer;padding:11px 14px;font-weight:600;font-size:14px;color:var(--text);list-style:none;display:flex;gap:10px;align-items:center}
+summary::-webkit-details-marker{display:none}
+summary::before{content:'+';font-family:var(--mono);color:var(--primary-700);width:12px}
+details[open] summary::before{content:'−'}
+details > div{padding:0 14px 12px 36px;font-size:14px}
+details > div p{margin:6px 0}
+
+.part{display:flex;align-items:center;gap:12px;margin:0 0 14px;padding-bottom:12px;border-bottom:2px solid var(--primary-100)}
+.part.b{margin-top:44px}
+.part > span{flex:none;font-family:var(--mono);font-size:12px;font-weight:600;color:var(--primary-700);background:var(--primary-50);border:1px solid var(--primary-100);border-radius:999px;padding:2px 10px}
+.part h2{margin:0;font-size:22px;color:var(--primary-800);letter-spacing:-.01em}
+.part p{margin:0;color:var(--text-dim);font-size:14px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:12px 0}
+.card{border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--bg)}
+.card.rec{border-color:var(--primary-200);background:var(--primary-50)}
+.card h4{margin:0 0 4px;font-size:14px;color:var(--primary-800)}
+.card p{margin:0;font-size:13.5px;color:var(--text-dim)}
+.card .tag{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--primary-700);margin-bottom:4px}
+footer{max-width:1120px;margin:0 auto;padding:0 16px 40px;color:var(--text-dim);font-size:13px}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <p class="eyebrow"><span class="ar">قرعة الحج</span> · Installation &amp; deployment</p>
+    <h1>Install, run and deploy the Hajj Lottery</h1>
+    <p class="lead">Part A takes a fresh clone to a working development setup on your own machine. Part B deploys the app to a real server: PostgreSQL, a system service, a reverse proxy with HTTPS, the first draw year, updates and backups. Commands are shown for Bash, with Windows PowerShell differences noted where they matter.</p>
+    <ul class="facts">
+      <li><strong>Node.js</strong> 20+</li>
+      <li><strong>PostgreSQL</strong> (any recent version)</li>
+      <li><strong>3</strong> npm workspaces: client · server · shared</li>
+      <li><strong>HTTPS</strong> required in production</li>
+    </ul>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="toc" aria-label="Steps">
+    <h2>A · Local development</h2>
+    <ol>
+      <li><a href="#prerequisites">Prerequisites</a></li>
+      <li><a href="#clone">Clone and install</a></li>
+      <li><a href="#env">Configure .env</a></li>
+      <li><a href="#database">Create the database</a></li>
+      <li><a href="#seed">Seed reference data</a></li>
+      <li><a href="#admin">First administrator</a></li>
+      <li><a href="#run">Run in development</a></li>
+      <li><a href="#verify">Verify the install</a></li>
+      <li><a href="#tests">Run the tests</a></li>
+      <li><a href="#production">Local production build</a></li>
+    </ol>
+    <h2>B · Production deployment</h2>
+    <ol>
+      <li><a href="#deploy-plan">Before you deploy</a></li>
+      <li><a href="#deploy-server">Prepare the server</a></li>
+      <li><a href="#deploy-build">Fetch, configure, build</a></li>
+      <li><a href="#deploy-db">Migrate, seed, admin</a></li>
+      <li><a href="#deploy-service">Run as a service</a></li>
+      <li><a href="#deploy-proxy">Reverse proxy &amp; HTTPS</a></li>
+      <li><a href="#deploy-first-year">Open the first draw year</a></li>
+      <li><a href="#deploy-update">Updating</a></li>
+      <li><a href="#deploy-backup">Backups &amp; restore</a></li>
+      <li><a href="#deploy-checklist">Go-live checklist</a></li>
+      <li><a href="#troubleshooting">Troubleshooting</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <div class="part"><span>Part A</span><div><h2>Local development</h2><p>Your own machine: dev servers with hot reload, seeded demo data, tests.</p></div></div>
+
+    <section class="step" id="prerequisites">
+      <div class="step-head"><span class="num">1</span><h2>Prerequisites</h2></div>
+      <ul>
+        <li><strong>Node.js 20 or newer</strong>, with npm (bundled). Check with <code>node -v</code>.</li>
+        <li><strong>PostgreSQL</strong> running locally or reachable over the network. A local service, Docker container or managed instance all work. You need a role that can create databases.</li>
+        <li><strong>Git</strong>, to clone the repository.</li>
+        <li><em>Optional:</em> <code>cloudflared</code>, only if you want to share a local demo through a Cloudflare Quick Tunnel (step 10).</li>
+      </ul>
+      <div class="note"><strong>No Docker image or hosted service is required.</strong> The app is plain Node and PostgreSQL. Prisma, Vite, tsx and the rest come in through <code>npm install</code>.</div>
+    </section>
+
+    <section class="step" id="clone">
+      <div class="step-head"><span class="num">2</span><h2>Clone and install</h2></div>
+      <div class="code"><div class="code-label"><span>bash</span><button class="copy" type="button">Copy</button></div><pre>git clone git@github.com:BenzidaneMo/Hajj-Lottery.git
+cd Hajj-Lottery
+npm install</pre></div>
+      <p><code>npm install</code> installs all three workspaces from the repository root, then a <code>postinstall</code> hook builds <code>shared/</code> to <code>shared/dist</code>. The client and server both import <code>@hajj-lottery/shared</code>, so they won't typecheck or start until that build exists.</p>
+      <div class="note">If you later edit anything in <code>shared/src</code>, rebuild it with <code>npm run build:shared</code> before the client or server will see the change.</div>
+    </section>
+
+    <section class="step" id="env">
+      <div class="step-head"><span class="num">3</span><h2>Configure <code>.env</code></h2></div>
+      <p>The single <code>.env</code> file lives at the <strong>repository root</strong>, not inside <code>server/</code>. Start from the template:</p>
+      <div class="code"><div class="code-label"><span>bash</span><button class="copy" type="button">Copy</button></div><pre>cp .env.example .env</pre></div>
+      <div class="code"><div class="code-label"><span>PowerShell</span><button class="copy" type="button">Copy</button></div><pre>Copy-Item .env.example .env</pre></div>
+      <p>Then fill in the values. The server checks them with a Zod schema at startup and exits with the <em>name</em> of any missing or invalid variable. Values are never logged.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Variable</th><th></th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><code>DATABASE_URL</code></td><td><span class="req">required</span></td><td>PostgreSQL connection string for the app and Prisma migrations, e.g. <code>postgresql://postgres:postgres@localhost:5432/hajj_lottery?schema=public</code></td></tr>
+          <tr><td><code>TEST_DATABASE_URL</code></td><td><span class="opt">for tests</span></td><td>A <strong>separate</strong> database for <code>npm test</code>. Its name must contain <code>test</code>, because the suite truncates tables.</td></tr>
+          <tr><td><code>NODE_ENV</code></td><td><span class="opt">default dev</span></td><td><code>development</code>, <code>production</code> or <code>test</code>. Production disables the dev seeds and enables same-origin static serving.</td></tr>
+          <tr><td><code>PORT</code></td><td><span class="opt">default 4000</span></td><td>API port.</td></tr>
+          <tr><td><code>CLIENT_ORIGIN</code></td><td><span class="opt">default :5173</span></td><td>Browser origins allowed to make credentialed API calls, comma-separated. Never <code>*</code>.</td></tr>
+          <tr><td><code>SESSION_TTL_HOURS</code></td><td><span class="opt">default 8</span></td><td>Admin session lifetime.</td></tr>
+          <tr><td><code>DEV_ADMIN_USERNAME</code> / <code>DEV_ADMIN_PASSWORD</code></td><td><span class="opt">dev only</span></td><td>Read by <code>npm run seed:admin</code> (step 6). Leave them empty and no administrator is created.</td></tr>
+          <tr><td><code>TRUSTED_ORIGIN_SUFFIXES</code></td><td><span class="opt">opt-in</span></td><td>For example <code>.trycloudflare.com</code>, only when sharing through a Quick Tunnel.</td></tr>
+          <tr><td><code>VITE_API_BASE_URL</code></td><td><span class="opt">client</span></td><td>API origin the dev client calls. Defaults to <code>http://localhost:4000</code>.</td></tr>
+        </tbody>
+      </table></div>
+      <div class="warn"><strong>Never commit <code>.env</code>.</strong> There are no default credentials anywhere in the codebase. Every administrator password comes from you.</div>
+    </section>
+
+    <section class="step" id="database">
+      <div class="step-head"><span class="num">4</span><h2>Create the database schema</h2></div>
+      <p>Make sure PostgreSQL is running and the database named in <code>DATABASE_URL</code> can be reached. Then apply every committed migration:</p>
+      <div class="code"><div class="code-label"><span>bash</span><button class="copy" type="button">Copy</button></div><pre>npm run prisma:migrate</pre></div>
+      <p>This runs <code>prisma migrate dev</code> against <code>prisma/schema.prisma</code>. The schema lives at the repository root, not under <code>server/</code>. Prisma creates the database if it doesn't exist yet and generates the Prisma client.</p>
+      <p>Besides tables, the migrations install raw-SQL constraints: immutability triggers on draw pools and results, the "one open registration year" partial unique index, and CHECK constraints on role/scope shapes. Always create the schema through the migrations. Don't use <code>prisma db push</code>, which skips the raw SQL.</p>
+    </section>
+
+    <section class="step" id="seed">
+      <div class="step-head"><span class="num">5</span><h2>Seed reference data</h2></div>
+      <div class="code"><div class="code-label"><span>bash</span><button class="copy" type="button">Copy</button></div><pre>npm run prisma:seed</pre></div>
+      <p>The seed is idempotent, so it's safe to run again. It loads:</p>
+      <ul>
+        <li><strong>Geography:</strong> all 69 wilayas and 1,541 communes, with Arabic, French and English names.</li>
+        <li><strong>Development participants:</strong> a handful of synthetic identities.</li>
+        <li><strong>A development draw year</strong> for the current year, opened for registration, with a commune draw of 10 places in every commune. Without it the registration form would refuse every applicant.</li>
+      </ul>
+      <p>The participants and draw year are skipped when <code>NODE_ENV=production</code>. In production, opening a cycle and allocating places is an administrative act.</p>
+      <h3>Optional: a realistic applicant pool</h3>
+      <div class="code"><div class="code-label"><span>bash</span><button class="copy" type="button">Copy</button></div><pre><span class="c"># one wilaya, quick</span>
+npm run seed:mock-applications --workspace server -- --wilaya=27
+<span class="c"># nationwide: 1,541 communes × 40 applicants, takes a while</span>
+npm run seed:mock-applications</pre></div>
+      <p>Mock applicants go through the real registration path, so eligibility, weighting and the one-application-per-year rule all apply.</p>
+    </section>
+
+    <section class="step" id="admin">
+      <div class="step-head"><span class="num">6</span><h2>Create the first administrator</h2></div>
+      <h3>Development</h3>
+      <p>Set <code>DEV_ADMIN_USERNAME</code> and <code>DEV_ADMIN_PASSWORD</code> in <code>.env</code>, then run:</p>
+      <div class="code"><div class="code-label"><span>bash</span><button class="copy" type="button">Copy</button></div><pre>npm run seed:admin</pre></div>
+      <p>This creates a <code>SUPER_ADMIN</code>. Running it again resets that account's password. It refuses to run in production.</p>
+      <h3>Production</h3>
+      <p>Pass the credentials as one-off environment variables, never in <code>.env</code>:</p>
+      <div class="code"><div class="code-label"><span>bash</span><button class="copy" type="button">Copy</button></div><pre>ADMIN_USERNAME="…" ADMIN_PASSWORD="…" npm run admin:create</pre></div>
+      <div class="code"><div class="code-label"><span>PowerShell</span><button class="copy" type="button">Copy</button></div><pre>$env:ADMIN_USERNAME = "…"; $env:ADMIN_PASSWORD = "…"
+npm run admin:create
+Remove-Item Env:ADMIN_USERNAME, Env:ADMIN_PASSWORD</pre></div>
+      <p>Passwords shorter than 12 characters are refused. If the account already exists in production, the script exits without touching its password, so it can't overwrite a live account.</p>
+    </section>
+
+    <section class="step" id="run">
+      <div class="step-head"><span class="num">7</span><h2>Run in development</h2></div>
+      <p>The frontend and API run as two processes. Use two terminals:</p>
+      <div class="code"><div class="code-label"><span>terminal 1 · API</span><button class="copy" type="button">Copy</button></div><pre>npm run dev:server   <span class="c"># http://localhost:4000 (tsx watch)</span></pre></div>
+      <div class="code"><div class="code-label"><span>terminal 2 · client</span><button class="copy" type="button">Copy</button></div><pre>npm run dev:client   <span class="c"># http://localhost:5173 (Vite)</span></pre></div>
+      <p>Both reload on file changes. The client calls the API at <code>http://localhost:4000</code>, and the API accepts that origin through <code>CLIENT_ORIGIN</code>.</p>
+    </section>
+
+    <section class="step" id="verify">
+      <div class="step-head"><span class="num">8</span><h2>Verify the install</h2></div>
+      <ul class="checks">
+        <li><span><a href="http://localhost:5173/">localhost:5173</a> shows the landing page in Arabic, right-to-left. The language switcher flips it to French or English.</span></li>
+        <li><span><code>/register</code> lists wilayas and communes, which means the geography seed worked, and accepts a submission, which means the dev draw year is open.</span></li>
+        <li><span><a href="http://localhost:4000/api/wilayas">localhost:4000/api/wilayas</a> returns JSON with 69 wilayas.</span></li>
+        <li><span><code>/admin/login</code> accepts the administrator from step 6 and opens the dashboard.</span></li>
+        <li><span><code>npm run prisma:studio</code> opens a browser view of the database, if you want to inspect rows.</span></li>
+      </ul>
+    </section>
+
+    <section class="step" id="tests">
+      <div class="step-head"><span class="num">9</span><h2>Run the tests</h2></div>
+      <p>Server tests (Vitest + supertest) run against a <strong>real PostgreSQL database</strong> given by <code>TEST_DATABASE_URL</code>. It must be a different database from <code>DATABASE_URL</code>, and its name must contain <code>test</code>. Migrations are applied to it automatically before the suite runs. Client tests use jsdom and need no database.</p>
+      <div class="code"><div class="code-label"><span>bash</span><button class="copy" type="button">Copy</button></div><pre>npm test                                  <span class="c"># every workspace</span>
+npm run test --workspace client           <span class="c"># public page tests only, no DB</span>
+npm run test --workspace server -- tests/national-id.test.ts -t "normalizes"</pre></div>
+      <h3>Quality checks</h3>
+      <div class="code"><div class="code-label"><span>bash</span><button class="copy" type="button">Copy</button></div><pre>npm run lint
+npm run typecheck
+npm run format:check</pre></div>
+    </section>
+
+    <section class="step" id="production">
+      <div class="step-head"><span class="num">10</span><h2>Production build on this machine</h2></div>
+      <div class="code"><div class="code-label"><span>bash</span><button class="copy" type="button">Copy</button></div><pre>npm run build                          <span class="c"># shared → server → client, in that order</span>
+NODE_ENV=production npm run --workspace server start</pre></div>
+      <div class="code"><div class="code-label"><span>PowerShell</span><button class="copy" type="button">Copy</button></div><pre>npm run build
+$env:NODE_ENV = "production"
+npm run --workspace server start</pre></div>
+      <p>With <code>NODE_ENV=production</code>, Express also serves <code>client/dist</code>, with an <code>index.html</code> fallback for client-side routes. The whole app then answers from <a href="http://localhost:4000/">localhost:4000</a> on one origin, and the production client calls <code>/api/…</code> relative to that origin.</p>
+      <h3>Sharing a local demo</h3>
+      <p>Add <code>TRUSTED_ORIGIN_SUFFIXES=".trycloudflare.com"</code> to <code>.env</code>, start the production server, then run <code>cloudflared tunnel --url http://localhost:4000</code> in another terminal. This is a demo convenience, not a deployment (for a real one, see Part B). See <a href="showcase-tunnel.md">docs/showcase-tunnel.md</a> for the full walkthrough, and use only synthetic data.</p>
+    </section>
+
+    <div class="part b"><span>Part B</span><div><h2>Production deployment</h2><p>A real, long-running server reachable at your own domain over HTTPS.</p></div></div>
+
+    <section class="step" id="deploy-plan">
+      <div class="step-head"><span class="num">11</span><h2>Before you deploy</h2></div>
+      <p>The repository ships no Dockerfile or platform config. It deploys as a plain Node process next to PostgreSQL. This guide uses a Linux VPS (Ubuntu 22.04/24.04) with systemd and a reverse proxy, which is the simplest setup that meets the app's requirements.</p>
+      <h3>Choose a topology</h3>
+      <div class="cards">
+        <div class="card rec"><span class="tag">Recommended</span><h4>One origin</h4><p>Express serves both the built client and <code>/api</code> on one domain, behind nginx or Caddy. Nothing to configure for CORS or cookies beyond <code>CLIENT_ORIGIN</code>.</p></div>
+        <div class="card"><span class="tag">Possible</span><h4>Split frontend / API</h4><p>Static client on <code>app.example.dz</code>, API on <code>api.example.dz</code>. They must share one registrable domain (same-site). The client's API URL goes in <code>client/.env.production.local</code>.</p></div>
+        <div class="card"><span class="tag">Demo only</span><h4>Cloudflare Quick Tunnel</h4><p>A temporary random URL from your own PC (step 10). Not for real data or real citizens.</p></div>
+      </div>
+      <h3>Hard requirements</h3>
+      <ul>
+        <li><strong>HTTPS.</strong> In production the session cookie is <code>Secure</code>, so over plain HTTP the admin login succeeds but the browser drops the cookie and you're never signed in.</li>
+        <li><strong>Exactly one proxy hop.</strong> The app sets <code>trust proxy</code> to <code>1</code> and reads the visitor's IP from the last <code>X-Forwarded-For</code> entry. The login, registration and status-lookup rate limits depend on that IP. Adding a CDN in front of nginx adds a second hop (see step 16).</li>
+        <li><strong>A single app instance.</strong> Sessions live in PostgreSQL, but the rate limiters and the batch-operation double-click guard are in memory. Run one process, not a cluster or several replicas.</li>
+        <li><strong>Port 4000 is never public.</strong> Only the reverse proxy may reach it. A visitor who could connect directly could forge <code>X-Forwarded-For</code> and get around the rate limits.</li>
+      </ul>
+      <h3>Sizing</h3>
+      <p>A small VPS (2 vCPU, 2–4 GB RAM) is plenty for the app itself. The build is the heaviest task it runs. Give PostgreSQL room to grow with the number of applications, and keep backups off the machine.</p>
+    </section>
+
+    <section class="step" id="deploy-server">
+      <div class="step-head"><span class="num">12</span><h2>Prepare the server</h2></div>
+      <h3>Install Node.js, PostgreSQL and Git</h3>
+      <div class="code"><div class="code-label"><span>bash · Ubuntu</span><button class="copy" type="button">Copy</button></div><pre>curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs postgresql git
+node -v   <span class="c"># must be 20 or newer</span></pre></div>
+      <h3>Create the database and its role</h3>
+      <div class="code"><div class="code-label"><span>bash</span><button class="copy" type="button">Copy</button></div><pre>sudo -u postgres psql -c "CREATE ROLE hajj LOGIN PASSWORD 'choose-a-long-random-password';"
+sudo -u postgres psql -c "CREATE DATABASE hajj_lottery OWNER hajj;"</pre></div>
+      <p>Keep PostgreSQL listening on localhost only, which is the Ubuntu default. A managed PostgreSQL service works just as well. Point <code>DATABASE_URL</code> at it and require TLS with <code>sslmode=require</code>.</p>
+      <h3>Create a system user for the app</h3>
+      <div class="code"><div class="code-label"><span>bash</span><button class="copy" type="button">Copy</button></div><pre>sudo useradd --system --create-home --home-dir /srv/hajj-lottery --shell /usr/sbin/nologin hajj</pre></div>
+    </section>
+
+    <section class="step" id="deploy-build">
+      <div class="step-head"><span class="num">13</span><h2>Fetch, configure and build</h2></div>
+      <p>Open a shell as the app user. Every command in steps 13 and 14 runs from <code>/srv/hajj-lottery/app</code>:</p>
+      <div class="code"><div class="code-label"><span>bash</span><button class="copy" type="button">Copy</button></div><pre>sudo -u hajj -H bash
+cd /srv/hajj-lottery
+git clone https://github.com/BenzidaneMo/Hajj-Lottery.git app
+cd app
+npm ci --include=dev</pre></div>
+      <div class="note"><strong>Keep the dev dependencies.</strong> The build (TypeScript, Vite), the Prisma CLI and the admin/seed scripts (<code>tsx</code>) all live in <code>devDependencies</code>. <code>--include=dev</code> makes sure they're installed even if <code>NODE_ENV=production</code> is set in your shell.</div>
+      <h3>Create the production <code>.env</code></h3>
+      <div class="code"><div class="code-label"><span>/srv/hajj-lottery/app/.env</span><button class="copy" type="button">Copy</button></div><pre>NODE_ENV="production"
+PORT=4000
+DATABASE_URL="postgresql://hajj:choose-a-long-random-password@localhost:5432/hajj_lottery?schema=public"
+CLIENT_ORIGIN="https://hajj.example.dz"
+SESSION_TTL_HOURS=8</pre></div>
+      <div class="code"><div class="code-label"><span>bash</span><button class="copy" type="button">Copy</button></div><pre>chmod 600 .env</pre></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Variable</th><th>In production</th></tr></thead>
+        <tbody>
+          <tr><td><code>CLIENT_ORIGIN</code></td><td>Your public origin, exactly as the browser shows it: scheme and host, no trailing slash. Even on a single origin it's required, because browsers send <code>Origin</code> on every POST and the server rejects unknown ones with <code>403 FORBIDDEN_ORIGIN</code>.</td></tr>
+          <tr><td><code>DEV_ADMIN_*</code></td><td>Leave out. The dev seed refuses to run in production anyway.</td></tr>
+          <tr><td><code>TRUSTED_ORIGIN_SUFFIXES</code></td><td>Leave out. It exists only for the Quick Tunnel demo.</td></tr>
+          <tr><td><code>TEST_DATABASE_URL</code></td><td>Leave out. Never run the test suite against a production server.</td></tr>
+          <tr><td><code>VITE_API_BASE_URL</code></td><td>Not needed. <code>client/.env.production</code> already sets it empty so the client calls <code>/api</code> on its own origin. Only a split deployment overrides it, in <code>client/.env.production.local</code>, <em>before</em> building.</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Build</h3>
+      <div class="code"><div class="code-label"><span>bash</span><button class="copy" type="button">Copy</button></div><pre>npm run build   <span class="c"># shared → server/dist → client/dist</span></pre></div>
+    </section>
+
+    <section class="step" id="deploy-db">
+      <div class="step-head"><span class="num">14</span><h2>Migrate, seed and create the administrator</h2></div>
+      <h3>Apply the migrations</h3>
+      <div class="code"><div class="code-label"><span>bash</span><button class="copy" type="button">Copy</button></div><pre>npx prisma migrate deploy --schema prisma/schema.prisma</pre></div>
+      <div class="warn"><strong>Use <code>migrate deploy</code>, never <code>npm run prisma:migrate</code>, on a server.</strong> The npm script runs <code>migrate dev</code>, which may prompt to reset the database and wipe it. <code>migrate deploy</code> only applies committed migrations, in order, and never generates or resets anything.</div>
+      <h3>Load the geography</h3>
+      <div class="code"><div class="code-label"><span>bash</span><button class="copy" type="button">Copy</button></div><pre>NODE_ENV=production npm run prisma:seed</pre></div>
+      <p>With <code>NODE_ENV=production</code>, the seed loads only the 69 wilayas and 1,541 communes. It skips the synthetic participants and the auto-opened draw year. Set the variable inline as shown, because the seed reads it from the process environment, not from <code>.env</code>.</p>
+      <h3>Create the first SUPER_ADMIN</h3>
+      <div class="code"><div class="code-label"><span>bash</span><button class="copy" type="button">Copy</button></div><pre>read -r -p 'Admin username: ' ADMIN_USERNAME
+read -r -s -p 'Admin password (12+ chars): ' ADMIN_PASSWORD; echo
+ADMIN_USERNAME="$ADMIN_USERNAME" ADMIN_PASSWORD="$ADMIN_PASSWORD" NODE_ENV=production npm run admin:create
+unset ADMIN_USERNAME ADMIN_PASSWORD
+exit   <span class="c"># leave the app user's shell</span></pre></div>
+      <p>Reading the password interactively keeps it out of your shell history. If that username already exists, the script exits without changing anything.</p>
+    </section>
+
+    <section class="step" id="deploy-service">
+      <div class="step-head"><span class="num">15</span><h2>Run as a service</h2></div>
+      <p>A systemd unit starts the app at boot and restarts it if it crashes:</p>
+      <div class="code"><div class="code-label"><span>/etc/systemd/system/hajj-lottery.service</span><button class="copy" type="button">Copy</button></div><pre>[Unit]
+Description=Hajj Lottery
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=hajj
+WorkingDirectory=/srv/hajj-lottery/app
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node server/dist/index.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target</pre></div>
+      <div class="code"><div class="code-label"><span>bash</span><button class="copy" type="button">Copy</button></div><pre>sudo systemctl daemon-reload
+sudo systemctl enable --now hajj-lottery
+systemctl status hajj-lottery
+curl -s http://127.0.0.1:4000/api/health   <span class="c"># {"status":"ok"}</span>
+journalctl -u hajj-lottery -f              <span class="c"># live logs</span></pre></div>
+      <p>The server loads <code>.env</code> from the repository root relative to its own compiled files, so no <code>EnvironmentFile</code> is needed. If you prefer pm2, run it in <strong>fork mode with one instance</strong> (<code>pm2 start server/dist/index.js --name hajj-lottery</code>), never <code>-i max</code>.</p>
+    </section>
+
+    <section class="step" id="deploy-proxy">
+      <div class="step-head"><span class="num">16</span><h2>Reverse proxy and HTTPS</h2></div>
+      <p>Point your domain's DNS <code>A</code>/<code>AAAA</code> record at the server first. Then pick one of the following.</p>
+      <h3>Option 1: nginx + Let's Encrypt</h3>
+      <div class="code"><div class="code-label"><span>/etc/nginx/sites-available/hajj-lottery</span><button class="copy" type="button">Copy</button></div><pre>server {
+    listen 80;
+    listen [::]:80;
+    server_name hajj.example.dz;
+
+    <span class="c"># legacy-import uploads are capped at 5 MB by the app</span>
+    client_max_body_size 6m;
+
+    location / {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        <span class="c"># overwrite, never append: one trusted hop, no client-supplied spoofing</span>
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}</pre></div>
+      <div class="code"><div class="code-label"><span>bash</span><button class="copy" type="button">Copy</button></div><pre>sudo apt-get install -y nginx certbot python3-certbot-nginx
+sudo ln -s /etc/nginx/sites-available/hajj-lottery /etc/nginx/sites-enabled/
+sudo nginx -t &amp;&amp; sudo systemctl reload nginx
+sudo certbot --nginx -d hajj.example.dz --redirect   <span class="c"># adds :443, HTTP→HTTPS redirect, auto-renewal</span></pre></div>
+      <h3>Option 2: Caddy (automatic HTTPS)</h3>
+      <div class="code"><div class="code-label"><span>/etc/caddy/Caddyfile</span><button class="copy" type="button">Copy</button></div><pre>hajj.example.dz {
+    request_body {
+        max_size 6MB
+    }
+    reverse_proxy 127.0.0.1:4000
+}</pre></div>
+      <p>Caddy gets and renews certificates by itself, and by default it sets <code>X-Forwarded-For</code> from the real client rather than trusting an incoming one.</p>
+      <h3>Firewall</h3>
+      <div class="code"><div class="code-label"><span>bash</span><button class="copy" type="button">Copy</button></div><pre>sudo ufw allow OpenSSH
+sudo ufw allow 80,443/tcp
+sudo ufw enable   <span class="c"># 4000 and 5432 stay closed</span></pre></div>
+      <div class="note"><strong>Using Cloudflare (orange-cloud proxy) in front of nginx?</strong> That adds a second hop, so nginx's <code>$remote_addr</code> is a Cloudflare edge address and the rate limits would group visitors by edge. Turn on nginx's <code>real_ip</code> module with Cloudflare's published IP ranges (<code>set_real_ip_from …;</code> <code>real_ip_header CF-Connecting-IP;</code>), so <code>$remote_addr</code> is the visitor again before it's passed on.</div>
+    </section>
+
+    <section class="step" id="deploy-first-year">
+      <div class="step-head"><span class="num">17</span><h2>Open the first draw year</h2></div>
+      <p>A production database has geography and one administrator, and nothing else. Registration stays closed until a draw year is open <em>and</em> each commune has a draw configured.</p>
+      <ol>
+        <li>Sign in at <code>https://hajj.example.dz/admin/login</code> and change the bootstrap password.</li>
+        <li>Create the other administrators (wilaya and commune scopes) under <strong>Administrators</strong>.</li>
+        <li>Under <strong>Draw years</strong>, create the year. Leave it in <code>DRAFT</code> for now.</li>
+        <li>Configure a commune draw (allocated places) for every participating commune. See below.</li>
+        <li>Move the draw year to <code>REGISTRATION_OPEN</code>. Only one year can be open at a time.</li>
+      </ol>
+      <div class="warn"><strong>The console has no "create commune draw" button.</strong> It was removed. Commune draws are created through <code>POST /api/admin/commune-draws</code> (SUPER_ADMIN), and the development seed doesn't run in production. Once created, each commune's allocation can be edited in the console.</div>
+      <p>This script creates one commune draw per active commune through the real API, so each creation is validated and written to the audit log. It's safe to run again: communes that already have a draw are skipped. Run it from any machine with Node 20+:</p>
+      <div class="code"><div class="code-label"><span>create-commune-draws.mjs</span><button class="copy" type="button">Copy</button></div><pre>// APP_URL=https://hajj.example.dz YEAR=2027 SPOTS=10 \
+// ADMIN_USERNAME=… ADMIN_PASSWORD=… node create-commune-draws.mjs
+const BASE = process.env.APP_URL
+const YEAR = Number(process.env.YEAR)
+const SPOTS = Number(process.env.SPOTS)
+const json = { 'Content-Type': 'application/json', Origin: BASE }
+
+const login = await fetch(`${BASE}/api/auth/login`, {
+  method: 'POST',
+  headers: json,
+  body: JSON.stringify({ username: process.env.ADMIN_USERNAME, password: process.env.ADMIN_PASSWORD }),
+})
+if (!login.ok) throw new Error(`Login failed (${login.status})`)
+const auth = { ...json, Cookie: login.headers.getSetCookie().map((c) =&gt; c.split(';')[0]).join('; ') }
+
+const years = await (await fetch(`${BASE}/api/admin/draw-years`, { headers: auth })).json()
+const drawYear = years.find((y) =&gt; y.year === YEAR)
+if (!drawYear) throw new Error(`Create draw year ${YEAR} in the console first`)
+
+const communes = await (await fetch(`${BASE}/api/communes`)).json()
+let created = 0
+let existing = 0
+for (const commune of communes) {
+  const res = await fetch(`${BASE}/api/admin/commune-draws`, {
+    method: 'POST',
+    headers: auth,
+    body: JSON.stringify({ drawYearId: drawYear.id, communeId: commune.id, allocatedSpots: SPOTS }),
+  })
+  if (res.status === 201) created++
+  else if (res.status === 409) existing++ // DUPLICATE_COMMUNE_DRAW: already configured
+  else throw new Error(`Commune ${commune.code}: ${res.status} ${await res.text()}`)
+}
+console.log(`Created ${created}, already configured ${existing}`)</pre></div>
+      <p><code>SPOTS</code> gives every commune the same allocation. Real allocations differ by commune, so adjust them in the console afterwards. You can only edit an allocation while that commune's draw is still unlocked.</p>
+    </section>
+
+    <section class="step" id="deploy-update">
+      <div class="step-head"><span class="num">18</span><h2>Updating a deployment</h2></div>
+      <div class="code"><div class="code-label"><span>bash</span><button class="copy" type="button">Copy</button></div><pre><span class="c"># back up first (step 19)</span>
+sudo -u hajj -H bash -c '
+  cd /srv/hajj-lottery/app &amp;&amp;
+  git pull --ff-only &amp;&amp;
+  npm ci --include=dev &amp;&amp;
+  npm run build &amp;&amp;
+  npx prisma migrate deploy --schema prisma/schema.prisma'
+sudo systemctl restart hajj-lottery
+curl -s http://127.0.0.1:4000/api/health</pre></div>
+      <ul>
+        <li>Migrations only go forward. Neither the repository nor Prisma has a "down" step, so the backup <em>is</em> the rollback plan.</li>
+        <li>Avoid updating while a draw is running. A restart in the middle of a request rolls back that commune's execution (it stays <code>LOCKED</code> and can be retried), but there's no reason to cause that.</li>
+        <li>Expect a few seconds of downtime during the restart. A single instance has no zero-downtime handover.</li>
+      </ul>
+    </section>
+
+    <section class="step" id="deploy-backup">
+      <div class="step-head"><span class="num">19</span><h2>Backups and restore</h2></div>
+      <p>The database holds the whole system of record: applications, frozen pools, draw results, the winner archive and the audit trail. Much of it is immutable by design and can't be rebuilt. Back it up daily and keep copies off the server.</p>
+      <div class="code"><div class="code-label"><span>bash · one-time setup</span><button class="copy" type="button">Copy</button></div><pre>sudo mkdir -p /var/backups/hajj-lottery
+sudo chown postgres /var/backups/hajj-lottery</pre></div>
+      <div class="code"><div class="code-label"><span>/etc/cron.d/hajj-lottery-backup · 02:30 daily, keep 30 days</span><button class="copy" type="button">Copy</button></div><pre>30 2 * * * postgres pg_dump -Fc hajj_lottery &gt; /var/backups/hajj-lottery/$(date +\%F).dump &amp;&amp; find /var/backups/hajj-lottery -name '*.dump' -mtime +30 -delete</pre></div>
+      <h3>Restore</h3>
+      <div class="code"><div class="code-label"><span>bash</span><button class="copy" type="button">Copy</button></div><pre>sudo systemctl stop hajj-lottery
+sudo -u postgres createdb -O hajj hajj_lottery_restored
+sudo -u postgres pg_restore --no-owner --role=hajj -d hajj_lottery_restored /var/backups/hajj-lottery/2027-05-01.dump
+<span class="c"># point DATABASE_URL at hajj_lottery_restored (or rename the databases), then:</span>
+sudo systemctl start hajj-lottery</pre></div>
+      <p>Always restore a <strong>full</strong> dump into an <strong>empty</strong> database. <code>pg_restore</code> creates the triggers after loading the data, which is what lets the immutability and completeness triggers accept the restored rows. A data-only restore over an existing schema would fire them. Test a restore before you need one.</p>
+    </section>
+
+    <section class="step" id="deploy-checklist">
+      <div class="step-head"><span class="num">20</span><h2>Go-live checklist</h2></div>
+      <ul class="checks">
+        <li><span>The site loads over <code>https://</code>, and <code>http://</code> redirects to it.</span></li>
+        <li><span><code>.env</code> has <code>NODE_ENV="production"</code>, the exact <code>CLIENT_ORIGIN</code>, and no <code>DEV_ADMIN_*</code>, <code>TRUSTED_ORIGIN_SUFFIXES</code> or <code>TEST_DATABASE_URL</code>. The file is <code>chmod 600</code>.</span></li>
+        <li><span>From outside the server, ports 4000 and 5432 are unreachable.</span></li>
+        <li><span>Admin login works and survives a page refresh, which confirms the Secure cookie over HTTPS.</span></li>
+        <li><span>Deep links work after a refresh: <code>/register</code>, <code>/winners</code>, <code>/admin/draws</code>.</span></li>
+        <li><span>Repeated wrong passwords on a test account trip the rate limit for that account only, not for everyone. That confirms the real visitor IP reaches the app.</span></li>
+        <li><span>A test registration succeeds in one commune, and the status lookup finds it with its receipt reference.</span></li>
+        <li><span>The bootstrap admin password has been changed, and the service comes back after a reboot.</span></li>
+        <li><span>Last night's backup exists, and a test restore has been done once.</span></li>
+        <li><span>The database holds no synthetic data. <code>seed:mock-applications</code> and the <code>reset-*</code> scripts are development tools, and the reset scripts refuse to run in production.</span></li>
+      </ul>
+      <div class="note"><strong>Running on Windows Server instead?</strong> The same steps apply. Install Node and PostgreSQL with their Windows installers, use <code>npx prisma migrate deploy</code>, register <code>node server\dist\index.js</code> as a service with NSSM (one instance, working directory set to the repository root), put Caddy or IIS (URL Rewrite + ARR) in front for HTTPS, and close port 4000 in Windows Firewall.</div>
+    </section>
+
+    <section class="step" id="troubleshooting">
+      <div class="step-head"><span class="num">21</span><h2>Troubleshooting</h2></div>
+
+      <details><summary>Script flags after <code>--</code> are ignored in PowerShell</summary><div>
+        <p>Plain <code>npm</code> resolves to <code>npm.ps1</code>, which in some npm/PowerShell combinations drops everything after <code>--</code> without an error. If a command like <code>npm run reset-participants --workspace server -- --yes</code> ignores its flags, run it with <code>npm.cmd</code> instead. Git Bash and <code>cmd.exe</code> aren't affected.</p>
+      </div></details>
+
+      <details><summary>Cannot find module <code>@hajj-lottery/shared</code></summary><div>
+        <p><code>shared/dist</code> is missing or stale. Run <code>npm run build:shared</code>. <code>npm install</code> normally does this for you through <code>postinstall</code>.</p>
+      </div></details>
+
+      <details><summary>Server exits at startup naming an environment variable</summary><div>
+        <p>The Zod environment check failed. Make sure <code>.env</code> is at the <strong>repository root</strong> and the named variable is set. The server never reads <code>server/.env</code>.</p>
+      </div></details>
+
+      <details><summary>Requests fail with a CORS error, or login doesn't stick</summary><div>
+        <p><code>CLIENT_ORIGIN</code> must exactly match the origin in the browser's address bar. <code>http://127.0.0.1:5173</code> and <code>http://localhost:5173</code> are different origins. The session cookie is <code>SameSite=Lax</code>, so in production the client and API must be same-site.</p>
+      </div></details>
+
+      <details><summary>The registration form refuses every applicant</summary><div>
+        <p>Registration needs an open draw year and a configured commune draw for the chosen commune. Run <code>npm run prisma:seed</code> in development. If you closed registration while testing, <code>npm run reopen-registration</code> (dev only) reopens it.</p>
+      </div></details>
+
+      <details><summary>Tests refuse to run</summary><div>
+        <p><code>TEST_DATABASE_URL</code> is missing, points at the same database as <code>DATABASE_URL</code>, or its database name doesn't contain <code>test</code>. These guards are deliberate, because the suite truncates tables.</p>
+      </div></details>
+
+      <details><summary>"Too many attempts" when signing in</summary><div>
+        <p>Login is rate-limited to 10 failed attempts per 15 minutes per IP and username. The limiter is in memory, so restarting the dev server clears it.</p>
+      </div></details>
+
+      <details><summary>Production: admin login "succeeds" but you're immediately signed out</summary><div>
+        <p>The site is being served over plain HTTP. In production the session cookie is <code>Secure</code>, and browsers discard it on HTTP. Serve the site over HTTPS (step 16).</p>
+      </div></details>
+
+      <details><summary>Production: every POST fails with <code>403 FORBIDDEN_ORIGIN</code></summary><div>
+        <p><code>CLIENT_ORIGIN</code> doesn't exactly match the address bar. Check the scheme (<code>https</code>), the host, <code>www.</code> or not, and that there's no trailing slash. Restart the service after changing <code>.env</code>.</p>
+      </div></details>
+
+      <details><summary>Production: one visitor's failed logins lock out everybody</summary><div>
+        <p>The app is seeing the proxy's address instead of the visitor's. Make sure exactly one proxy sits in front and it sets <code>X-Forwarded-For</code>. With a CDN in front of nginx, configure <code>real_ip</code> (step 16).</p>
+      </div></details>
+
+      <details><summary>Production: legacy import upload fails with 413</summary><div>
+        <p>The reverse proxy's body limit is below the app's 5 MB import cap. Raise <code>client_max_body_size</code> (nginx) or <code>request_body max_size</code> (Caddy) to 6 MB.</p>
+      </div></details>
+
+      <details><summary>Production: refreshing <code>/admin/…</code> or <code>/register</code> gives a 404</summary><div>
+        <p>Express only serves the client and its <code>index.html</code> fallback when <code>NODE_ENV=production</code> <em>and</em> <code>client/dist</code> exists. Check both, then rebuild with <code>npm run build</code>.</p>
+      </div></details>
+
+      <details><summary>Starting a test draw cycle over</summary><div>
+        <p>These development tools all refuse to run in production:</p>
+        <p><code>npm run reset-commune-draws -- --yes</code> undoes every pool freeze and execution and keeps applicants. <code>npm run reset-participants -- --yes</code> wipes every participant, application and result. <code>npm run draft-commune-draws</code> returns <code>READY</code> draws to <code>DRAFT</code>. Without <code>--yes</code>, the reset scripts only do a dry run.</p>
+      </div></details>
+    </section>
+
+  </main>
+</div>
+
+<footer>Hajj Lottery · <span lang="ar" dir="rtl">قرعة الحج</span>. For architecture and domain rules, see <code>README.md</code> and the documents in <code>docs/</code>.</footer>
+
+<script>
+(function(){
+  document.querySelectorAll('.copy').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var pre = btn.closest('.code').querySelector('pre');
+      var text = pre.innerText.split('\n').map(function(l){ return l.replace(/\s+#.*$/, ''); }).join('\n').trim();
+      var done = function(){ btn.textContent = 'Copied'; setTimeout(function(){ btn.textContent = 'Copy'; }, 1400); };
+      if (navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(done, function(){ btn.textContent = 'Select & copy'; });
+      } else { btn.textContent = 'Select & copy'; }
+    });
+  });
+
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+  if (!('IntersectionObserver' in window)) return;
+  var byId = {};
+  links.forEach(function(a){ byId[a.getAttribute('href').slice(1)] = a; });
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if (e.isIntersecting){
+        links.forEach(function(a){ a.classList.remove('active'); });
+        var a = byId[e.target.id]; if (a) a.classList.add('active');
+      }
+    });
+  }, {rootMargin:'-20% 0px -70% 0px'});
+  document.querySelectorAll('section.step').forEach(function(s){ io.observe(s); });
+})();
+</script>
+</body>
+</html>
