@@ -11,6 +11,12 @@ transparent results, across Arabic (RTL), French, and English.
 > published results, notifications/SMS, citizen accounts, a winner-reversal workflow, and the
 > authoritative NIN-lookup identity service.
 
+<p align="center">
+  <a href="https://youtu.be/SSDPyLhoA1w" target="_blank">
+    <img src="https://res.cloudinary.com/dzdt1s05w/image/upload/v1791541990/blog-img-6-1_rqcszv.webp" alt="Watch the video" width="600" height="450" />
+  </a>
+</p>
+
 ## Architecture
 
 ```
