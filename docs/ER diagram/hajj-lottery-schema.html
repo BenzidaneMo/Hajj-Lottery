@@ -76,7 +76,13 @@ svg#erd text{user-select:none;}
 .edge-path.dim{opacity:.08;}
 .edge-tag{font-size:8px;fill:var(--accent-strong);font-weight:700;}
 .edge-tag-bg{fill:var(--surface);opacity:.85;}
-.node-hitbox{fill:transparent;cursor:pointer;}
+.node-hitbox{fill:transparent;cursor:inherit;}
+
+/* Click-and-drag to pan: the frame is the scroll container. */
+.diagram-frame{cursor:grab;}
+.diagram-frame.is-pannable{touch-action:pan-x pan-y;}
+.diagram-frame.panning{cursor:grabbing;user-select:none;-webkit-user-select:none;}
+.diagram-frame.panning .node-hitbox{pointer-events:none;} /* pause hover tracing while dragging */
 
 .footnote{font-size:12px;color:var(--text-dim);margin-top:14px;line-height:1.5;}
 </style>
@@ -527,6 +533,50 @@ svg#erd text{user-select:none;}
   var legacyLbl = el('text', {x:legacyXs[0], y:legacyY-22, class:'col-label'}, gNodes);
   legacyLbl.textContent = 'Legacy Import';
   LEGACY.forEach(drawNode);
+
+  // ---- Click-and-drag to pan ----
+  (function(){
+    var frame = document.querySelector('.diagram-frame');
+    var DRAG_THRESHOLD = 3;           // px before a press counts as a drag
+    var startX, startY, startLeft, startTop, pid = null, moved = false;
+
+    frame.classList.add('is-pannable');
+
+    frame.addEventListener('pointerdown', function(e){
+      if (e.pointerType === 'touch') return;      // touch already scrolls natively
+      if (e.button !== 0) return;                 // left button only
+      var r = frame.getBoundingClientRect();
+      // ignore presses on the scrollbars themselves
+      if (e.clientX - r.left >= frame.clientWidth || e.clientY - r.top >= frame.clientHeight) return;
+      pid = e.pointerId; moved = false;
+      startX = e.clientX; startY = e.clientY;
+      startLeft = frame.scrollLeft; startTop = frame.scrollTop;
+    });
+
+    frame.addEventListener('pointermove', function(e){
+      if (pid === null || e.pointerId !== pid) return;
+      var dx = e.clientX - startX, dy = e.clientY - startY;
+      if (!moved){
+        if (Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
+        moved = true;
+        frame.classList.add('panning');
+        frame.setPointerCapture(pid);
+      }
+      frame.scrollLeft = startLeft - dx;
+      frame.scrollTop  = startTop  - dy;
+    });
+
+    function endPan(e){
+      if (pid === null || (e && e.pointerId !== pid)) return;
+      if (frame.hasPointerCapture && frame.hasPointerCapture(pid)) frame.releasePointerCapture(pid);
+      pid = null;
+      frame.classList.remove('panning');
+    }
+    frame.addEventListener('pointerup', endPan);
+    frame.addEventListener('pointercancel', endPan);
+    frame.addEventListener('lostpointercapture', endPan);
+    frame.addEventListener('dragstart', function(e){ e.preventDefault(); });
+  })();
 })();
 </script>
 </html>
